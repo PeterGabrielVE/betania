@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 2cm; }
+  body { font-family: "DejaVu Sans", sans-serif; color: #222; font-size: 12px; }
+  h1 { font-size: 18px; margin: 0 0 2px; }
+  .sub { color: #666; margin-bottom: 16px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #ddd; }
+  th { background: #f3f3f1; }
+</style>
+</head>
+<body>
+  <h1>{{ retiro }}</h1>
+  <div class="sub">{{ retiro.parroquia }} · {{ retiro.fecha_inicio }} a {{ retiro.fecha_fin }} · Sede: {{ retiro.sede }}</div>
+  <table>
+    <thead>
+      <tr><th>#</th><th>Caminante</th><th>Padrino/Madrina</th><th>Estado</th></tr>
+    </thead>
+    <tbody>
+      {% for i in inscritos %}
+      <tr>
+        <td>{{ forloop.counter }}</td>
+        <td>{{ i.persona.nombre }}</td>
+        <td>{{ i.padrino.nombre|default:"—" }}</td>
+        <td>{{ i.get_estado_display }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="4">Sin inscritos confirmados.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</body>
+</html>

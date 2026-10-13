@@ -1,0 +1,218 @@
+// Cliente de la API de Django (retiros/api.py). Usa la cookie de sesión, así
+// que todas las peticiones van al mismo origen.
+
+export class ApiError extends Error {
+  status: number;
+  // Errores por campo de un formulario: { campo: ["mensaje", ...] }
+  campos: Record<string, string[]>;
+
+  constructor(status: number, message: string, campos = {}) {
+    super(message);
+    this.status = status;
+    this.campos = campos;
+  }
+}
+
+function csrfToken(): string {
+  const cookie = document.cookie
+    .split("; ")
+    .find((c) => c.startsWith("csrftoken="));
+  return cookie ? decodeURIComponent(cookie.split("=")[1]) : "";
+}
+
+function aError(status: number, datos: unknown): ApiError {
+  if (Array.isArray(datos)) {
+    return new ApiError(status, datos.join(" "));
+  }
+  if (datos && typeof datos === "object") {
+    const { detail, non_field_errors, ...campos } = datos as Record<
+      string,
+      unknown
+    >;
+    const general = detail ?? non_field_errors;
+    const mensaje = Array.isArray(general)
+      ? general.join(" ")
+      : typeof general === "string"
+        ? general
+        : "Revisa los campos marcados.";
+    return new ApiError(status, mensaje, campos as Record<string, string[]>);
+  }
+  return new ApiError(status, `Error ${status} al consultar el servidor.`);
+}
+
+export async function api<T>(
+  ruta: string,
+  opciones: {
+    method?: "GET" | "POST" | "PATCH" | "DELETE";
+    body?: unknown;
+  } = {},
+): Promise<T> {
+  const { method = "GET", body } = opciones;
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (method !== "GET") {
+    headers["Content-Type"] = "application/json";
+    headers["X-CSRFToken"] = csrfToken();
+  }
+
+  const res = await fetch(`/api${ruta}`, {
+    method,
+    headers,
+    credentials: "same-origin",
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+
+  const datos = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw aError(res.status, datos);
+  }
+  return datos as T;
+}
+
+export type Sesion =
+  | { autenticado: false }
+  | {
+      autenticado: true;
+      username: string;
+      nombre: string;
+      email: string;
+      es_staff: boolean;
+      es_superusuario: boolean;
+      moneda: string; // ISO 4217
+      region: string; // p. ej. "es-CO"
+    };
+
+export type Pagina<T> = {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+};
+
+// --- Esquema de módulos (/api/esquema/) ---
+
+export type TipoCampo =
+  | "texto"
+  | "area"
+  | "email"
+  | "numero"
+  | "decimal" // dinero
+  | "cifra" // decimal que no es dinero (una tasa de cambio)
+  | "fecha"
+  | "fechahora"
+  | "bool"
+  | "opcion"
+  | "fk"
+  | "json"
+  | "enlace";
+
+export type Campo = {
+  nombre: string;
+  etiqueta: string;
+  tipo: TipoCampo;
+  requerido?: boolean;
+  opciones?: { valor: string; etiqueta: string }[]; // tipo "opcion"
+  recurso?: string; // tipo "fk": slug del módulo relacionado
+  seccion?: string; // título bajo el que va en el formulario
+  // tipo "json": datos que el formulario pide por separado y guarda en ese JSON
+  subcampos?: Campo[];
+};
+
+export type Modulo = {
+  slug: string;
+  titulo: string;
+  singular: string;
+  grupo: string;
+  campos: Campo[]; // formulario
+  lista: Campo[]; // columnas de la tabla
+  filtros: Campo[];
+  buscable: boolean;
+  puede_agregar: boolean;
+  puede_cambiar: boolean;
+  puede_eliminar: boolean;
+};
+
+// Un registro de cualquier módulo. Cada relación trae además `<campo>_etiqueta`.
+export type Registro = { id: string; etiqueta: string } & Record<
+  string,
+  unknown
+>;
+
+type Opcion = { valor: string; etiqueta: string };
+
+// Panel de un retiro (/api/retiros/<id>/panel/). Cada sección llega en null si
+// el usuario no tiene permiso para verla.
+export type PanelRetiro = {
+  retiro: {
+    id: string;
+    etiqueta: string;
+    parroquia: string;
+    fecha_inicio: string;
+    fecha_fin: string;
+    sede: string;
+    cupo: number;
+    cuota: number;
+    estado: string;
+    estado_display: string;
+  };
+  caminantes: {
+    filas: {
+      id: string;
+      persona: string;
+      telefono: string;
+      padrino: string;
+      estado: string;
+      // Solo con acceso a finanzas:
+      pagado?: number;
+      saldo?: number;
+      estado_pago?: string;
+    }[];
+    inscritos: number;
+    disponibles: number;
+    por_estado: { estado: string; etiqueta: string; total: number }[];
+  } | null;
+  equipo: {
+    total: number;
+    coordinadores: string[];
+    sin_area: string[];
+    areas: {
+      area: string;
+      personas: { nombre: string; es_coordinador: boolean }[];
+    }[];
+  } | null;
+  charlas:
+    { id: string; orden: number; tema: string; expositor: string }[] | null;
+  finanzas: {
+    ingresos: number;
+    egresos: number;
+    balance: number;
+    por_cobrar?: number;
+    por_concepto: (Opcion & { total: number })[];
+    por_categoria: (Opcion & { total: number })[];
+  } | null;
+  opciones_pago: Opcion[];
+};
+
+export type Resumen = {
+  personas: number;
+  retiros: number;
+  retiros_activos: number;
+  inscripciones: number;
+  inscripciones_por_estado: {
+    estado: string;
+    etiqueta: string;
+    total: number;
+  }[];
+  ingresos: number;
+  egresos: number;
+  balance: number;
+  proximos_retiros: {
+    id: string;
+    etiqueta: string;
+    fecha_inicio: string;
+    fecha_fin: string;
+    cupo: number;
+    inscritos: number;
+    estado: string;
+    estado_display: string;
+  }[];
+};

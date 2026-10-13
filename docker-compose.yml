@@ -1,0 +1,29 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: retiros
+      POSTGRES_USER: retiros
+      POSTGRES_PASSWORD: retiros
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U retiros"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  web:
+    build: .
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    # --- Modo desarrollo (recarga en caliente): descomenta estas dos líneas ---
+    # volumes: [ ".:/app" ]
+    # command: python manage.py runserver 0.0.0.0:8000
+
+volumes:
+  pgdata:

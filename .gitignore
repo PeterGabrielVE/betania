@@ -1,0 +1,7 @@
+.env
+__pycache__/
+*.pyc
+staticfiles/
+*.sqlite3
+node_modules/
+frontend/dist/
