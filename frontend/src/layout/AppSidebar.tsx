@@ -50,9 +50,14 @@ const AppSidebar: React.FC = () => {
   // Inicio + una sección desplegable por grupo de módulos.
   const navItems = useMemo<NavItem[]>(() => {
     const grupos = [...new Set(modulos.map((m) => m.grupo))];
-    const puedeInscribir = ["personas", "inscripciones"].every(
-      (slug) => modulos.find((m) => m.slug === slug)?.puede_agregar,
-    );
+    const puedenTodos = (slugs: string[]) =>
+      slugs.every((s) => modulos.find((m) => m.slug === s)?.puede_agregar);
+    const puedeInscribir = puedenTodos(["personas", "inscripciones"]);
+    const puedeRegistrarServidor = puedenTodos([
+      "personas",
+      "participaciones",
+      "servicios",
+    ]);
     return [
       { icon: <GridIcon fontSize={24} />, name: "Inicio", path: "/" },
       ...grupos.map((grupo) => ({
@@ -65,6 +70,10 @@ const AppSidebar: React.FC = () => {
             // El formulario de caminantes (el de papel) va junto a su listado.
             ...(m.slug === "inscripciones" && puedeInscribir
               ? [{ name: "Inscribir caminante", path: "/inscribir" }]
+              : []),
+            // Y el de servidores, junto a Servidores por área.
+            ...(m.slug === "servicios" && puedeRegistrarServidor
+              ? [{ name: "Registrar servidor", path: "/registrar-servidor" }]
               : []),
           ]),
       })),

@@ -10,14 +10,13 @@ import {
   get,
   useFormContext,
   useWatch,
+  type FieldValues,
   type UseFormRegister,
 } from "react-hook-form";
-import {
-  EXTRANJERO,
-  OPERADORAS,
-  type Campo as NombreCampo,
-  type Valores,
-} from "./esquema";
+import { EXTRANJERO, OPERADORAS, OTRA_CIUDAD } from "./esquemaPersona";
+
+// Sirven a más de un formulario (caminante, servidor): el campo es su nombre.
+type NombreCampo = string;
 
 type Base = {
   nombre: NombreCampo;
@@ -37,7 +36,7 @@ function Envoltura({
 }: Base & { children: React.ReactNode }) {
   const {
     formState: { errors },
-  } = useFormContext<Valores>();
+  } = useFormContext();
   const error = get(errors, nombre)?.message as string | undefined;
   return (
     <div className={ancho ? "sm:col-span-2" : ""}>
@@ -77,7 +76,7 @@ function useCampo(nombre: NombreCampo) {
   const {
     register,
     formState: { errors },
-  } = useFormContext<Valores>();
+  } = useFormContext();
   const error = !!get(errors, nombre);
   return {
     error,
@@ -97,7 +96,7 @@ export function Texto({
   ...base
 }: Base & {
   // Para pasar opciones propias a register (p. ej. onBlur).
-  registro?: ReturnType<UseFormRegister<Valores>>;
+  registro?: ReturnType<UseFormRegister<FieldValues>>;
   tipo?: "text" | "email" | "tel" | "date" | "number";
   placeholder?: string;
 }) {
@@ -168,7 +167,7 @@ export function Casilla({
   const { error, props } = useCampo(nombre);
   const {
     formState: { errors },
-  } = useFormContext<Valores>();
+  } = useFormContext();
   const mensaje = get(errors, nombre)?.message as string | undefined;
   return (
     <div>
@@ -223,7 +222,7 @@ export function Relacion({
   onElegir?: (id: string | null) => void;
   placeholder?: string;
 }) {
-  const { control } = useFormContext<Valores>();
+  const { control } = useFormContext();
   return (
     <Envoltura {...base}>
       <Controller
@@ -287,7 +286,7 @@ export function Celular(base: Base) {
   const {
     control,
     formState: { errors },
-  } = useFormContext<Valores>();
+  } = useFormContext();
   const error = !!get(errors, base.nombre);
   return (
     <Envoltura {...base}>
@@ -396,57 +395,108 @@ function useLugares(recurso: string, filtro: string, valor: string) {
   };
 }
 
+// País (Venezuela por defecto), estado y ciudad. Para Venezuela, estado y
+// ciudad salen de la lista; si la ciudad no aparece, se escribe («Otra
+// ciudad»). Para otro país, estado/provincia y ciudad se escriben.
 export function Ubicacion({ paises }: { paises: Lugar[] }) {
-  const { register, setValue, control } = useFormContext<Valores>();
-  const [pais, entidad] = useWatch({ control, name: ["pais", "entidad"] });
+  const {
+    register,
+    setValue,
+    control,
+    formState: { errors },
+  } = useFormContext();
+  const [pais, entidad, ciudad] = useWatch({
+    control,
+    name: ["pais", "entidad", "ciudad"],
+  }) as string[];
   const estados = useLugares("estados", "pais", pais);
   const ciudades = useLugares("ciudades", "estado", entidad);
-  const errores = useFormContext<Valores>().formState.errors;
+  // «Otra ciudad» elegida (la ciudad se escribe en ciudad_texto).
+  const escribirCiudad = ciudad === OTRA_CIUDAD;
+  const conLista = estados.cargando || estados.filas.length > 0;
 
   const lista = (
     nombre: NombreCampo,
     etiqueta: string,
     filas: Lugar[],
     cargando: boolean,
-    alCambiar?: () => void,
-  ) => (
-    <Envoltura nombre={nombre} etiqueta={etiqueta} obligatorio>
-      <select
-        id={`insc-${nombre}`}
-        aria-invalid={!!get(errores, nombre)}
-        className={claseDe(!!get(errores, nombre))}
-        disabled={cargando}
-        {...register(nombre, { onChange: alCambiar })}
-      >
-        <option value="">{cargando ? "Cargando…" : "Elegir…"}</option>
-        {filas.map((f) => (
-          <option key={f.id} value={f.id}>
-            {f.nombre}
-          </option>
-        ))}
-      </select>
-    </Envoltura>
-  );
+    alCambiar?: (valor: string) => void,
+    otra = false,
+  ) => {
+    const error = !!get(errors, nombre);
+    return (
+      <Envoltura nombre={nombre} etiqueta={etiqueta} obligatorio>
+        <select
+          id={`insc-${nombre}`}
+          aria-invalid={error}
+          className={claseDe(error)}
+          disabled={cargando}
+          {...register(nombre, {
+            onChange: (e) => alCambiar?.(e.target.value),
+          })}
+        >
+          <option value="">{cargando ? "Cargando…" : "Elegir…"}</option>
+          {filas.map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.nombre}
+            </option>
+          ))}
+          {otra && (
+            <option value={OTRA_CIUDAD}>Otra ciudad (escribirla)</option>
+          )}
+        </select>
+      </Envoltura>
+    );
+  };
+
+  const limpiar = (campos: NombreCampo[]) =>
+    campos.forEach((c) => setValue(c, ""));
 
   return (
     <>
       {lista("pais", "País", paises, paises.length === 0, () => {
-        setValue("entidad", "");
-        setValue("ciudad", "");
+        limpiar(["entidad", "ciudad", "estado_texto", "ciudad_texto"]);
       })}
-      {/* Solo los países con estados cargados (Venezuela) piden estado y ciudad. */}
-      {(estados.cargando || estados.filas.length > 0) && (
+      {conLista ? (
         <>
-          {lista("entidad", "Estado", estados.filas, estados.cargando, () =>
-            setValue("ciudad", ""),
-          )}
+          {lista("entidad", "Estado", estados.filas, estados.cargando, () => {
+            limpiar(["ciudad", "ciudad_texto"]);
+          })}
           {lista(
             "ciudad",
             "Ciudad",
             ciudades.filas,
             ciudades.cargando || !entidad,
+            (valor) => {
+              if (valor !== OTRA_CIUDAD) limpiar(["ciudad_texto"]);
+            },
+            true,
+          )}
+          {escribirCiudad && (
+            <Texto
+              nombre="ciudad_texto"
+              etiqueta="Escribe la ciudad"
+              obligatorio
+              placeholder="Ej.: El Junquito"
+            />
           )}
         </>
+      ) : (
+        pais && (
+          <>
+            <Texto
+              nombre="estado_texto"
+              etiqueta="Estado / provincia"
+              placeholder="Ej.: Antioquia"
+            />
+            <Texto
+              nombre="ciudad_texto"
+              etiqueta="Ciudad"
+              obligatorio
+              placeholder="Ej.: Medellín"
+            />
+          </>
+        )
       )}
     </>
   );

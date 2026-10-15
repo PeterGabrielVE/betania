@@ -77,6 +77,21 @@ paso, si ya está registrada, sus datos se cargan solos. El celular se elige por
 operadora (0412, 0414, 0416, 0422, 0424, 0426) o "Otro país", y se guarda como
 `0414-1234567` o con su código (`+57 300 1234567`). La edad mínima es 18 años.
 
+Nombres y apellidos van por separado (primer y segundo nombre, primer y segundo
+apellido); el nombre completo se arma solo al guardar. Si la ciudad no está en
+la lista se elige «Otra ciudad» y se escribe; para otro país, estado/provincia
+y ciudad se escriben a mano.
+
+No se registran duplicados: el documento no se repite, tampoco una persona sin
+documento con el mismo nombre y fecha de nacimiento que otra, nadie se inscribe
+dos veces en un retiro ni está dos veces en su equipo, y quien es caminante de
+un retiro no puede ser servidor de ese mismo retiro (ni al revés).
+
+Los servidores se registran con su propio formulario por pasos
+(`/registrar-servidor`: Identificación, Datos personales, Servicio y Confirmar),
+que comparte con el de caminantes la identificación y los datos personales; en
+Servicio se marcan sus áreas y cuáles coordina.
+
 Permisos y confidencialidad:
 
 - La API usa la sesión de Django, así que el RLS aplica igual que en el admin.

@@ -176,6 +176,12 @@ class Persona(models.Model):
     tipo_documento = models.CharField(max_length=1, choices=TipoDocumento.choices,
                                       default=TipoDocumento.VENEZOLANO)
     documento = models.CharField(max_length=20, blank=True, db_index=True)
+    primer_nombre = models.CharField(max_length=60, blank=True)
+    segundo_nombre = models.CharField(max_length=60, blank=True)
+    primer_apellido = models.CharField(max_length=60, blank=True)
+    segundo_apellido = models.CharField(max_length=60, blank=True)
+    # Nombre completo, armado con los cuatro de arriba al guardar (ver save()).
+    # Es el que usan listados, búsquedas y reportes.
     nombre = models.CharField(max_length=200)
     # Celular: el teléfono principal ("0414-1234567" o, si es extranjero, "+57...").
     telefono = models.CharField(max_length=40, blank=True, db_index=True)   # clave para deduplicar
@@ -188,6 +194,10 @@ class Persona(models.Model):
                                related_name="personas")
     ciudad = models.ForeignKey(Ciudad, on_delete=models.PROTECT, null=True, blank=True,
                                related_name="personas")
+    # Para lo que no está en los catálogos: un país sin estados cargados (del
+    # extranjero) o una ciudad que no aparece en la lista.
+    estado_texto = models.CharField("estado / provincia", max_length=100, blank=True)
+    ciudad_texto = models.CharField("ciudad (escrita)", max_length=100, blank=True)
     # Confidencial (salud, alergias, notas pastorales...). Solo roles autorizados. Ver RLS.
     datos_sensibles = models.JSONField(default=dict, blank=True)
     creado = models.DateTimeField(auto_now_add=True)
@@ -210,30 +220,96 @@ class Persona(models.Model):
             return f"Pasaporte {self.documento}"
         return f"{self.tipo_documento}-{self.documento}"
 
+    @property
+    def procedencia(self):
+        """"Los Teques, Miranda"; fuera de Venezuela, también el país."""
+        partes = [self.ciudad.nombre if self.ciudad_id else self.ciudad_texto,
+                  self.estado.nombre if self.estado_id else self.estado_texto]
+        if self.pais_id and self.pais.codigo != "VE":
+            partes.append(self.pais.nombre)
+        return ", ".join(p for p in partes if p)
+
     @staticmethod
     def normalizar_documento(documento):
         """"v-12.345.678" -> "12345678": sin letra, puntos, guiones ni espacios."""
         return re.sub(r"^[VEP]-|[\s.-]", "", (documento or "").strip().upper())
 
+    PARTES_NOMBRE = ("primer_nombre", "segundo_nombre", "primer_apellido", "segundo_apellido")
+
+    def dividir_nombre(self, completo):
+        """Reparte un nombre completo en nombres y apellidos (para datos que
+        llegan en un solo texto: registros viejos, importaciones de Excel).
+        "Ana Pérez" · "José Pérez Gómez" (un nombre, dos apellidos) ·
+        "María José Pérez Gómez"; con más palabras, lo del medio va al segundo
+        nombre."""
+        palabras = (completo or "").split()
+        n = len(palabras)
+        if n <= 2:
+            partes = [palabras[0] if palabras else "", "", palabras[1] if n == 2 else "", ""]
+        elif n == 3:
+            partes = [palabras[0], "", palabras[1], palabras[2]]
+        else:
+            partes = [palabras[0], " ".join(palabras[1:-2]), palabras[-2], palabras[-1]]
+        for campo, valor in zip(self.PARTES_NOMBRE, partes):
+            setattr(self, campo, valor)
+
     def save(self, *args, **kwargs):
         self.documento = self.normalizar_documento(self.documento)
+        for campo in self.PARTES_NOMBRE:
+            setattr(self, campo, " ".join((getattr(self, campo) or "").split()))
+        if any(getattr(self, c) for c in self.PARTES_NOMBRE):
+            self.nombre = " ".join(getattr(self, c) for c in self.PARTES_NOMBRE
+                                   if getattr(self, c))
+        else:
+            self.dividir_nombre(self.nombre)
         super().save(*args, **kwargs)
+
+    def _duplicada(self):
+        """Otra persona con el mismo nombre y fecha de nacimiento (si a alguna de
+        las dos le falta el documento, podría ser la misma)."""
+        if not (self.fecha_nacimiento and self.primer_nombre and self.primer_apellido):
+            return None
+        candidatas = (
+            Persona.objects.exclude(pk=self.pk)
+            .filter(fecha_nacimiento=self.fecha_nacimiento,
+                    primer_nombre__iexact=self.primer_nombre.strip(),
+                    primer_apellido__iexact=self.primer_apellido.strip())
+        )
+        if self.segundo_apellido:
+            candidatas = candidatas.filter(
+                segundo_apellido__in=["", self.segundo_apellido.strip()])
+        if self.documento:
+            # Con documentos distintos son dos personas diferentes.
+            candidatas = candidatas.filter(documento="")
+        return candidatas.first()
 
     def clean(self):
         errores = {}
         self.documento = self.normalizar_documento(self.documento)
+        if not (self.primer_nombre or "").strip():
+            errores["primer_nombre"] = "Escribe el primer nombre."
+        if not (self.primer_apellido or "").strip():
+            errores["primer_apellido"] = "Escribe el primer apellido."
         if self.documento:
             if self.tipo_documento == self.TipoDocumento.PASAPORTE:
                 if not re.fullmatch(r"[A-Z0-9]{5,20}", self.documento):
                     errores["documento"] = "El pasaporte lleva de 5 a 20 letras o números."
             elif not re.fullmatch(r"\d{5,9}", self.documento):
                 errores["documento"] = "La cédula lleva solo números (de 5 a 9 cifras)."
-            else:
+            if "documento" not in errores:
                 otra = (Persona.objects.exclude(pk=self.pk)
                         .filter(tipo_documento=self.tipo_documento, documento=self.documento)
                         .first())
                 if otra:
                     errores["documento"] = f"Ya está registrada con ese documento: {otra}."
+        if not errores:
+            otra = self._duplicada()
+            if otra:
+                errores["primer_nombre"] = (
+                    f"Ya hay una persona con ese nombre y fecha de nacimiento: {otra}"
+                    + (f" ({otra.documento_completo})" if otra.documento else "")
+                    + ". Búscala en vez de registrarla de nuevo."
+                )
         if self.fecha_nacimiento:
             hoy = date.today()
             if self.fecha_nacimiento > hoy:
@@ -440,6 +516,18 @@ class Inscripcion(models.Model):
     def clean(self):
         if self.padrino_id and self.padrino_id == self.persona_id:
             raise ValidationError({"padrino": "Una persona no puede invitarse a sí misma."})
+        if not (self.persona_id and self.retiro_id):
+            return
+        if (Inscripcion.objects.exclude(pk=self.pk)
+                .filter(retiro_id=self.retiro_id, persona_id=self.persona_id).exists()):
+            raise ValidationError({"persona": "Ya está inscrita en este retiro."})
+        equipo = (Participacion.objects
+                  .filter(retiro_id=self.retiro_id, persona_id=self.persona_id)
+                  .exclude(tipo=Participacion.Tipo.CAMINANTE).first())
+        if equipo:
+            raise ValidationError({"persona": (
+                f"Ya está en el equipo de este retiro como {equipo.get_tipo_display().lower()}."
+            )})
 
     def __str__(self):
         return f"{self.persona} → {self.retiro} [{self.get_estado_display()}]"
@@ -463,6 +551,21 @@ class Participacion(models.Model):
                 fields=["persona", "retiro"], name="uniq_participacion_persona_retiro"
             )
         ]
+
+    def clean(self):
+        if not (self.persona_id and self.retiro_id):
+            return
+        otra = (Participacion.objects.exclude(pk=self.pk)
+                .filter(retiro_id=self.retiro_id, persona_id=self.persona_id).first())
+        if otra:
+            raise ValidationError({"persona": (
+                f"Ya está en este retiro como {otra.get_tipo_display().lower()}."
+            )})
+        if self.tipo != self.Tipo.CAMINANTE and (
+            Inscripcion.objects.filter(retiro_id=self.retiro_id, persona_id=self.persona_id)
+            .exclude(estado=Inscripcion.Estado.CANCELADA).exists()
+        ):
+            raise ValidationError({"persona": "Está inscrita como caminante en este retiro."})
 
     def __str__(self):
         return f"{self.persona} · {self.get_tipo_display()} · {self.retiro}"
@@ -488,6 +591,12 @@ class AsignacionServicio(models.Model):
                 fields=["participacion", "area"], name="uniq_servidor_area"
             )
         ]
+
+    def clean(self):
+        if (self.participacion_id and self.area_id
+                and AsignacionServicio.objects.exclude(pk=self.pk)
+                .filter(participacion_id=self.participacion_id, area_id=self.area_id).exists()):
+            raise ValidationError({"area": "Ya sirve en esa área."})
 
     def __str__(self):
         rol = "coord. de área" if self.es_coordinador else "servidor"

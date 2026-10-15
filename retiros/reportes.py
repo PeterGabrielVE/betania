@@ -32,10 +32,17 @@ class PersonaResource(resources.ModelResource):
     class Meta:
         model = Persona
         # No se exportan datos_sensibles.
-        fields = ("tipo_documento", "documento", "nombre", "telefono", "email",
+        fields = ("tipo_documento", "documento", "nombre", "primer_nombre", "segundo_nombre",
+                  "primer_apellido", "segundo_apellido", "telefono", "email",
                   "fecha_nacimiento", "parroquia")
         export_order = fields
         import_id_fields = ()
+
+    def before_save_instance(self, instance, row, **kwargs):
+        """Un archivo con solo "nombre" (sin nombres y apellidos por separado):
+        se reparte en nombres y apellidos."""
+        if row.get("nombre") and not row.get("primer_nombre"):
+            instance.dividir_nombre(str(row["nombre"]))
 
     def get_instance(self, instance_loader, row):
         """Al importar, casa por documento, correo o teléfono para no duplicar personas."""

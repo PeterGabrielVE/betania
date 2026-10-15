@@ -1,58 +1,34 @@
 // Formulario de inscripción de un caminante (el de papel), paso a paso.
-// Aquí está todo lo que no es de pantalla: los pasos, las reglas de cada campo
-// (zod), los valores iniciales y la conversión a lo que espera la API.
+// Lo de la persona (documento, nombres, celular, de dónde es) está en
+// esquemaPersona.ts; aquí, lo propio del caminante: familia, salud, contactos
+// de emergencia y la inscripción al retiro.
 import type { Registro } from "@/api/client";
 import { z } from "zod";
+import {
+  camposPersona,
+  camposPersonaSensibles,
+  casilla,
+  celular,
+  comoTexto,
+  correo,
+  cuerpoPersona as cuerpoDeLaPersona,
+  datosDePersona as datosDeLaPersona,
+  ETIQUETAS_PERSONA,
+  fijo,
+  json,
+  normalizarCelular,
+  obligatorio,
+  PASO_PERSONALES,
+  reglasPersona,
+  texto,
+  valoresPersona,
+} from "./esquemaPersona";
 
-// --------------------------------------------------------------------------- //
-// Reglas reutilizables
-// --------------------------------------------------------------------------- //
-const texto = z.string().trim();
-const obligatorio = (mensaje: string) => texto.min(1, mensaje);
-const correo = texto.refine(
-  (v) => v === "" || z.email().safeParse(v).success,
-  "Escribe un correo válido.",
-);
-const casilla = z.boolean();
-
-// Teléfono fijo o de otro país: números, espacios, guiones, paréntesis o +.
-const FIJO = /^\+?[\d\s().-]{7,20}$/;
-const fijo = texto.refine(
-  (v) => v === "" || FIJO.test(v),
-  "Escribe un teléfono válido, p. ej. 0212-1234567.",
-);
-
-// Celulares de Venezuela: operadora + 7 dígitos ("0414-1234567"); de otro país,
-// con su código ("+57 300 1234567"). Ver CampoCelular.
-export const OPERADORAS = ["0412", "0414", "0416", "0422", "0424", "0426"];
-export const EXTRANJERO = "ext";
-const CELULAR_VE = new RegExp(`^(${OPERADORAS.join("|")})-\\d{7}$`);
-const CELULAR_EXTRANJERO = /^\+\d[\d\s-]{6,18}$/;
-
-function mensajeCelular(v: string): string | null {
-  if (v === "" || CELULAR_VE.test(v) || CELULAR_EXTRANJERO.test(v)) return null;
-  if (v.startsWith("-")) return "Elige la operadora.";
-  if (/^04\d{2}-/.test(v))
-    return "El número lleva 7 dígitos después de la operadora.";
-  return "Escribe el número con el código del país, p. ej. +57 300 1234567.";
-}
-const celular = texto.superRefine((v, ctx) => {
-  const mensaje = mensajeCelular(v);
-  if (mensaje) ctx.addIssue({ code: "custom", message: mensaje });
-});
-
-export const TIPOS_DOCUMENTO = [
-  { valor: "V", etiqueta: "Cédula venezolana (V)" },
-  { valor: "E", etiqueta: "Cédula de extranjero (E)" },
-  { valor: "P", etiqueta: "Pasaporte" },
-];
-// "V-12.345.678" -> "12345678" (igual que Persona.normalizar_documento).
-export function normalizarDocumento(documento: string): string {
-  return documento
-    .trim()
-    .toUpperCase()
-    .replace(/^[VEP]-|[\s.-]/g, "");
-}
+export {
+  EDAD_MINIMA,
+  normalizarDocumento,
+  TIPOS_DOCUMENTO,
+} from "./esquemaPersona";
 
 export const ESTADOS_CIVILES = [
   "Soltero",
@@ -64,51 +40,16 @@ export const ESTADOS_CIVILES = [
 export const TALLAS = ["S", "M", "L", "XL"];
 // Con estos estados civiles se pide el nombre de la pareja.
 export const CON_PAREJA = ["Casado", "Unión libre"];
-export const EDAD_MINIMA = 18;
-
-function edad(nacimiento: string, hoy = new Date()): number {
-  const [a, m, d] = nacimiento.split("-").map(Number);
-  const cumplio =
-    hoy.getMonth() + 1 > m || (hoy.getMonth() + 1 === m && hoy.getDate() >= d);
-  return hoy.getFullYear() - a - (cumplio ? 0 : 1);
-}
 
 // --------------------------------------------------------------------------- //
 // Campos
 // --------------------------------------------------------------------------- //
 // Los que puede ver cualquiera que inscribe.
 const basicos = {
-  // Paso "Identificación"
+  ...camposPersona,
   retiro: obligatorio("Elige el retiro."),
-  // Sale del retiro (o de la persona ya registrada); no se muestra.
-  parroquia: obligatorio("Elige el retiro para saber la parroquia."),
   estado: obligatorio("Elige el estado de la inscripción."),
-  tipo_documento: obligatorio("Elige el tipo de documento."),
-  documento: obligatorio("Escribe el número de documento."),
   padrino: texto,
-  // Paso "Datos personales"
-  nombre: obligatorio("Escribe los nombres y apellidos.").refine(
-    (v) => v.split(/\s+/).length >= 2,
-    "Escribe nombres y apellidos.",
-  ),
-  fecha_nacimiento: obligatorio("Indica la fecha de nacimiento.")
-    .refine(
-      (v) => !Number.isNaN(Date.parse(v)) && Date.parse(v) <= Date.now(),
-      "La fecha de nacimiento no puede ser futura.",
-    )
-    .refine(
-      (v) => edad(v) >= EDAD_MINIMA,
-      `Debe tener al menos ${EDAD_MINIMA} años.`,
-    )
-    .refine((v) => edad(v) <= 100, "Revisa la fecha de nacimiento."),
-  // Persona.telefono es el celular, el teléfono principal.
-  telefono: obligatorio("Escribe el celular.").pipe(celular),
-  email: correo,
-  pais: obligatorio("Elige el país."),
-  // El estado geográfico (Persona.estado); "estado" es el de la inscripción.
-  entidad: texto,
-  ciudad: texto,
-  // Paso "Confirmar"
   notas: texto,
   consentimiento_datos: casilla.refine(
     (v) => v,
@@ -119,10 +60,7 @@ const basicos = {
 // Confidenciales: solo para los roles que ven datos sensibles (si no, la API
 // los descarta, así que tampoco se piden).
 const sensibles = {
-  // Datos personales
-  telefono_casa: fijo,
-  direccion: texto,
-  ocupacion: texto,
+  ...camposPersonaSensibles,
   // Familia y fe
   estado_civil: obligatorio("Elige el estado civil."),
   pareja_nombre: texto,
@@ -165,25 +103,10 @@ function cruzadas(
   conSensibles: boolean,
   conEstados: (pais: string) => boolean,
 ) {
-  const falta = (path: Campo, message: string) =>
+  const falta = (path: string, message: string) =>
     ctx.addIssue({ code: "custom", path: [path], message });
 
-  // Cédula: solo números; pasaporte: letras y números.
-  const documento = normalizarDocumento(v.documento ?? "");
-  if (documento) {
-    if (v.tipo_documento === "P") {
-      if (!/^[A-Z0-9]{5,20}$/.test(documento)) {
-        falta("documento", "El pasaporte lleva de 5 a 20 letras o números.");
-      }
-    } else if (!/^\d{5,9}$/.test(documento)) {
-      falta("documento", "La cédula lleva solo números (de 5 a 9 cifras).");
-    }
-  }
-  // En un país con estados cargados (Venezuela) se pide estado y ciudad.
-  if (v.pais && conEstados(v.pais)) {
-    if (!v.entidad) falta("entidad", "Elige el estado.");
-    else if (!v.ciudad) falta("ciudad", "Elige la ciudad.");
-  }
+  reglasPersona(v, falta, conEstados);
   if (!conSensibles) return;
   if (CON_PAREJA.includes(v.estado_civil ?? "") && !v.pareja_nombre) {
     falta("pareja_nombre", "Escribe el nombre de la pareja.");
@@ -216,22 +139,10 @@ export function crearEsquema(
 
 // Nombre de cada campo, en el formulario y en el resumen.
 export const ETIQUETAS: Record<Campo, string> = {
+  ...ETIQUETAS_PERSONA,
   retiro: "Retiro",
-  parroquia: "Parroquia",
   estado: "Estado de la inscripción",
-  tipo_documento: "Tipo de documento",
-  documento: "Número de documento",
   padrino: "Quién lo invitó",
-  nombre: "Nombres y apellidos",
-  fecha_nacimiento: "Fecha de nacimiento",
-  telefono: "Celular",
-  email: "Correo",
-  pais: "País",
-  entidad: "Estado",
-  ciudad: "Ciudad",
-  telefono_casa: "Teléfono de casa",
-  direccion: "Sector / urbanización / dirección",
-  ocupacion: "Ocupación",
   estado_civil: "Estado civil",
   pareja_nombre: "Nombre de la pareja",
   pareja_telefono: "Teléfono de la pareja",
@@ -268,7 +179,7 @@ export type Paso = {
   id: string;
   titulo: string;
   descripcion: string;
-  campos: Campo[]; // los que se validan al pasar al siguiente
+  campos: string[]; // los que se validan al pasar al siguiente
   soloSensibles?: boolean;
 };
 
@@ -290,18 +201,7 @@ export const PASOS: Paso[] = [
     id: "personales",
     titulo: "Datos personales",
     descripcion: "Quién es, de dónde es y cómo localizarlo.",
-    campos: [
-      "nombre",
-      "fecha_nacimiento",
-      "telefono",
-      "telefono_casa",
-      "email",
-      "pais",
-      "entidad",
-      "ciudad",
-      "direccion",
-      "ocupacion",
-    ],
+    campos: PASO_PERSONALES,
   },
   {
     id: "familia",
@@ -370,12 +270,10 @@ export function pasosPara(conSensibles: boolean): Paso[] {
 // --------------------------------------------------------------------------- //
 // Valores iniciales y conversión a la API
 // --------------------------------------------------------------------------- //
-// Claves de Persona.datos_sensibles, Inscripcion.salud_alimentacion y
-// Inscripcion.contacto_emergencia (ver retiros/api/modulos.py).
-const DATOS_SENSIBLES = [
-  "telefono_casa",
-  "direccion",
-  "ocupacion",
+// Lo de Persona.datos_sensibles que pide este formulario además de lo común,
+// y las claves de Inscripcion.salud_alimentacion y contacto_emergencia (ver
+// retiros/api/modulos.py).
+const FAMILIA = [
   "estado_civil",
   "pareja_nombre",
   "pareja_telefono",
@@ -407,7 +305,6 @@ const CONTACTO: [Campo, string][] = [
   ["contacto2_relacion", "relacion2"],
   ["contacto2_telefono", "telefono2"],
 ];
-
 const BOOLEANOS = new Set<string>([
   "bautismo",
   "confirmacion",
@@ -417,69 +314,33 @@ const BOOLEANOS = new Set<string>([
 ]);
 
 export function valoresIniciales(retiro?: string, pais = ""): Valores {
-  const valores = Object.fromEntries(
+  const vacios = Object.fromEntries(
     Object.keys(esquemaCompleto.shape).map((c) => [
       c,
       BOOLEANOS.has(c) ? false : "",
     ]),
   ) as Valores;
   return {
-    ...valores,
+    ...vacios,
+    ...valoresPersona(pais),
     retiro: retiro ?? "",
     estado: "solicitada",
-    tipo_documento: "V",
-    pais,
   };
 }
 
-const comoTexto = (valor: unknown) =>
-  valor === undefined || valor === null ? "" : String(valor);
-
-// "04141234567" o "0414 123 4567" -> "0414-1234567".
-function normalizarCelular(valor: unknown): string {
-  const texto = comoTexto(valor).trim();
-  const ve = /^(04\d{2})[\s-]*(\d{3})[\s-]*(\d{4})$/.exec(texto);
-  return ve ? `${ve[1]}-${ve[2]}${ve[3]}` : texto;
-}
-
-// Los datos de una persona ya registrada, para no volver a escribirlos.
 export function datosDePersona(persona: Registro): Partial<Valores> {
   const datos = (persona.datos_sensibles ?? {}) as Record<string, unknown>;
-  const valores: Record<string, unknown> = {
-    tipo_documento: persona.tipo_documento || "V",
-    documento: comoTexto(persona.documento),
-    nombre: comoTexto(persona.nombre),
-    fecha_nacimiento: comoTexto(persona.fecha_nacimiento),
-    telefono: normalizarCelular(persona.telefono),
-    email: comoTexto(persona.email),
-    parroquia: comoTexto(persona.parroquia),
-    entidad: comoTexto(persona.estado),
-    ciudad: comoTexto(persona.ciudad),
-  };
-  // Sin país registrado se conserva el que ya tenía el formulario (Venezuela).
-  if (persona.pais) valores.pais = persona.pais;
-  for (const clave of DATOS_SENSIBLES) {
-    valores[clave] = BOOLEANOS.has(clave)
-      ? Boolean(datos[clave])
-      : clave === "pareja_celular"
-        ? normalizarCelular(datos[clave])
-        : comoTexto(datos[clave]);
-  }
-  return valores as Partial<Valores>;
-}
-
-// Un objeto JSON sin los vacíos, sobre lo que ya tenía (para no borrar datos
-// que este formulario no pide).
-function json(
-  anterior: unknown,
-  pares: [string, unknown][],
-): Record<string, unknown> {
-  const objeto = { ...((anterior ?? {}) as Record<string, unknown>) };
-  for (const [clave, valor] of pares) {
-    if (valor === "" || valor === false) delete objeto[clave];
-    else objeto[clave] = valor;
-  }
-  return objeto;
+  const familia = Object.fromEntries(
+    FAMILIA.map((c) => [
+      c,
+      BOOLEANOS.has(c)
+        ? Boolean(datos[c])
+        : c === "pareja_celular"
+          ? normalizarCelular(datos[c])
+          : comoTexto(datos[c]),
+    ]),
+  );
+  return { ...datosDeLaPersona(persona), ...familia };
 }
 
 export function cuerpoPersona(
@@ -487,27 +348,15 @@ export function cuerpoPersona(
   conSensibles: boolean,
   anterior: Registro | null,
 ) {
-  return {
-    tipo_documento: v.tipo_documento,
-    documento: normalizarDocumento(v.documento),
-    nombre: v.nombre,
-    parroquia: v.parroquia,
-    fecha_nacimiento: v.fecha_nacimiento || null,
-    telefono: v.telefono,
-    email: v.email,
-    pais: v.pais || null,
-    estado: v.entidad || null,
-    ciudad: v.ciudad || null,
-    ...(conSensibles && {
-      datos_sensibles: json(
-        anterior?.datos_sensibles,
-        DATOS_SENSIBLES.map((c) => [
-          c,
-          c === "hijos" && v.hijos !== "" ? Number(v.hijos) : v[c],
-        ]),
-      ),
-    }),
-  };
+  return cuerpoDeLaPersona(
+    v,
+    conSensibles,
+    anterior,
+    FAMILIA.map((c) => [
+      c,
+      c === "hijos" && v.hijos !== "" ? Number(v.hijos) : v[c],
+    ]),
+  );
 }
 
 export function cuerpoInscripcion(
@@ -535,16 +384,10 @@ export function cuerpoInscripcion(
   };
 }
 
-// Errores de la API ({campo: ["mensaje"]}) -> campo del formulario. `de`
-// dice si vienen de guardar la persona o la inscripción.
-export function campoDeError(
-  clave: string,
-  de: "persona" | "inscripcion",
-): Campo | null {
-  if (de === "persona" && clave === "estado") return "entidad";
-  if (clave === "datos_sensibles") return "direccion";
+// Errores de la inscripción (/inscripciones/) -> campo del formulario.
+export function campoDeInscripcion(clave: string): string | null {
   if (clave === "salud_alimentacion") return "talla_camiseta";
   if (clave === "contacto_emergencia") return "contacto_nombre";
   if (clave === "persona") return "documento";
-  return clave in esquemaCompleto.shape ? (clave as Campo) : null;
+  return clave in esquemaCompleto.shape ? clave : null;
 }

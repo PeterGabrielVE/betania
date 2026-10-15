@@ -84,6 +84,8 @@ class PersonaAdmin(ImportExportModelAdmin):
     list_filter = ("parroquia", AnioCaminanteFilter)
     search_fields = ("nombre", "documento", "telefono", "email")
     autocomplete_fields = ("pais", "estado", "ciudad")
+    # Se arma con nombres y apellidos al guardar.
+    readonly_fields = ("nombre",)
 
     @admin.display(description="Documento", ordering="documento")
     def documento_completo(self, obj):

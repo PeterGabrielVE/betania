@@ -18,7 +18,6 @@ from rest_framework.response import Response
 from ..models import (
     Charla, EstadoPago, Gasto, Inscripcion, Pago, Participacion, Persona, Retiro, Tarea,
 )
-from ..geografia import VENEZUELA
 from ..tasas import TasaNoDisponible, tasas_bcv
 from .modulos import INSCRITAS, POR_MODELO
 from .permisos import permiso, ve_sensibles
@@ -332,12 +331,8 @@ def _texto(datos, clave):
 
 
 def _procedencia(persona, datos):
-    """"Los Teques, Miranda"; fuera de Venezuela, también el país."""
-    partes = [str(x) for x in (persona.ciudad, persona.estado) if x]
-    if persona.pais and persona.pais.codigo != VENEZUELA:
-        partes.append(str(persona.pais))
-    # Registros de antes de los catálogos de geografía.
-    return ", ".join(partes) or _texto(datos, "procedencia")
+    # Registros de antes de los catálogos de geografía: "procedencia" a mano.
+    return persona.procedencia or _texto(datos, "procedencia")
 
 
 def _ficha(i, retiro):

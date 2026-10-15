@@ -145,10 +145,12 @@ MODULOS = [
     # ---- Personas y acceso ----
     Modulo(
         "personas", Persona, "Personas", "persona", PERSONAS,
-        campos=["tipo_documento", "documento", "nombre", "parroquia", "fecha_nacimiento",
-                "telefono", "email", "pais", "estado", "ciudad", "datos_sensibles"],
-        lista=["nombre", "documento_completo", "telefono", "ciudad", "fecha_nacimiento",
-               "parroquia", "creado"],
+        campos=["tipo_documento", "documento", "primer_nombre", "segundo_nombre",
+                "primer_apellido", "segundo_apellido", "parroquia", "fecha_nacimiento",
+                "telefono", "email", "pais", "estado", "ciudad", "estado_texto",
+                "ciudad_texto", "datos_sensibles"],
+        lista=["nombre", "documento_completo", "telefono", "procedencia",
+               "fecha_nacimiento", "parroquia", "creado"],
         buscar=["nombre", "documento", "telefono", "email"],
         filtros=["parroquia"],
         orden=["nombre"],
@@ -157,15 +159,17 @@ MODULOS = [
         extras={
             # "V-12345678" o "Pasaporte 123456789".
             "documento_completo": Extra("Documento", "texto", lambda o: o.documento_completo),
+            "procedencia": Extra("De dónde es", "texto", lambda o: o.procedencia),
         },
         etiquetas={"nombre": "Nombres y apellidos", "fecha_nacimiento": "Nacimiento",
                    "email": "Correo", "parroquia": "Parroquia (del sistema)",
                    "telefono": "Celular", "documento": "Número de documento",
                    "tipo_documento": "Tipo de documento"},
         secciones={
-            _DATOS: ["tipo_documento", "documento", "nombre", "parroquia", "fecha_nacimiento",
+            _DATOS: ["tipo_documento", "documento", "primer_nombre", "segundo_nombre",
+                     "primer_apellido", "segundo_apellido", "parroquia", "fecha_nacimiento",
                      "telefono", "email"],
-            _UBICACION: ["pais", "estado", "ciudad"],
+            _UBICACION: ["pais", "estado", "ciudad", "estado_texto", "ciudad_texto"],
         },
         subcampos={
             "datos_sensibles": [
@@ -289,6 +293,10 @@ ETIQUETAS = {
     "monto_base": f"Equivalente en {settings.MONEDA}",
     "fecha_limite": "Fecha límite",
     "pais": "País", "codigo": "Código (ISO)",
+    "primer_nombre": "Primer nombre", "segundo_nombre": "Segundo nombre",
+    "primer_apellido": "Primer apellido", "segundo_apellido": "Segundo apellido",
+    "estado_texto": "Estado / provincia (si no está en la lista)",
+    "ciudad_texto": "Ciudad (si no está en la lista)",
 }
 
 # Texto de ayuda bajo el control de un campo.

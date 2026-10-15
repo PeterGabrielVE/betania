@@ -167,6 +167,14 @@ function TableroRetiro({ t }: { t: Tablero }) {
         texto: "Inscribir caminante",
         state: { retiro: { id: retiro.id, etiqueta: retiro.etiqueta } },
       },
+    puedeAgregar("personas") &&
+      puedeAgregar("participaciones") &&
+      puedeAgregar("servicios") && {
+        a: "/registrar-servidor",
+        icono: <GroupIcon className="size-5" />,
+        texto: "Registrar servidor",
+        state: { retiro: { id: retiro.id, etiqueta: retiro.etiqueta } },
+      },
     puedeAgregar("pagos") && {
       a: "/pagos?nuevo=1",
       icono: <DollarLineIcon className="size-5" />,

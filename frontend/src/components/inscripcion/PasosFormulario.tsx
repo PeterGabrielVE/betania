@@ -1,8 +1,6 @@
 // Lo que se pide en cada paso del formulario de inscripción.
-import { api, type Registro } from "@/api/client";
 import SelectorRemoto from "@/components/modulos/SelectorRemoto";
-import { fecha } from "@/utils/formato";
-import { useEffect, useState } from "react";
+import type { Registro } from "@/api/client";
 import { useFormContext, useWatch } from "react-hook-form";
 import {
   AreaTexto,
@@ -12,21 +10,17 @@ import {
   Opciones,
   Relacion,
   Texto,
-  Ubicacion,
-  type Lugar,
 } from "./Campos";
 import {
   CON_PAREJA,
-  EDAD_MINIMA,
   ESTADOS_CIVILES,
   ETIQUETAS as E,
-  normalizarDocumento,
   TALLAS,
   TIPOS_DOCUMENTO,
-  type Campo,
   type Paso,
   type Valores,
 } from "./esquema";
+import Resumen from "./Resumen";
 
 type Opcion = { valor: string; etiqueta: string };
 const comoOpciones = (lista: string[]): Opcion[] =>
@@ -123,52 +117,6 @@ export function PasoIdentificacion({
           etiquetas={etiquetas}
           onEtiqueta={onEtiqueta}
         />
-      </Grupo>
-    </div>
-  );
-}
-
-export function PasoPersonales({
-  sensibles,
-  paises,
-}: {
-  sensibles: boolean;
-  paises: Lugar[];
-}) {
-  return (
-    <div className="space-y-6">
-      <Grupo>
-        <Texto nombre="nombre" etiqueta={E.nombre} obligatorio ancho />
-        <Texto
-          nombre="fecha_nacimiento"
-          etiqueta={E.fecha_nacimiento}
-          tipo="date"
-          obligatorio
-          ayuda={`Desde ${EDAD_MINIMA} años.`}
-        />
-        {sensibles && <Texto nombre="ocupacion" etiqueta={E.ocupacion} />}
-      </Grupo>
-      <Grupo titulo="Cómo localizarlo">
-        <Celular nombre="telefono" etiqueta={E.telefono} obligatorio />
-        {sensibles && (
-          <Texto
-            nombre="telefono_casa"
-            etiqueta={E.telefono_casa}
-            tipo="tel"
-            placeholder="Ej.: 0212-1234567"
-          />
-        )}
-        <Texto nombre="email" etiqueta={E.email} tipo="email" />
-      </Grupo>
-      <Grupo titulo="De dónde es">
-        <Ubicacion paises={paises} />
-        {sensibles && (
-          <AreaTexto
-            nombre="direccion"
-            etiqueta={E.direccion}
-            placeholder="Ej.: Urb. La Florida, calle 3, casa 12"
-          />
-        )}
       </Grupo>
     </div>
   );
@@ -315,122 +263,42 @@ export function PasoContactos() {
   );
 }
 
-// Nombre de un país, estado o ciudad a partir de su id.
-function useNombre(recurso: string, id: string) {
-  const [nombre, setNombre] = useState<{ id: string; nombre: string }>({
-    id: "",
-    nombre: "",
-  });
-  useEffect(() => {
-    if (!id) return;
-    let vigente = true;
-    api<Registro>(`/${recurso}/${id}/`)
-      .then((r) => vigente && setNombre({ id, nombre: r.nombre as string }))
-      .catch(() => vigente && setNombre({ id, nombre: "" }));
-    return () => {
-      vigente = false;
-    };
-  }, [recurso, id]);
-  return nombre.id === id ? nombre.nombre : "";
-}
-
-// Lo que se va a guardar, por paso, con un enlace para corregir cada parte.
-function Resumen({
+export function PasoConfirmar({
   pasos,
   etiquetas,
   estados,
   onIr,
 }: {
   pasos: Paso[];
-  etiquetas: Record<string, string>;
+  etiquetas: Record<string, string>; // texto del retiro y del padrino
   estados: Opcion[];
   onIr: (indice: number) => void;
 }) {
-  const { getValues } = useFormContext<Valores>();
-  const valores = getValues();
-  const lugares: Partial<Record<Campo, string>> = {
-    pais: useNombre("paises", valores.pais),
-    entidad: useNombre("estados", valores.entidad),
-    ciudad: useNombre("ciudades", valores.ciudad),
-  };
-  const mostrar = (campo: Campo): string => {
-    const v = valores[campo];
-    if (typeof v === "boolean") return v ? "Sí" : "";
-    if (!v) return "";
-    if (campo in lugares) return lugares[campo] ?? "";
-    if (campo === "tipo_documento") {
-      return TIPOS_DOCUMENTO.find((t) => t.valor === v)?.etiqueta ?? v;
-    }
-    if (campo === "documento") return normalizarDocumento(v);
-    if (campo === "retiro" || campo === "padrino")
-      return etiquetas[campo] ?? "";
-    if (campo === "estado") {
-      return estados.find((o) => o.valor === v)?.etiqueta ?? v;
-    }
-    if (campo === "fecha_nacimiento") return fecha(v);
-    return v;
-  };
-
-  return (
-    <div className="space-y-4">
-      {pasos.slice(0, -1).map((paso, i) => {
-        const datos = paso.campos
-          .filter((c) => c !== "parroquia")
-          .map((c) => [c, mostrar(c)] as const)
-          .filter(([, v]) => v);
-        return (
-          <section
-            key={paso.id}
-            className="rounded-xl border border-gray-200 p-4 dark:border-gray-800"
-          >
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h4 className="text-theme-sm font-semibold text-gray-800 dark:text-white/90">
-                {paso.titulo}
-              </h4>
-              <button
-                type="button"
-                onClick={() => onIr(i)}
-                className="text-theme-sm text-brand-500 hover:text-brand-600 dark:text-brand-400"
-              >
-                Editar
-              </button>
-            </div>
-            {datos.length === 0 ? (
-              <p className="text-theme-xs text-gray-500 dark:text-gray-400">
-                Sin datos.
-              </p>
-            ) : (
-              <dl className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
-                {datos.map(([campo, valor]) => (
-                  <div key={campo} className="min-w-0">
-                    <dt className="text-theme-xs text-gray-500 dark:text-gray-400">
-                      {campo.startsWith("contacto2_")
-                        ? `Otro familiar: ${E[campo].toLowerCase()}`
-                        : E[campo]}
-                    </dt>
-                    <dd className="text-theme-sm break-words whitespace-pre-line text-gray-800 dark:text-white/90">
-                      {valor}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            )}
-          </section>
-        );
-      })}
-    </div>
+  // Los del segundo contacto se distinguen del primero.
+  const titulos: Record<string, string> = Object.fromEntries(
+    Object.entries(E).map(([campo, titulo]) => [
+      campo,
+      campo.startsWith("contacto2_")
+        ? `Otro familiar: ${titulo.toLowerCase()}`
+        : titulo,
+    ]),
   );
-}
-
-export function PasoConfirmar(props: {
-  pasos: Paso[];
-  etiquetas: Record<string, string>;
-  estados: Opcion[];
-  onIr: (indice: number) => void;
-}) {
   return (
     <div className="space-y-6">
-      <Resumen {...props} />
+      <Resumen
+        pasos={pasos.slice(0, -1)}
+        titulos={titulos}
+        onIr={onIr}
+        formatear={(campo, valor) => {
+          if (campo === "retiro" || campo === "padrino") {
+            return valor ? (etiquetas[campo] ?? "") : "";
+          }
+          if (campo === "estado") {
+            return estados.find((o) => o.valor === valor)?.etiqueta;
+          }
+          return undefined;
+        }}
+      />
       <Grupo>
         <AreaTexto
           nombre="notas"

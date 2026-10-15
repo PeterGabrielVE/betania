@@ -583,6 +583,8 @@ export default function RetiroPanel() {
   const puede = (slug: string) => modulo(slug)?.puede_agregar;
   const puedeEditar = (slug: string) => !!modulo(slug)?.puede_cambiar;
   const puedeInscribir = puede("personas") && puede("inscripciones");
+  const puedeRegistrarServidor =
+    puede("personas") && puede("participaciones") && puede("servicios");
 
   return (
     <>
@@ -628,6 +630,15 @@ export default function RetiroPanel() {
               className={claseBoton}
             >
               Inscribir caminante
+            </Link>
+          )}
+          {puedeRegistrarServidor && (
+            <Link
+              to="/registrar-servidor"
+              state={{ retiro: { id: retiro.id, etiqueta: retiro.etiqueta } }}
+              className={claseBoton}
+            >
+              Registrar servidor
             </Link>
           )}
         </div>

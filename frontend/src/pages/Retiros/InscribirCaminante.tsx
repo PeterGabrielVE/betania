@@ -1,38 +1,37 @@
-import { api, ApiError, type Pagina, type Registro } from "@/api/client";
+import { api, ApiError, type Registro } from "@/api/client";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
-import BarraPasos from "@/components/inscripcion/BarraPasos";
+import Asistente from "@/components/inscripcion/Asistente";
 import {
-  campoDeError,
+  campoDeInscripcion,
   crearEsquema,
   cuerpoInscripcion,
   cuerpoPersona,
   datosDePersona,
-  normalizarDocumento,
   pasosPara,
   valoresIniciales,
-  type Campo,
   type Valores,
 } from "@/components/inscripcion/esquema";
+import { campoDePersona } from "@/components/inscripcion/esquemaPersona";
+import PasoPersonales from "@/components/inscripcion/PasoPersonales";
 import {
   PasoConfirmar,
   PasoContactos,
   PasoFamilia,
   PasoIdentificacion,
-  PasoPersonales,
   PasoSalud,
 } from "@/components/inscripcion/PasosFormulario";
+import { useAsistente } from "@/components/inscripcion/useAsistente";
 import {
-  claseBoton,
-  claseEnlace,
-  claseTarjeta,
-} from "@/components/modulos/estilos";
-import Button from "@/components/ui/button/Button";
+  conflictoEnRetiro,
+  useRegistroPersona,
+} from "@/components/inscripcion/useRegistroPersona";
+import { claseEnlace } from "@/components/modulos/estilos";
 import { useAuth } from "@/context/AuthContext";
 import { CheckCircleIcon } from "@/icons";
 import NotFound from "@/pages/OtherPage/NotFound";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { FormProvider, useForm, type FieldErrors } from "react-hook-form";
 import { Link, useLocation } from "react-router";
 
@@ -56,208 +55,87 @@ export default function InscribirCaminante() {
     !!personas?.campos.some((c) => c.nombre === "datos_sensibles") &&
     !!inscripciones?.campos.some((c) => c.nombre === "salud_alimentacion");
   const pasos = useMemo(() => pasosPara(sensibles), [sensibles]);
-  // Países para elegir; Venezuela va por defecto y es la que pide estado y ciudad.
-  const [paises, setPaises] = useState<{ id: string; nombre: string }[]>([]);
+  const estados =
+    inscripciones?.campos.find((c) => c.nombre === "estado")?.opciones ?? [];
+
+  // Venezuela pide estado y ciudad de la lista; el id llega con los países.
   const [venezuela, setVenezuela] = useState("");
   const esquema = useMemo(
     () => crearEsquema(sensibles, (pais) => pais === venezuela),
     [sensibles, venezuela],
   );
-  const estados =
-    inscripciones?.campos.find((c) => c.nombre === "estado")?.opciones ?? [];
-
   const formulario = useForm<Valores>({
     resolver: zodResolver(esquema),
     defaultValues: valoresIniciales(retiroInicial?.id),
     // Avisa al salir de cada campo y, ya con error, mientras se corrige.
     mode: "onTouched",
   });
-  const {
-    trigger,
-    setValue,
-    getValues,
-    setError,
-    reset,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = formulario;
+  const { getValues, setError, reset, handleSubmit, formState } = formulario;
 
-  const [actual, setActual] = useState(0);
-  const [alcanzado, setAlcanzado] = useState(0);
-  // Persona ya guardada (elegida en el buscador o creada en un intento anterior).
-  const [persona, setPersona] = useState<Registro | null>(null);
+  const asistente = useAsistente(pasos, formulario);
+  const registro = useRegistroPersona(formulario, {
+    retiroInicial: retiroInicial?.id,
+    vaciar: (pais) => valoresIniciales(getValues("retiro"), pais),
+    datosExtra: datosDePersona,
+  });
+  if (registro.venezuela !== venezuela) setVenezuela(registro.venezuela);
+
   // Texto visible de las relaciones elegidas (retiro, padrino).
   const [etiquetas, setEtiquetas] = useState<Record<string, string>>(
     retiroInicial ? { retiro: retiroInicial.etiqueta } : {},
   );
-  const [general, setGeneral] = useState("");
-  const [avisoDocumento, setAvisoDocumento] = useState("");
   const [hecho, setHecho] = useState<{
     etiqueta: string;
     retiro: string;
   } | null>(null);
-  const tarjeta = useRef<HTMLDivElement>(null);
-
-  // La parroquia de una persona nueva es la del retiro; la de una ya
-  // registrada se conserva.
-  const personaElegida = useRef(false);
-  const usarParroquiaDe = (retiro: string) =>
-    api<Registro>(`/retiros/${retiro}/`)
-      .then((r) => {
-        if (!personaElegida.current) {
-          setValue("parroquia", r.parroquia as string, {
-            shouldValidate: true,
-          });
-        }
-      })
-      .catch((e: Error) => setGeneral(e.message));
-
-  useEffect(() => {
-    if (retiroInicial) usarParroquiaDe(retiroInicial.id);
-    api<Pagina<Registro>>("/paises/?page_size=100")
-      .then((d) => {
-        setPaises(
-          d.results.map((p) => ({ id: p.id, nombre: p.nombre as string })),
-        );
-        const ve = d.results.find((p) => p.codigo === "VE")?.id ?? "";
-        setVenezuela(ve);
-        if (!getValues("pais")) setValue("pais", ve);
-      })
-      .catch((e: Error) => setGeneral(e.message));
-    // Solo al abrir la pantalla.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const conErrores = useMemo(
-    () =>
-      new Set(
-        pasos
-          .map((p, i) => (p.campos.some((c) => errors[c]) ? i : -1))
-          .filter((i) => i >= 0),
-      ),
-    [pasos, errors],
-  );
 
   if (!personas?.puede_agregar || !inscripciones?.puede_agregar) {
     return <NotFound />;
   }
 
-  const irA = (indice: number) => {
-    setActual(indice);
-    setAlcanzado((a) => Math.max(a, indice));
-    tarjeta.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
+  const { persona } = registro;
 
-  // Avanzar exige que el paso actual esté completo.
+  // Del primer paso se sigue solo si la persona no está ya en ese retiro.
   const siguiente = async () => {
-    const valido = await trigger(pasos[actual].campos, { shouldFocus: true });
-    if (!valido) return;
-    if (actual === 0) await buscarPorDocumento();
-    irA(actual + 1);
-  };
-
-  const ir = async (indice: number) => {
-    if (indice <= actual) return irA(indice);
-    if (await trigger(pasos[actual].campos, { shouldFocus: true })) {
-      irA(indice);
-    }
-  };
-
-  // Si ya hay alguien registrado con ese documento, se cargan sus datos en vez
-  // de crear a otra persona.
-  const buscarPorDocumento = async () => {
-    const tipo = getValues("tipo_documento");
-    const numero = normalizarDocumento(getValues("documento"));
-    if (!numero) return;
-    if (persona?.documento === numero && persona.tipo_documento === tipo)
-      return;
-    try {
-      const { results } = await api<Pagina<Registro>>(
-        `/personas/?search=${encodeURIComponent(numero)}&page_size=20`,
-      );
-      const encontrada = results.find(
-        (p) => p.documento === numero && p.tipo_documento === tipo,
-      );
+    if (!(await asistente.validarActual())) return;
+    if (asistente.actual === 0) {
+      const encontrada = await registro.buscarPorDocumento(pasos[0].campos);
       if (encontrada) {
-        await elegirPersona(encontrada.id);
-        setAvisoDocumento(
-          `Ya está registrada: ${encontrada.nombre}. Se cargaron sus datos; revísalos en los pasos siguientes.`,
+        const conflicto = await conflictoEnRetiro(
+          encontrada,
+          getValues("retiro"),
+          "caminante",
         );
-      } else {
-        if (persona) {
-          // Otro documento: es otra persona. Se borra lo que se había cargado
-          // de la anterior (menos lo de este paso) para no mezclar sus datos.
-          setPersona(null);
-          personaElegida.current = false;
-          const limpios = valoresIniciales(getValues("retiro"), venezuela);
-          for (const campo of Object.keys(limpios) as Campo[]) {
-            if (!pasos[0].campos.includes(campo)) {
-              setValue(campo, limpios[campo] as never);
-            }
-          }
-          const retiro = getValues("retiro");
-          if (retiro) usarParroquiaDe(retiro);
+        if (conflicto) {
+          setError("documento", { message: conflicto }, { shouldFocus: true });
+          return;
         }
-        setAvisoDocumento(
-          "Persona nueva: completa sus datos en los pasos siguientes.",
-        );
       }
-    } catch (e) {
-      setGeneral((e as Error).message);
     }
-  };
-
-  const elegirPersona = async (id: string | null) => {
-    setGeneral("");
-    setAvisoDocumento("");
-    if (!id) {
-      setPersona(null);
-      personaElegida.current = false;
-      const retiro = getValues("retiro");
-      if (retiro) usarParroquiaDe(retiro);
-      return;
-    }
-    try {
-      const registro = await api<Registro>(`/personas/${id}/`);
-      setPersona(registro);
-      personaElegida.current = true;
-      for (const [campo, valor] of Object.entries(datosDePersona(registro))) {
-        setValue(campo as Campo, valor as never, { shouldDirty: true });
-      }
-    } catch (e) {
-      setGeneral((e as Error).message);
-    }
-  };
-
-  // Lleva al primer paso con errores.
-  const alPrimerError = (campos: string[]) => {
-    const indice = pasos.findIndex((p) =>
-      p.campos.some((c) => campos.includes(c)),
-    );
-    if (indice >= 0) irA(indice);
+    asistente.irA(asistente.actual + 1);
   };
 
   const errorDeApi = (
     err: unknown,
-    de: "persona" | "inscripcion",
+    campoDe: (clave: string) => string | null,
     prefijo = "",
   ) => {
     if (err instanceof ApiError) {
       const marcados: string[] = [];
       for (const [clave, mensajes] of Object.entries(err.campos)) {
-        const campo = campoDeError(clave, de);
+        const campo = campoDe(clave);
         if (campo) {
-          setError(campo, { message: mensajes.join(" ") });
+          setError(campo as keyof Valores, { message: mensajes.join(" ") });
           marcados.push(campo);
         }
       }
-      alPrimerError(marcados);
+      asistente.alPrimero(marcados);
     }
-    setGeneral(`${prefijo}${(err as Error).message}`);
+    registro.setError(`${prefijo}${(err as Error).message}`);
   };
 
   const guardar = async (v: Valores) => {
-    setGeneral("");
+    registro.setError("");
     let guardada: Registro;
     try {
       // 1. La persona: se crea, o se actualiza si ya existía.
@@ -269,9 +147,9 @@ export default function InscribirCaminante() {
         },
       );
       // Si la inscripción falla, al reintentar no se duplica la persona.
-      setPersona(guardada);
+      registro.setPersona(guardada);
     } catch (err) {
-      errorDeApi(err, "persona");
+      errorDeApi(err, campoDePersona);
       return;
     }
     try {
@@ -285,47 +163,45 @@ export default function InscribirCaminante() {
     } catch (err) {
       errorDeApi(
         err,
-        "inscripcion",
+        campoDeInscripcion,
         "Los datos de la persona se guardaron, pero no la inscripción: ",
       );
     }
   };
 
   const alFallar = (fallos: FieldErrors<Valores>) =>
-    alPrimerError(Object.keys(fallos));
+    asistente.alPrimero(Object.keys(fallos));
 
   // Formulario vacío; el retiro se conserva para inscribir al siguiente.
   const empezarDeNuevo = (retiro = getValues("retiro")) => {
     reset(valoresIniciales(retiro, venezuela));
-    setAvisoDocumento("");
     setEtiquetas((e) => ({ retiro: e.retiro ?? "" }));
-    setPersona(null);
-    personaElegida.current = false;
-    if (retiro) usarParroquiaDe(retiro);
-    setGeneral("");
-    setActual(0);
-    setAlcanzado(0);
+    registro.setPersona(null);
+    registro.olvidarPersona();
+    registro.setAviso("");
+    registro.setError("");
+    asistente.reiniciar();
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const ultimo = actual === pasos.length - 1;
-  const paso = pasos[actual];
   const contenido: Record<string, React.ReactNode> = {
     identificacion: (
       <PasoIdentificacion
         persona={persona}
-        onPersona={elegirPersona}
-        onDocumento={buscarPorDocumento}
-        avisoDocumento={avisoDocumento}
+        onPersona={registro.elegirPersona}
+        onDocumento={() => registro.buscarPorDocumento(pasos[0].campos)}
+        avisoDocumento={registro.aviso}
         etiquetas={etiquetas}
         onEtiqueta={(nombre, etiqueta) =>
           setEtiquetas((e) => ({ ...e, [nombre]: etiqueta }))
         }
-        onRetiro={(id) => id && usarParroquiaDe(id)}
+        onRetiro={(id) => id && registro.usarParroquiaDe(id)}
         estados={estados}
       />
     ),
-    personales: <PasoPersonales sensibles={sensibles} paises={paises} />,
+    personales: (
+      <PasoPersonales sensibles={sensibles} paises={registro.paises} />
+    ),
     familia: <PasoFamilia />,
     salud: <PasoSalud />,
     contactos: <PasoContactos />,
@@ -334,7 +210,7 @@ export default function InscribirCaminante() {
         pasos={pasos}
         etiquetas={etiquetas}
         estados={estados}
-        onIr={irA}
+        onIr={asistente.irA}
       />
     ),
   };
@@ -368,7 +244,7 @@ export default function InscribirCaminante() {
           noValidate
           onSubmit={(e) => {
             // Enter en un campo avanza de paso; solo el último guarda.
-            if (!ultimo) {
+            if (!asistente.ultimo) {
               e.preventDefault();
               siguiente();
               return;
@@ -377,65 +253,19 @@ export default function InscribirCaminante() {
           }}
           className="space-y-6"
         >
-          <BarraPasos
+          <Asistente
             pasos={pasos}
-            actual={actual}
-            alcanzado={alcanzado}
-            conErrores={conErrores}
-            onIr={ir}
-          />
-
-          <div ref={tarjeta} className={`${claseTarjeta} scroll-mt-24`}>
-            <div className="mb-6">
-              <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
-                {paso.titulo}
-              </h3>
-              <p className="text-theme-sm text-gray-500 dark:text-gray-400">
-                {paso.descripcion} Los campos con{" "}
-                <span className="text-error-500">*</span> son obligatorios.
-              </p>
-            </div>
-            {contenido[paso.id]}
-          </div>
-
-          {general && (
-            <p
-              className="rounded-xl border border-error-500/30 bg-error-50 px-5 py-3 text-sm text-error-600 dark:bg-error-500/15 dark:text-error-500"
-              role="alert"
-            >
-              {general}
-            </p>
-          )}
-
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <button
-              type="button"
-              className={claseBoton}
-              onClick={() => {
-                setHecho(null);
-                empezarDeNuevo();
-              }}
-            >
-              Empezar de nuevo
-            </button>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                className={claseBoton}
-                disabled={actual === 0}
-                onClick={() => irA(actual - 1)}
-              >
-                Anterior
-              </button>
-              {ultimo ? (
-                <Button size="sm" disabled={isSubmitting}>
-                  {isSubmitting ? "Guardando…" : "Registrar inscripción"}
-                </Button>
-              ) : (
-                <Button size="sm">Siguiente</Button>
-              )}
-            </div>
-          </div>
+            asistente={asistente}
+            general={registro.error}
+            guardando={formState.isSubmitting}
+            textoGuardar="Registrar inscripción"
+            onEmpezarDeNuevo={() => {
+              setHecho(null);
+              empezarDeNuevo();
+            }}
+          >
+            {contenido[pasos[asistente.actual].id]}
+          </Asistente>
         </form>
       </FormProvider>
     </>

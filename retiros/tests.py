@@ -198,7 +198,8 @@ class ModulosTests(Base):
         ana = self.persona("Ana")
         datos = {"retiro": str(self.retiro.pk), "persona": str(ana.pk)}
         self.assertEqual(self.post("/api/inscripciones/", datos).status_code, 201)
-        self.assertEqual(self.post("/api/inscripciones/", datos).status_code, 400)
+        r = self.post("/api/inscripciones/", datos)
+        self.assertEqual(r.json()["persona"], ["Ya está inscrita en este retiro."])
         self.assertEqual(self.client.delete(f"/api/personas/{ana.pk}/").status_code, 409)
 
     def test_sesion_informa_moneda_y_region(self):
@@ -480,7 +481,8 @@ class AccesoPorRolTests(Base):
 class DocumentoYGeografiaTests(Base):
     def crear(self, **datos):
         return self.post("/api/personas/", {
-            "nombre": "Ana Pérez", "parroquia": str(self.parroquia.pk), **datos,
+            "primer_nombre": "Ana", "primer_apellido": "Pérez",
+            "parroquia": str(self.parroquia.pk), **datos,
         })
 
     def test_el_documento_se_normaliza_y_no_se_repite(self):
@@ -533,6 +535,93 @@ class DocumentoYGeografiaTests(Base):
         miranda = next(e for e in estados["results"] if e["nombre"] == "Miranda")
         ciudades = self.client.get(f"/api/ciudades/?estado={miranda['id']}&page_size=100").json()
         self.assertIn("Los Teques", [c["nombre"] for c in ciudades["results"]])
+
+
+class NombresYDuplicadosTests(Base):
+    def crear(self, **datos):
+        return self.post("/api/personas/", {"parroquia": str(self.parroquia.pk), **datos})
+
+    def test_nombre_completo_con_nombres_y_apellidos(self):
+        r = self.crear(primer_nombre=" María ", segundo_nombre="José",
+                       primer_apellido="Pérez", segundo_apellido="Gómez",
+                       nombre="Esto no se usa")
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertEqual(r.json()["nombre"], "María José Pérez Gómez")
+
+    def test_pide_primer_nombre_y_primer_apellido(self):
+        errores = self.crear(segundo_nombre="José").json()
+        self.assertEqual(errores["primer_nombre"], ["Escribe el primer nombre."])
+        self.assertEqual(errores["primer_apellido"], ["Escribe el primer apellido."])
+
+    def test_nombres_viejos_se_reparten(self):
+        casos = {
+            "Ana Pérez": ("Ana", "", "Pérez", ""),
+            "José Pérez Gómez": ("José", "", "Pérez", "Gómez"),
+            "María José Pérez Gómez": ("María", "José", "Pérez", "Gómez"),
+            "Ana María Luisa Pérez Gómez": ("Ana", "María Luisa", "Pérez", "Gómez"),
+        }
+        for completo, partes in casos.items():
+            p = self.persona(completo)
+            self.assertEqual((p.primer_nombre, p.segundo_nombre, p.primer_apellido,
+                              p.segundo_apellido), partes, completo)
+            self.assertEqual(p.nombre, completo)
+
+    def test_no_duplica_por_nombre_y_fecha(self):
+        datos = {"primer_nombre": "Ana", "primer_apellido": "Pérez",
+                 "fecha_nacimiento": "1990-05-04"}
+        self.assertEqual(self.crear(**datos).status_code, 201)
+        r = self.crear(**{**datos, "primer_nombre": "ana"})
+        self.assertIn("Ya hay una persona con ese nombre y fecha de nacimiento",
+                      r.json()["primer_nombre"][0])
+        # Aunque la nueva traiga documento, la anterior no tiene: podría ser
+        # la misma persona.
+        r = self.crear(**datos, documento="12345678")
+        self.assertEqual(r.status_code, 400)
+
+    def test_con_documentos_distintos_son_personas_distintas(self):
+        datos = {"primer_nombre": "Ana", "primer_apellido": "Pérez",
+                 "fecha_nacimiento": "1990-05-04"}
+        self.assertEqual(self.crear(**datos, documento="12345678").status_code, 201)
+        self.assertEqual(self.crear(**datos, documento="87654321").status_code, 201)
+
+    def test_pasaporte_repetido(self):
+        datos = {"primer_nombre": "John", "primer_apellido": "Smith",
+                 "tipo_documento": "P", "documento": "AB123456"}
+        self.assertEqual(self.crear(**datos).status_code, 201)
+        r = self.crear(**{**datos, "primer_nombre": "Juan"})
+        self.assertIn("Ya está registrada con ese documento", r.json()["documento"][0])
+
+    def test_ciudad_escrita_si_no_esta_en_la_lista(self):
+        colombia = Pais.objects.create(nombre="Colombia", codigo="CO")
+        r = self.crear(primer_nombre="Ana", primer_apellido="Gómez", pais=str(colombia.pk),
+                       estado_texto="Antioquia", ciudad_texto="Medellín")
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertEqual(Persona.objects.get().procedencia, "Medellín, Antioquia, Colombia")
+
+    def test_caminante_y_servidor_del_mismo_retiro(self):
+        ana, luis = self.persona("Ana Pérez"), self.persona("Luis Gómez")
+        Inscripcion.objects.create(retiro=self.retiro, persona=ana)
+        r = self.post("/api/participaciones/", {
+            "retiro": str(self.retiro.pk), "persona": str(ana.pk), "tipo": "servidor"})
+        self.assertEqual(r.json()["persona"], ["Está inscrita como caminante en este retiro."])
+
+        Participacion.objects.create(retiro=self.retiro, persona=luis, tipo="servidor")
+        r = self.post("/api/inscripciones/", {
+            "retiro": str(self.retiro.pk), "persona": str(luis.pk)})
+        self.assertEqual(r.json()["persona"],
+                         ["Ya está en el equipo de este retiro como servidor."])
+        r = self.post("/api/participaciones/", {
+            "retiro": str(self.retiro.pk), "persona": str(luis.pk), "tipo": "coordinador"})
+        self.assertEqual(r.json()["persona"], ["Ya está en este retiro como servidor."])
+
+    def test_area_repetida(self):
+        luis = Participacion.objects.create(
+            retiro=self.retiro, persona=self.persona("Luis Gómez"), tipo="servidor")
+        cocina = AreaServicio.objects.create(nombre="Cocina")
+        datos = {"participacion": str(luis.pk), "area": str(cocina.pk)}
+        self.assertEqual(self.post("/api/servicios/", datos).status_code, 201)
+        self.assertEqual(self.post("/api/servicios/", datos).json()["area"],
+                         ["Ya sirve en esa área."])
 
 
 class ReportesTests(Base):
@@ -592,6 +681,7 @@ class ReportesTests(Base):
         self.persona("Ana", datos_sensibles={"direccion": "Calle 1"})
         exportado = PersonaResource().export()
         self.assertEqual(exportado.headers,
-                         ["tipo_documento", "documento", "nombre", "telefono", "email",
-                          "fecha_nacimiento", "parroquia"])
-        self.assertEqual(exportado[0][6], "San José")
+                         ["tipo_documento", "documento", "nombre", "primer_nombre",
+                          "segundo_nombre", "primer_apellido", "segundo_apellido", "telefono",
+                          "email", "fecha_nacimiento", "parroquia"])
+        self.assertEqual(exportado[0][10], "San José")
