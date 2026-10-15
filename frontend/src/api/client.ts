@@ -224,6 +224,79 @@ export type PanelRetiro = {
   opciones_pago: Opcion[];
 };
 
+type Conteo = Opcion & { total: number };
+
+// Tablero de un retiro en el inicio. Cada sección llega en null (o sin sus
+// campos de pago) si el usuario no tiene permiso para verla.
+export type Tablero = {
+  retiro: {
+    id: string;
+    etiqueta: string;
+    fecha_inicio: string;
+    fecha_fin: string;
+    sede: string;
+    cupo: number;
+    cuota: number;
+    cuota_servidor: number;
+    estado: string;
+    estado_display: string;
+  };
+  dias_para_inicio: number;
+  dias_para_fin: number;
+  caminantes: {
+    inscritos: number;
+    disponibles: number;
+    confirmados: number;
+    por_confirmar: number;
+    cancelados: number;
+    por_estado: { estado: string; etiqueta: string; total: number }[];
+    pagos?: Conteo[];
+    por_cobrar?: number;
+    recaudado?: number;
+  } | null;
+  servidores: {
+    total: number;
+    coordinadores: number;
+    sin_area: number;
+    por_area: { area: string; total: number }[];
+    pagos?: Conteo[];
+    por_cobrar?: number;
+    recaudado?: number;
+  } | null;
+  finanzas: {
+    ingresos: number;
+    egresos: number;
+    balance: number;
+    por_concepto: Conteo[];
+    por_categoria: Conteo[];
+    // Ingresos acumulados a cada fecha con pagos.
+    recaudacion: { fecha: string; total: number }[];
+  } | null;
+  tareas: {
+    pendientes: number;
+    vencidas: number;
+    hechas: number;
+    proximas: {
+      id: string;
+      titulo: string;
+      fecha_limite: string | null;
+      responsable: string;
+      area: string;
+      vencida: boolean;
+    }[];
+  } | null;
+  cumpleanos: {
+    nombre: string;
+    rol: string;
+    fecha: string;
+    cumple: number;
+    en_dias: number;
+    durante_retiro: boolean;
+  }[];
+  // Pendientes que salen de los datos (por confirmar, deben, sin contacto...).
+  alertas: { clave: string; total: number; texto: string; enlace: string }[];
+};
+
 export type Resumen = {
   personas: number;
   retiros: number;
@@ -249,4 +322,7 @@ export type Resumen = {
     estado: string;
     estado_display: string;
   }[];
+  // Retiros que se pueden elegir en el tablero y el tablero del elegido.
+  retiros_tablero: { id: string; etiqueta: string; fecha_inicio: string }[];
+  tablero: Tablero | null;
 };

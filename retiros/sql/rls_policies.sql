@@ -66,6 +66,13 @@ CREATE POLICY charla_tenant ON retiros_charla
   USING (EXISTS (SELECT 1 FROM retiros_retiro r
                  WHERE r.id = retiro_id AND parroquia_visible(r.parroquia_id)));
 
+ALTER TABLE retiros_tarea ENABLE ROW LEVEL SECURITY;
+ALTER TABLE retiros_tarea FORCE  ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tarea_tenant ON retiros_tarea;
+CREATE POLICY tarea_tenant ON retiros_tarea
+  USING (EXISTS (SELECT 1 FROM retiros_retiro r
+                 WHERE r.id = retiro_id AND parroquia_visible(r.parroquia_id)));
+
 ALTER TABLE retiros_asignacionservicio ENABLE ROW LEVEL SECURITY;
 ALTER TABLE retiros_asignacionservicio FORCE  ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS asignacion_tenant ON retiros_asignacionservicio;

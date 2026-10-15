@@ -68,6 +68,14 @@ def _describir(modulo, nombre):
     return info
 
 
+def _filtro(modulo, nombre):
+    """Como _describir, pero un sí/no se filtra con una lista de dos opciones."""
+    info = _describir(modulo, nombre)
+    if info["tipo"] == "bool":
+        info.update(tipo="opcion", opciones=_opciones([("true", "Sí"), ("false", "No")]))
+    return info
+
+
 # --------------------------------------------------------------------------- #
 # Serializer y ViewSet de un módulo
 # --------------------------------------------------------------------------- #
@@ -206,7 +214,7 @@ def esquema(request):
             "grupo": m.grupo,
             "campos": [_describir(m, n) for n in campos],
             "lista": [_describir(m, n) for n in lista],
-            "filtros": [_describir(m, n) for n in m.filtros],
+            "filtros": [_filtro(m, n) for n in m.filtros],
             "buscable": bool(m.buscar),
             "puede_agregar": user.has_perm(m.permiso("add")),
             "puede_cambiar": user.has_perm(m.permiso("change")),

@@ -9,7 +9,7 @@ from django.db.models import Count, Q, Sum
 
 from ..models import (
     AreaServicio, AsignacionRol, AsignacionServicio, Charla, Diocesis, EstadoPago, Gasto,
-    Inscripcion, Pago, Parroquia, Participacion, Persona, Retiro, TipoRetiro, Usuario,
+    Inscripcion, Pago, Parroquia, Participacion, Persona, Retiro, Tarea, TipoRetiro, Usuario,
 )
 from .registro import Extra, Modulo, anotado, sub
 
@@ -126,6 +126,17 @@ MODULOS = [
         filtros=["retiro"],
         orden=["retiro", "orden"],
         relacionados=["retiro__tipo", "expositor"],
+    ),
+    Modulo(
+        "tareas", Tarea, "Tareas", "tarea", RETIROS,
+        campos=["retiro", "titulo", "descripcion", "area", "responsable", "fecha_limite",
+                "hecha"],
+        lista=["titulo", "fecha_limite", "responsable", "area", "retiro", "hecha"],
+        buscar=["titulo", "responsable__nombre"],
+        filtros=["hecha", "retiro", "area"],
+        orden=["hecha", "fecha_limite"],
+        relacionados=["retiro__tipo", "area", "responsable"],
+        etiquetas={"titulo": "Tarea", "hecha": "Hecha"},
     ),
     # ---- Personas y acceso ----
     Modulo(
@@ -247,6 +258,7 @@ ETIQUETAS = {
     "cuota_servidor": f"Cuota del servidor ({settings.MONEDA})", "monto": "Monto",
     "tasa": f"Tasa de cambio (por 1 {settings.MONEDA})",
     "monto_base": f"Equivalente en {settings.MONEDA}",
+    "fecha_limite": "Fecha límite",
 }
 
 # Texto de ayuda bajo el control de un campo.

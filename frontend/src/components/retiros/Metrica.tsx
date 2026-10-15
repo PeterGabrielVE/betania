@@ -5,6 +5,8 @@ interface MetricaProps {
   etiqueta: string;
   valor: string | number;
   detalle?: string;
+  // Debajo de la cifra, p. ej. un <Medidor>.
+  children?: React.ReactNode;
 }
 
 // Tarjeta con una cifra: las del inicio y las del panel de un retiro.
@@ -13,6 +15,7 @@ export default function Metrica({
   etiqueta,
   valor,
   detalle,
+  children,
 }: MetricaProps) {
   return (
     <div className={claseTarjeta}>
@@ -31,6 +34,7 @@ export default function Metrica({
             {detalle}
           </span>
         )}
+        {children && <div className="mt-3">{children}</div>}
       </div>
     </div>
   );

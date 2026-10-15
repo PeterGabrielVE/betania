@@ -87,12 +87,15 @@ function Listado({ modulo }: { modulo: Modulo }) {
     datos?: Pagina<Registro>;
     error?: string;
   }>({ clave: "" });
-  // undefined = cerrado, null = alta, registro = edición
-  const [editando, setEditando] = useState<Registro | null | undefined>();
-  const [aviso, setAviso] = useState("");
   // ?editar=<id>&volver=<ruta>: abre ese registro (p. ej. desde el panel de un
-  // retiro) y, al guardar o cancelar, regresa a esa ruta.
+  // retiro) y, al guardar o cancelar, regresa a esa ruta. ?nuevo=1 abre el
+  // formulario de alta (los accesos rápidos del inicio).
   const [busqueda] = useSearchParams();
+  // undefined = cerrado, null = alta, registro = edición
+  const [editando, setEditando] = useState<Registro | null | undefined>(() =>
+    busqueda.has("nuevo") && modulo.puede_agregar ? null : undefined,
+  );
+  const [aviso, setAviso] = useState("");
   const editar = busqueda.get("editar");
   const volver = busqueda.get("volver");
 

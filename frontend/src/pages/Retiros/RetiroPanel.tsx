@@ -1,9 +1,4 @@
-import {
-  api,
-  ApiError,
-  type FichaCaminante,
-  type PanelRetiro,
-} from "@/api/client";
+import { ApiError, type FichaCaminante, type PanelRetiro } from "@/api/client";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
 import {
@@ -12,6 +7,7 @@ import {
   claseEnlace,
   claseTarjeta,
 } from "@/components/modulos/estilos";
+import Actualizacion from "@/components/retiros/Actualizacion";
 import Metrica from "@/components/retiros/Metrica";
 import Badge from "@/components/ui/badge/Badge";
 import {
@@ -22,10 +18,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useAuth } from "@/context/AuthContext";
+import { useDatosVivos } from "@/hooks/useDatosVivos";
 import { BoxIconLine, CalenderIcon, DollarLineIcon, GroupIcon } from "@/icons";
 import NotFound from "@/pages/OtherPage/NotFound";
 import { colorEstado, dinero, fecha } from "@/utils/formato";
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { Fragment, useState } from "react";
 import { Link, useParams } from "react-router";
 
 const claseTitulo = "text-lg font-semibold text-gray-800 dark:text-white/90";
@@ -554,68 +551,15 @@ function Equipo({ equipo }: { equipo: NonNullable<PanelRetiro["equipo"]> }) {
   );
 }
 
-// Cada cuánto se vuelve a consultar el panel mientras está a la vista, para
-// que los pagos y cambios que registran otros aparezcan sin recargar.
-const ACTUALIZAR_CADA_MS = 30_000;
-
-const formatoHora = new Intl.DateTimeFormat(undefined, {
-  hour: "numeric",
-  minute: "2-digit",
-});
-
 // Todo lo de un retiro en una pantalla: caminantes, equipo, charlas y finanzas.
 export default function RetiroPanel() {
   const { id } = useParams();
   const { modulos } = useAuth();
-  const [resultado, setResultado] = useState<{
-    id?: string;
-    panel?: PanelRetiro;
-    error?: ApiError | Error;
-    hora?: Date;
-  }>({});
-  const [consultando, setConsultando] = useState(false);
+  const { datos, alDia, error, hora, consultando, actualizar } =
+    useDatosVivos<PanelRetiro>(`/retiros/${id}/panel/`);
 
-  const cargar = useCallback(
-    (vigente: () => boolean = () => true) =>
-      api<PanelRetiro>(`/retiros/${id}/panel/`)
-        .then((panel) => {
-          if (vigente()) setResultado({ id, panel, hora: new Date() });
-        })
-        .catch((error: Error) => {
-          // Si falla una actualización, queda a la vista lo último que llegó.
-          if (vigente()) {
-            setResultado((r) =>
-              r.id === id && r.panel ? { ...r, error } : { id, error },
-            );
-          }
-        }),
-    [id],
-  );
-
-  const actualizarAhora = () => {
-    setConsultando(true);
-    cargar().finally(() => setConsultando(false));
-  };
-
-  useEffect(() => {
-    let activo = true;
-    const vigente = () => activo;
-    cargar(vigente);
-    const actualizar = () => {
-      if (!document.hidden) cargar(vigente);
-    };
-    const intervalo = setInterval(actualizar, ACTUALIZAR_CADA_MS);
-    // Al volver a la pestaña (o al celular) se actualiza enseguida.
-    document.addEventListener("visibilitychange", actualizar);
-    return () => {
-      activo = false;
-      clearInterval(intervalo);
-      document.removeEventListener("visibilitychange", actualizar);
-    };
-  }, [cargar]);
-
-  const { panel, error } = resultado;
-  if (resultado.id !== id) return <p className={claseVacio}>Cargando…</p>;
+  if (!alDia) return <p className={claseVacio}>Cargando…</p>;
+  const panel = datos;
   if (!panel) {
     if (error instanceof ApiError && [403, 404].includes(error.status)) {
       return <NotFound />;
@@ -649,22 +593,12 @@ export default function RetiroPanel() {
           {retiro.sede && <span>Sede: {retiro.sede}</span>}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span
-            className="text-xs text-gray-500 dark:text-gray-400"
-            title="El panel se actualiza solo cada 30 segundos"
-          >
-            {error
-              ? "No se pudo actualizar"
-              : `Actualizado ${formatoHora.format(resultado.hora)}`}
-          </span>
-          <button
-            type="button"
-            className={claseBoton}
-            onClick={actualizarAhora}
-            disabled={consultando}
-          >
-            {consultando ? "Actualizando…" : "Actualizar"}
-          </button>
+          <Actualizacion
+            hora={hora}
+            error={error}
+            consultando={consultando}
+            onActualizar={actualizar}
+          />
           {puede("pagos") && (
             <Link to="/pagos" className={claseBoton}>
               Registrar pago

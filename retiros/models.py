@@ -251,6 +251,29 @@ class Charla(models.Model):
         return self.tema
 
 
+class Tarea(models.Model):
+    """Pendientes de la preparación de un retiro (comprar, llamar, reservar...)."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    retiro = models.ForeignKey(Retiro, on_delete=models.CASCADE, related_name="tareas")
+    titulo = models.CharField(max_length=200)
+    descripcion = models.TextField(blank=True)
+    area = models.ForeignKey(
+        AreaServicio, on_delete=models.SET_NULL, null=True, blank=True, related_name="tareas"
+    )
+    responsable = models.ForeignKey(
+        Persona, on_delete=models.SET_NULL, null=True, blank=True, related_name="tareas"
+    )
+    fecha_limite = models.DateField(null=True, blank=True)
+    hecha = models.BooleanField(default=False)
+    creado = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["retiro", "hecha"])]
+
+    def __str__(self):
+        return self.titulo
+
+
 # --------------------------------------------------------------------------- #
 # Inscripciones (embudo de candidatos) y participación (rol confirmado)
 # --------------------------------------------------------------------------- #

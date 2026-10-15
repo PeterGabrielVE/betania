@@ -14,6 +14,7 @@ from import_export.admin import ImportExportModelAdmin
 from .models import (
     Diocesis, Parroquia, TipoRetiro, AreaServicio, Persona, Usuario, AsignacionRol,
     Retiro, Charla, Inscripcion, Participacion, AsignacionServicio, Pago, Gasto, EstadoPago,
+    Tarea,
 )
 from .reportes import PersonaResource, InscripcionResource
 
@@ -204,6 +205,14 @@ class ParroquiaAdmin(admin.ModelAdmin):
 @admin.register(Diocesis)
 class DiocesisAdmin(admin.ModelAdmin):
     search_fields = ("nombre",)
+
+
+@admin.register(Tarea)
+class TareaAdmin(admin.ModelAdmin):
+    list_display = ("titulo", "retiro", "area", "responsable", "fecha_limite", "hecha")
+    list_filter = ("hecha", "retiro", "area")
+    search_fields = ("titulo", "responsable__nombre")
+    autocomplete_fields = ("retiro", "area", "responsable")
 
 
 admin.site.register(TipoRetiro)

@@ -93,8 +93,8 @@ permisos salen del rol (`retiros/acceso.py`); no hay que marcarlos uno por uno.
 
 | Rol | Ve | Edita |
 | --- | --- | --- |
-| Coordinador de retiro / de parroquia | Todo el retiro: ficha de cada caminante (salud, tratamiento, comida, requerimientos, contactos), equipo y finanzas | Caminantes, equipo, charlas, **pagos** y gastos |
-| Coordinador de logística | Lo mismo | Caminantes y equipo; pagos y gastos solo los consulta |
+| Coordinador de retiro / de parroquia | Todo el retiro: ficha de cada caminante (salud, tratamiento, comida, requerimientos, contactos), equipo y finanzas | Caminantes, equipo, charlas, tareas, **pagos** y gastos |
+| Coordinador de logística | Lo mismo | Caminantes, equipo y tareas; pagos y gastos solo los consulta |
 
 Para dar acceso a alguien, en `/admin/`:
 
@@ -113,6 +113,29 @@ Lo que paga un servidor se registra en **Pagos** con su nombre en *Persona*
 (concepto "Aportación de servidor"); lo que debe sale de la **cuota del
 servidor** del retiro. Para la cuota de un caminante basta elegir su nombre: el
 pago se liga solo a su inscripción.
+
+## Tablero (página de inicio)
+
+El inicio muestra el tablero de un retiro: por omisión el próximo (o el que está
+en curso), y se cambia con el selector de arriba (`/?retiro=<id>`, un enlace que
+se puede compartir). Se actualiza solo cada 30 segundos, como el panel.
+
+- Cuenta regresiva al retiro, caminantes inscritos contra el cupo, asistencia
+  confirmada y por confirmar, servidores, cuánto falta por cobrar y tareas
+  pendientes (con las vencidas).
+- Gráficas: caminantes por estado, cuotas de caminantes y de servidores
+  (pagado / parcial / sin pago), recaudación acumulada contra lo esperado en
+  cuotas, gastos por categoría y servidores por área.
+- **Pendientes:** las tareas más urgentes y los avisos que salen solos de los
+  datos (caminantes por confirmar o que deben, sin familiar de contacto o sin
+  consentimiento, servidores que deben o sin área, charlas sin expositor).
+- **Cumpleaños** de caminantes y servidores en los próximos 30 días y los que
+  caen durante el retiro.
+- **Accesos rápidos:** inscribir caminante, registrar pago o gasto, nueva tarea,
+  panel del retiro, lista PDF, etc. (solo los que el rol permite).
+
+Las tareas se gestionan en el módulo **Tareas** (menú Retiros): título, retiro,
+área, responsable, fecha límite y si ya está hecha.
 
 ## Pruebas
 

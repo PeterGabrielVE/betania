@@ -5,8 +5,8 @@ AsignacionRol; no hace falta darle permisos uno por uno en el admin.
 
     Coordinación (de parroquia o de retiro): ve todo el retiro, incluidos datos
         confidenciales y finanzas; registra pagos y gastos y edita caminantes,
-        equipo y charlas.
-    Logística: ve lo mismo que coordinación; edita caminantes y equipo, pero los
+        equipo, charlas y tareas.
+    Logística: ve lo mismo que coordinación; edita caminantes, equipo y tareas, pero los
         pagos y gastos solo los consulta.
 
 Los demás roles siguen usando los permisos normales de Django (usuario o grupo).
@@ -24,9 +24,9 @@ PRIORIDAD = [
 
 _VER = [
     "diocesis", "parroquia", "tiporetiro", "areaservicio", "persona", "retiro", "charla",
-    "inscripcion", "participacion", "asignacionservicio", "pago", "gasto",
+    "inscripcion", "participacion", "asignacionservicio", "pago", "gasto", "tarea",
 ]
-_EQUIPO = ["persona", "inscripcion", "participacion", "asignacionservicio"]
+_EQUIPO = ["persona", "inscripcion", "participacion", "asignacionservicio", "tarea"]
 
 
 def _perms(acciones, modelos):
@@ -42,7 +42,10 @@ _COORDINACION = (
 PERMISOS_ROL = {
     Rol.COORD_PARROQUIA: _COORDINACION | _perms(["add"], ["retiro"]),
     Rol.COORD_RETIRO: _COORDINACION,
-    Rol.LOGISTICA: _perms(["view"], _VER) | _perms(["add", "change"], _EQUIPO),
+    Rol.LOGISTICA: (
+        _perms(["view"], _VER) | _perms(["add", "change"], _EQUIPO)
+        | _perms(["delete"], ["tarea"])
+    ),
 }
 
 

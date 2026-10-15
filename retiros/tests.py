@@ -6,7 +6,7 @@ aplicación y los permisos de Django, no el aislamiento por parroquia.
     python manage.py test
 """
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from unittest import mock
 
@@ -14,11 +14,13 @@ import tablib
 from django.contrib.auth.models import Permission, User
 from django.core.cache import cache
 from django.test import TestCase
+from django.utils import timezone
 
 from . import tasas
 from .models import (
     AreaServicio, AsignacionRol, AsignacionServicio, Charla, Diocesis, EstadoPago, Gasto,
-    Inscripcion, Pago, Parroquia, Participacion, Persona, Retiro, Rol, TipoRetiro, Usuario,
+    Inscripcion, Pago, Parroquia, Participacion, Persona, Retiro, Rol, Tarea, TipoRetiro,
+    Usuario,
 )
 from .reportes import PersonaResource
 
@@ -313,8 +315,61 @@ class PanelRetiroTests(Base):
         self.assertIsNone(panel["finanzas"])
         self.assertIsNone(panel["equipo"])
         self.assertIsNone(panel["servidores"])
+        tablero = self.client.get("/api/resumen/").json()["tablero"]
+        self.assertIsNone(tablero["finanzas"])
+        self.assertIsNone(tablero["tareas"])
+        self.assertNotIn("pagos", tablero["caminantes"])
         self.assertNotIn("pagado", panel["caminantes"]["filas"][0])
         self.assertNotIn("ficha", panel["caminantes"]["filas"][0])  # sin rol confidencial
+
+    def test_tablero_del_inicio(self):
+        hoy = timezone.localdate()
+        Persona.objects.filter(nombre="Ana").update(
+            fecha_nacimiento=(hoy + timedelta(days=5)).replace(year=1990))
+        Persona.objects.filter(nombre="Luis").update(fecha_nacimiento=date(1980, 3, 13))
+        Tarea.objects.create(retiro=self.retiro, titulo="Comprar velas",
+                             fecha_limite=hoy - timedelta(days=1))
+        Tarea.objects.create(retiro=self.retiro, titulo="Reservar bus")
+        Tarea.objects.create(retiro=self.retiro, titulo="Hecha", hecha=True)
+
+        tablero = self.client.get("/api/resumen/").json()["tablero"]
+        self.assertEqual(tablero["retiro"]["id"], str(self.retiro.pk))
+        self.assertEqual(tablero["dias_para_inicio"], (self.retiro.fecha_inicio - hoy).days)
+
+        caminantes = tablero["caminantes"]
+        self.assertEqual(
+            (caminantes["inscritos"], caminantes["confirmados"], caminantes["por_confirmar"],
+             caminantes["cancelados"], caminantes["por_cobrar"]),
+            (2, 1, 1, 1, 100),
+        )
+        self.assertEqual({p["valor"]: p["total"] for p in caminantes["pagos"]},
+                         {"pagado": 1, "parcial": 0, "pendiente": 1})
+        self.assertEqual(tablero["servidores"]["por_area"], [{"area": "Cocina", "total": 1}])
+
+        tareas = tablero["tareas"]
+        self.assertEqual((tareas["pendientes"], tareas["vencidas"], tareas["hechas"]), (2, 1, 1))
+        self.assertEqual([t["titulo"] for t in tareas["proximas"]],
+                         ["Comprar velas", "Reservar bus"])
+
+        self.assertEqual(
+            [(c["nombre"], c["durante_retiro"]) for c in tablero["cumpleanos"]],
+            [("Ana", False), ("Luis", True)],
+        )
+        alertas = {a["clave"]: a["total"] for a in tablero["alertas"]}
+        self.assertEqual(alertas["por_confirmar"], 1)
+        self.assertEqual(alertas["caminantes_deben"], 1)
+        self.assertEqual(alertas["sin_area"], 1)
+        self.assertEqual(
+            [p["total"] for p in tablero["finanzas"]["recaudacion"]], [100, 130])
+
+    def test_tablero_de_otro_retiro(self):
+        otro = Retiro.objects.create(
+            parroquia=self.parroquia, tipo=self.retiro.tipo, edicion=13,
+            fecha_inicio=date(2027, 9, 1), fecha_fin=date(2027, 9, 3),
+        )
+        resumen = self.client.get(f"/api/resumen/?retiro={otro.pk}").json()
+        self.assertEqual(resumen["tablero"]["retiro"]["id"], str(otro.pk))
+        self.assertEqual(len(resumen["retiros_tablero"]), 2)
 
     def test_retiro_inexistente(self):
         ruta = "/api/retiros/00000000-0000-0000-0000-000000000000/panel/"
