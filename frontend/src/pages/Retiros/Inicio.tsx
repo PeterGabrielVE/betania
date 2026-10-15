@@ -34,9 +34,16 @@ export default function Inicio() {
   return (
     <>
       <PageMeta
-        title="Inicio | Gestión de retiros"
+        title="Inicio | Betania"
         description="Resumen de retiros, personas, inscripciones y finanzas"
       />
+      {resumen.tasas_bcv && (
+        <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
+          Tasa BCV del {fecha(resumen.tasas_bcv.fecha)}:{" "}
+          {dinero(resumen.tasas_bcv.USD, "VES")} por dólar ·{" "}
+          {dinero(resumen.tasas_bcv.EUR, "VES")} por euro
+        </p>
+      )}
       <div className="grid grid-cols-12 gap-4 md:gap-6">
         <div className="col-span-12 grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-6 xl:grid-cols-4">
           <Metrica

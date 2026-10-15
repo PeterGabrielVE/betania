@@ -13,11 +13,12 @@ CREATE OR REPLACE FUNCTION app_rol() RETURNS text
 
 CREATE OR REPLACE FUNCTION rol_finanzas() RETURNS boolean
   LANGUAGE sql STABLE AS $$
-    SELECT app_rol() IN ('tesoreria', 'coord_parroquia', 'admin_diocesano', 'super_admin');
+    SELECT app_rol() IN ('tesoreria', 'coord_parroquia', 'coord_retiro', 'logistica',
+                         'admin_diocesano', 'super_admin');
   $$;
 CREATE OR REPLACE FUNCTION rol_datos_sensibles() RETURNS boolean
   LANGUAGE sql STABLE AS $$
-    SELECT app_rol() IN ('coord_parroquia', 'coord_retiro', 'secretaria',
+    SELECT app_rol() IN ('coord_parroquia', 'coord_retiro', 'logistica', 'secretaria',
                          'admin_diocesano', 'super_admin');
   $$;
 CREATE OR REPLACE FUNCTION parroquia_visible(pid uuid) RETURNS boolean

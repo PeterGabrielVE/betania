@@ -18,6 +18,10 @@ from .models import (
 from .reportes import PersonaResource, InscripcionResource
 
 
+admin.site.site_header = admin.site.site_title = "Betania"
+admin.site.index_title = "Administración"
+
+
 # --------------------------------------------------------------------------- #
 # Filtros a medida
 # --------------------------------------------------------------------------- #
@@ -89,7 +93,7 @@ class AsignacionRolInline(admin.TabularInline):
 class UsuarioAdmin(admin.ModelAdmin):
     list_display = ("persona", "activo", "roles_resumen")
     search_fields = ("persona__nombre",)
-    autocomplete_fields = ("persona",)
+    autocomplete_fields = ("persona", "cuenta")
     inlines = [AsignacionRolInline]
 
     @admin.display(description="Roles")

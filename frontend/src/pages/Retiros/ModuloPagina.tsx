@@ -28,7 +28,7 @@ import { useAuth } from "@/context/AuthContext";
 import NotFound from "@/pages/OtherPage/NotFound";
 import { colorEstado, dinero, fecha } from "@/utils/formato";
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 
 function celda(campo: Campo, fila: Registro): React.ReactNode {
   const valor = fila[campo.nombre];
@@ -90,6 +90,27 @@ function Listado({ modulo }: { modulo: Modulo }) {
   // undefined = cerrado, null = alta, registro = edición
   const [editando, setEditando] = useState<Registro | null | undefined>();
   const [aviso, setAviso] = useState("");
+  // ?editar=<id>&volver=<ruta>: abre ese registro (p. ej. desde el panel de un
+  // retiro) y, al guardar o cancelar, regresa a esa ruta.
+  const [busqueda] = useSearchParams();
+  const editar = busqueda.get("editar");
+  const volver = busqueda.get("volver");
+
+  useEffect(() => {
+    if (!editar) return;
+    let vigente = true;
+    api<Registro>(`/${modulo.slug}/${editar}/`)
+      .then((registro) => vigente && setEditando(registro))
+      .catch((e: Error) => vigente && setAviso(e.message));
+    return () => {
+      vigente = false;
+    };
+  }, [modulo.slug, editar]);
+
+  const cerrar = () => {
+    setEditando(undefined);
+    if (volver?.startsWith("/")) navigate(volver);
+  };
 
   // Espera a que el usuario deje de escribir antes de consultar.
   useEffect(() => {
@@ -320,16 +341,16 @@ function Listado({ modulo }: { modulo: Modulo }) {
 
       <Modal
         isOpen={editando !== undefined}
-        onClose={() => setEditando(undefined)}
+        onClose={cerrar}
         className="m-4 max-w-2xl"
       >
         {editando !== undefined && (
           <FormularioModulo
             modulo={modulo}
             registro={editando}
-            onCancelar={() => setEditando(undefined)}
+            onCancelar={cerrar}
             onGuardado={() => {
-              setEditando(undefined);
+              cerrar();
               setVersion((v) => v + 1);
             }}
           />
@@ -349,7 +370,7 @@ export default function ModuloPagina() {
   return (
     <>
       <PageMeta
-        title={`${modulo.titulo} | Gestión de retiros`}
+        title={`${modulo.titulo} | Betania`}
         description={`Listado de ${modulo.titulo.toLowerCase()}`}
       />
       <PageBreadcrumb pageTitle={modulo.titulo} />

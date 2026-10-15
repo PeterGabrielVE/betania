@@ -1,4 +1,6 @@
-# Sistema de gestión de retiros
+# Betania
+
+Sistema de gestión de retiros de Emaús y Samuel.
 
 Proyecto Django + PostgreSQL (con Row-Level Security) listo para correr en Docker.
 
@@ -70,8 +72,8 @@ Permisos y confidencialidad:
 - Lo que sale de las finanzas (columnas de pago, sección de finanzas del panel)
   solo se muestra con permiso para ver pagos.
 - El PDF de confirmados exige sesión y permiso para ver inscripciones.
-- Un usuario que no es superusuario todavía no ve datos: falta el TODO de
-  `retiros/middleware.py`.
+- Los demás usuarios obtienen sus permisos de su rol (ver "Acceso de
+  coordinación y logística" más abajo).
 
 Importar/Exportar Excel sigue estando solo en `/admin/`.
 
@@ -83,6 +85,34 @@ cd frontend
 npm install
 npm run dev      # http://localhost:5173, reenvía /api y /admin a Django
 ```
+
+## Acceso de coordinación y logística
+
+Coordinación y logística entran al mismo panel con su propio usuario. Los
+permisos salen del rol (`retiros/acceso.py`); no hay que marcarlos uno por uno.
+
+| Rol | Ve | Edita |
+| --- | --- | --- |
+| Coordinador de retiro / de parroquia | Todo el retiro: ficha de cada caminante (salud, tratamiento, comida, requerimientos, contactos), equipo y finanzas | Caminantes, equipo, charlas, **pagos** y gastos |
+| Coordinador de logística | Lo mismo | Caminantes y equipo; pagos y gastos solo los consulta |
+
+Para dar acceso a alguien, en `/admin/`:
+
+1. **Users → Add**: crea su usuario y contraseña (no hace falta marcar "staff").
+2. **Usuarios → Add**: elige su persona y, en **Cuenta**, el usuario del paso 1.
+   En la misma pantalla, agrega su rol (p. ej. *Coordinador de logística*) y el
+   retiro.
+
+Luego se le comparte el enlace del panel del retiro (`/retiros/<id>`): ahí ven
+qué caminante y qué servidor debe, cuánto ha pagado cada uno y la ficha
+completa de cada caminante. El panel se actualiza solo cada 30 segundos (y al
+volver a la pestaña), así que un pago o un cambio que registre otro aparece sin
+recargar.
+
+Lo que paga un servidor se registra en **Pagos** con su nombre en *Persona*
+(concepto "Aportación de servidor"); lo que debe sale de la **cuota del
+servidor** del retiro. Para la cuota de un caminante basta elegir su nombre: el
+pago se liga solo a su inscripción.
 
 ## Pruebas
 
@@ -114,6 +144,7 @@ retiros/
     sesion.py    Login, logout y usuario actual
     permisos.py  Permisos de modelo y acceso a datos confidenciales
   reportes.py    Recursos de Excel y lista de confirmados en PDF
+  tasas.py       Tasa oficial del BCV (dólar y euro)
   middleware.py  Fija el contexto de RLS por petición
   migrations/    Migraciones versionadas
   sql/           Políticas de Row-Level Security (idempotentes)
@@ -126,13 +157,11 @@ entrypoint.sh    Migra, aplica RLS, colecta estáticos, arranca
 
 ## Notas importantes
 
-- **RLS y el rol de conexión.** En local, la app se conecta como el dueño de las
-  tablas y el `FORCE ROW LEVEL SECURITY` hace que las políticas apliquen igual;
-  el superusuario las atraviesa vía el middleware. **En producción**, conecta la
-  app con un rol que **no** sea dueño de las tablas.
-- **Usuarios no superadmin.** El middleware ya deja lista la estructura, pero
-  falta enlazar `auth.User` con tu modelo `Usuario`/`AsignacionRol` para resolver
-  su rol y parroquia activa (marcado como TODO en `retiros/middleware.py`).
+- **RLS y el rol de conexión.** El usuario `retiros` del `docker-compose.yml` es
+  superusuario de Postgres, y un superusuario se salta el RLS aunque haya
+  `FORCE ROW LEVEL SECURITY`: en local las políticas **no** filtran. **En
+  producción**, conecta la app con un rol que no sea superusuario ni dueño de las
+  tablas (con `GRANT` sobre ellas); así las políticas sí aplican.
 - **Formulario público de inscripción.** Todavía no está; el siguiente paso son
   las páginas públicas con HTMX y las políticas `WITH CHECK` para los INSERT.
 - **Migraciones.** Están versionadas en `retiros/migrations/` y el entrypoint
@@ -141,13 +170,19 @@ entrypoint.sh    Migra, aplica RLS, colecta estáticos, arranca
   desarrollo") y guárdala en el repositorio.
 - **Monedas.** Los pagos y gastos se registran en bolívares, dólares o euros.
   `MONEDA` (en `.env`, por defecto `USD`) es la moneda base: en ella van las
-  cuotas y todos los totales. Un movimiento en otra moneda pide su tasa de
-  cambio (cuántas unidades equivalen a 1 de la base, p. ej. Bs por dólar) y
-  guarda su equivalente. Cambiar `MONEDA` con movimientos ya registrados no
-  los recalcula.
+  cuotas y todos los totales. Un movimiento en otra moneda guarda su tasa de
+  cambio (cuántas unidades equivalen a 1 de la base, p. ej. Bs por dólar) y su
+  equivalente. Si la tasa se deja vacía se toma la oficial del BCV de ese
+  momento, consultada a [DolarApi](https://ve.dolarapi.com) (`retiros/tasas.py`;
+  el contenedor necesita salida a internet). Si la consulta falla, el
+  formulario pide escribirla. Cambiar `MONEDA` con movimientos ya registrados
+  no los recalcula.
 - **País.** `TIME_ZONE` y `REGION` (formato de montos y fechas) también se
   fijan en `.env`; ver `.env.example`.
 - **Producción.** `DEBUG=0` exige un `SECRET_KEY` propio; define también
   `ALLOWED_HOSTS` y `HTTPS=1`.
+- **Nombre y logo.** El logo es `frontend/public/images/logo/betania.svg`
+  (también es el icono de la pestaña); para cambiarlo basta reemplazar ese
+  archivo. El nombre se dibuja en `frontend/src/components/common/Logo.tsx`.
 - **Plantilla.** Las páginas de ejemplo de TailAdmin ya no están en el menú ni
   en las rutas, pero sus archivos siguen en `frontend/src` como referencia.

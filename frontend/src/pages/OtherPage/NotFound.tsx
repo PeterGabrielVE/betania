@@ -11,8 +11,8 @@ export default function NotFound({ className }: NotFoundProps) {
   return (
     <>
       <PageMeta
-        title="React.js 404 Page | TailAdmin - React.js Admin Dashboard Template"
-        description="This is React.js 404  page for TailAdmin - React.js Tailwind CSS Admin Dashboard Template"
+        title="Página no encontrada | Betania"
+        description="La página que buscas no existe"
       />
       <div
         className={cn(
@@ -34,7 +34,7 @@ export default function NotFound({ className }: NotFoundProps) {
           />
 
           <p className="mt-10 mb-6 text-base text-gray-700 sm:text-lg dark:text-gray-400">
-            We can’t seem to find the page you are looking for!
+            No encontramos la página que buscas.
           </p>
 
           <Link
@@ -43,7 +43,7 @@ export default function NotFound({ className }: NotFoundProps) {
               "inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-5 py-3.5 text-sm font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50 hover:text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-white/3 dark:hover:text-gray-200",
             )}
           >
-            Back to Home Page
+            Volver al inicio
           </Link>
         </div>
         {/* <!-- Footer --> */}
@@ -52,7 +52,7 @@ export default function NotFound({ className }: NotFoundProps) {
             "absolute inset-s-1/2 bottom-6 -translate-x-1/2 text-center text-sm text-gray-500 rtl:translate-x-1/2 dark:text-gray-400",
           )}
         >
-          &copy; {new Date().getFullYear()} - TailAdmin
+          &copy; {new Date().getFullYear()} - Betania
         </p>
       </div>
     </>

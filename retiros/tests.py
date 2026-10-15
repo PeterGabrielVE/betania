@@ -8,14 +8,17 @@ aplicación y los permisos de Django, no el aislamiento por parroquia.
 
 from datetime import date
 from decimal import Decimal
+from unittest import mock
 
 import tablib
 from django.contrib.auth.models import Permission, User
+from django.core.cache import cache
 from django.test import TestCase
 
+from . import tasas
 from .models import (
-    AreaServicio, AsignacionServicio, Charla, Diocesis, EstadoPago, Gasto, Inscripcion, Pago,
-    Parroquia, Participacion, Persona, Retiro, TipoRetiro,
+    AreaServicio, AsignacionRol, AsignacionServicio, Charla, Diocesis, EstadoPago, Gasto,
+    Inscripcion, Pago, Parroquia, Participacion, Persona, Retiro, Rol, TipoRetiro, Usuario,
 )
 from .reportes import PersonaResource
 
@@ -35,6 +38,14 @@ class Base(TestCase):
 
     def setUp(self):
         self.client.force_login(self.admin)
+        # Las pruebas no salen a internet: el BCV "publica" 180 Bs por dólar y
+        # 200 por euro, salvo que una prueba cambie self.bcv.side_effect.
+        cache.clear()
+        self.bcv = mock.patch.object(tasas, "_consultar", return_value={
+            "bolivares": {"VES": Decimal(1), "USD": Decimal(180), "EUR": Decimal(200)},
+            "fecha": "2027-03-01",
+        }).start()
+        self.addCleanup(mock.patch.stopall)
 
     def persona(self, nombre, **datos):
         return Persona.objects.create(parroquia=self.parroquia, nombre=nombre, **datos)
@@ -48,6 +59,7 @@ class EstadoPagoTests(TestCase):
         self.assertEqual(EstadoPago.de(None, 100), EstadoPago.PENDIENTE)
         self.assertEqual(EstadoPago.de(Decimal("40"), 100), EstadoPago.PARCIAL)
         self.assertEqual(EstadoPago.de(Decimal("100"), 100), EstadoPago.PAGADO)
+        self.assertEqual(EstadoPago.de(None, 0), EstadoPago.PAGADO)  # sin cuota no debe
 
 
 class ModulosTests(Base):
@@ -115,6 +127,12 @@ class ModulosTests(Base):
             **datos,
         })
 
+    def test_la_cuota_se_liga_a_la_inscripcion_con_solo_elegir_la_persona(self):
+        ana = self.persona("Ana")
+        inscripcion = Inscripcion.objects.create(retiro=self.retiro, persona=ana)
+        r = self.pago(monto=40, concepto="cuota", persona=str(ana.pk))
+        self.assertEqual(r.json()["inscripcion"], str(inscripcion.pk))
+
     def test_pago_en_la_moneda_base(self):
         # Sin moneda toma la base, y la tasa sobra aunque la manden.
         r = self.pago(monto=50, tasa=180)
@@ -123,19 +141,46 @@ class ModulosTests(Base):
         self.assertEqual((pago["moneda"], pago["tasa"], pago["monto_base"]), ("USD", None, 50))
 
     def test_pago_en_otra_moneda_se_convierte_con_su_tasa(self):
-        r = self.pago(monto=9000, moneda="VES")
-        self.assertEqual(r.status_code, 400)
-        self.assertIn("tasa", r.json())
         self.assertIn("moneda", self.pago(monto=10, moneda="MXN").json())
 
         r = self.pago(monto=9000, moneda="VES", tasa="180.5")
         self.assertEqual(r.status_code, 201, r.content)
         self.assertEqual(r.json()["monto_base"], 49.86)
+        self.bcv.assert_not_called()  # con la tasa escrita no se consulta el BCV
 
         # Al corregir la tasa se recalcula el equivalente.
         r = self.client.patch(f"/api/pagos/{r.json()['id']}/", {"tasa": 180},
                               content_type="application/json")
         self.assertEqual(r.json()["monto_base"], 50)
+
+    def test_sin_tasa_se_usa_la_del_bcv(self):
+        pago = self.pago(monto=9000, moneda="VES").json()
+        self.assertEqual((pago["tasa"], pago["monto_base"]), (180, 50))
+        # Euros a dólares pasando por bolívares: 180 / 200 = 0,9 EUR por dólar.
+        pago = self.pago(monto=45, moneda="EUR").json()
+        self.assertEqual((pago["tasa"], pago["monto_base"]), (0.9, 50))
+        self.assertEqual(self.bcv.call_count, 1)  # la segunda sale de la caché
+
+        # El pago conserva su tasa aunque el BCV publique otra después.
+        cache.clear()
+        self.bcv.return_value["bolivares"]["USD"] = Decimal(190)
+        r = self.client.patch(f"/api/pagos/{pago['id']}/", {"referencia": "A-1"},
+                              content_type="application/json")
+        self.assertEqual(r.json()["tasa"], 0.9)
+
+        tasas_bcv = self.client.get("/api/resumen/").json()["tasas_bcv"]
+        self.assertEqual(tasas_bcv, {"fecha": "2027-03-01", "USD": 190, "EUR": 200})
+
+    def test_si_el_bcv_no_responde_se_pide_la_tasa(self):
+        self.bcv.side_effect = OSError("sin red")
+        with self.assertLogs("retiros.tasas", "ERROR"):
+            r = self.pago(monto=9000, moneda="VES")
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("tasa", r.json())
+        self.assertEqual(self.pago(monto=9000, moneda="VES", tasa=180).status_code, 201)
+        self.assertEqual(self.pago(monto=20).status_code, 201)  # en dólares no hace falta
+        self.assertIsNone(self.client.get("/api/resumen/").json()["tasas_bcv"])
+        self.assertEqual(self.bcv.call_count, 1)  # el fallo no se reintenta en cada petición
 
     def test_la_cuota_se_cubre_con_pagos_en_varias_monedas(self):
         inscripcion = Inscripcion.objects.create(retiro=self.retiro, persona=self.persona("Ana"))
@@ -218,6 +263,44 @@ class PanelRetiroTests(Base):
             {"cuota": 100, "donativo": 30},
         )
 
+    def test_ficha_de_cada_caminante(self):
+        ana = Inscripcion.objects.get(persona__nombre="Ana")
+        ana.persona.fecha_nacimiento = date(1990, 3, 13)
+        ana.persona.datos_sensibles = {"procedencia": "Maracay", "celular": "0414"}
+        ana.persona.save()
+        ana.salud_alimentacion = {"tratamiento": "Insulina", "regimen_alimenticio": "Sin sal",
+                                  "requerimientos": "Silla de ruedas"}
+        ana.contacto_emergencia = {"nombre": "Rosa", "relacion": "Madre", "telefono": "0412",
+                                   "celular": "0424", "nombre2": "Juan", "telefono2": "0416"}
+        ana.save()
+
+        ficha = self.client.get(self.ruta).json()["caminantes"]["filas"][0]["ficha"]
+        self.assertEqual(ficha["edad"], 36)  # cumple 37 el día después de empezar
+        self.assertEqual(
+            (ficha["procedencia"], ficha["tratamiento"], ficha["alimentacion"],
+             ficha["requerimientos"]),
+            ("Maracay", "Insulina", "Sin sal", "Silla de ruedas"),
+        )
+        self.assertEqual(ficha["contactos"], [
+            {"nombre": "Rosa", "relacion": "Madre", "telefono": "0412 / 0424"},
+            {"nombre": "Juan", "relacion": "", "telefono": "0416"},
+        ])
+
+    def test_lo_que_debe_cada_servidor(self):
+        self.retiro.cuota_servidor = 50
+        self.retiro.save()
+        luis = Persona.objects.get(nombre="Luis")
+        Pago.objects.create(retiro=self.retiro, persona=luis, monto=20,
+                            concepto=Pago.Concepto.APORTACION, fecha=date(2027, 1, 7))
+
+        servidores = self.client.get(self.ruta).json()["servidores"]
+        self.assertEqual(
+            [(f["persona"], f["areas"], f["pagado"], f["saldo"], f["estado_pago"])
+             for f in servidores["filas"]],
+            [("Luis", "Cocina", 20, 30, "parcial"), ("Pedro", "", 0, 50, "pendiente")],
+        )
+        self.assertEqual(servidores["por_cobrar"], 80)
+
     def test_cada_seccion_exige_su_permiso(self):
         user = User.objects.create_user("servidor", password="x")
         self.client.force_login(user)
@@ -229,7 +312,9 @@ class PanelRetiroTests(Base):
         panel = self.client.get(self.ruta).json()
         self.assertIsNone(panel["finanzas"])
         self.assertIsNone(panel["equipo"])
+        self.assertIsNone(panel["servidores"])
         self.assertNotIn("pagado", panel["caminantes"]["filas"][0])
+        self.assertNotIn("ficha", panel["caminantes"]["filas"][0])  # sin rol confidencial
 
     def test_retiro_inexistente(self):
         ruta = "/api/retiros/00000000-0000-0000-0000-000000000000/panel/"
@@ -239,6 +324,56 @@ class PanelRetiroTests(Base):
         resumen = self.client.get("/api/resumen/").json()
         self.assertEqual((resumen["inscripciones"], resumen["balance"]), (3, 80))
         self.assertEqual(resumen["proximos_retiros"][0]["inscritos"], 2)
+
+
+class AccesoPorRolTests(Base):
+    """Coordinación y logística entran con su cuenta y obtienen permisos de su rol."""
+
+    def entrar_como(self, rol):
+        cuenta = User.objects.create_user(rol, password="x")
+        usuario = Usuario.objects.create(persona=self.persona(rol), cuenta=cuenta)
+        AsignacionRol.objects.create(usuario=usuario, rol=rol, retiro=self.retiro)
+        self.client.force_login(cuenta)
+        return usuario
+
+    def setUp(self):
+        super().setUp()
+        self.ana = Inscripcion.objects.create(retiro=self.retiro, persona=self.persona("Ana"))
+        self.ruta = f"/api/retiros/{self.retiro.pk}/panel/"
+
+    def test_sin_rol_no_ve_nada(self):
+        self.client.force_login(User.objects.create_user("nadie", password="x"))
+        self.assertEqual(self.client.get(self.ruta).status_code, 403)
+        self.assertEqual(self.client.get("/api/esquema/").json(), [])
+
+    def test_logistica_edita_caminantes_y_consulta_pagos(self):
+        self.entrar_como(Rol.LOGISTICA)
+        panel = self.client.get(self.ruta).json()
+        self.assertIn("ficha", panel["caminantes"]["filas"][0])
+        self.assertIsNotNone(panel["finanzas"])
+
+        r = self.client.patch(f"/api/inscripciones/{self.ana.pk}/",
+                              {"salud_alimentacion": {"tratamiento": "Insulina"}},
+                              content_type="application/json")
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(self.client.get("/api/pagos/").status_code, 200)
+        pago = {"retiro": str(self.retiro.pk), "concepto": "cuota", "monto": 10,
+                "fecha": "2027-03-01", "inscripcion": str(self.ana.pk)}
+        self.assertEqual(self.post("/api/pagos/", pago).status_code, 403)
+
+    def test_coordinacion_registra_pagos(self):
+        self.entrar_como(Rol.COORD_RETIRO)
+        pago = {"retiro": str(self.retiro.pk), "concepto": "cuota", "monto": 100,
+                "fecha": "2027-03-01", "inscripcion": str(self.ana.pk)}
+        self.assertEqual(self.post("/api/pagos/", pago).status_code, 201)
+        (fila,) = self.client.get(self.ruta).json()["caminantes"]["filas"]
+        self.assertEqual((fila["estado_pago"], fila["saldo"]), ("pagado", 0))
+
+    def test_usuario_inactivo_pierde_el_acceso(self):
+        usuario = self.entrar_como(Rol.COORD_RETIRO)
+        usuario.activo = False
+        usuario.save()
+        self.assertEqual(self.client.get(self.ruta).status_code, 403)
 
 
 class ReportesTests(Base):

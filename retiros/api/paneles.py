@@ -16,8 +16,9 @@ from rest_framework.response import Response
 from ..models import (
     Charla, EstadoPago, Gasto, Inscripcion, Pago, Participacion, Persona, Retiro,
 )
+from ..tasas import TasaNoDisponible, tasas_bcv
 from .modulos import INSCRITAS
-from .permisos import permiso
+from .permisos import permiso, ve_sensibles
 
 
 def _ve(user, modelo):
@@ -36,6 +37,16 @@ def _por_opcion(queryset, campo, opciones):
         {"valor": valor, "etiqueta": etiqueta, "total": totales.get(valor, 0)}
         for valor, etiqueta in opciones
     ]
+
+
+def _tasas_json():
+    """Tasa oficial del BCV (Bs por dólar y por euro), o None si no se pudo consultar."""
+    try:
+        tasas = tasas_bcv()
+    except TasaNoDisponible:
+        return None
+    return {"fecha": tasas["fecha"], "USD": tasas["bolivares"]["USD"],
+            "EUR": tasas["bolivares"]["EUR"]}
 
 
 def _retiro_json(r):
@@ -72,6 +83,7 @@ def resumen(request):
         "ingresos": ingresos,
         "egresos": egresos,
         "balance": ingresos - egresos,
+        "tasas_bcv": _tasas_json(),
         "proximos_retiros": [_retiro_json(r) for r in proximos],
     })
 
@@ -79,7 +91,47 @@ def resumen(request):
 # --------------------------------------------------------------------------- #
 # Panel de un retiro
 # --------------------------------------------------------------------------- #
-def _caminantes(retiro, con_pagos):
+def _edad(nacimiento, el_dia):
+    if not nacimiento:
+        return None
+    return el_dia.year - nacimiento.year - (
+        (el_dia.month, el_dia.day) < (nacimiento.month, nacimiento.day)
+    )
+
+
+def _texto(datos, clave):
+    return str(datos.get(clave) or "").strip()
+
+
+def _ficha(i, retiro):
+    """Lo confidencial de un caminante: salud, alimentación y a quién llamar."""
+    persona, salud = i.persona, i.salud_alimentacion or {}
+    datos, contacto = persona.datos_sensibles or {}, i.contacto_emergencia or {}
+    contactos = []
+    for sufijo in ("", "2"):
+        nombre = _texto(contacto, f"nombre{sufijo}")
+        telefonos = [_texto(contacto, f"telefono{sufijo}"), _texto(contacto, f"celular{sufijo}")]
+        if nombre or any(telefonos):
+            contactos.append({
+                "nombre": nombre,
+                "relacion": _texto(contacto, f"relacion{sufijo}"),
+                "telefono": " / ".join(t for t in telefonos if t),
+            })
+    return {
+        "edad": _edad(persona.fecha_nacimiento, retiro.fecha_inicio),
+        "procedencia": _texto(datos, "procedencia") or _texto(datos, "direccion"),
+        "celular": _texto(datos, "celular"),
+        "condicion_medica": _texto(salud, "condicion_medica"),
+        "tratamiento": _texto(salud, "tratamiento"),
+        "alimentacion": _texto(salud, "regimen_alimenticio"),
+        "requerimientos": _texto(salud, "requerimientos"),
+        "talla_camiseta": _texto(salud, "talla_camiseta"),
+        "contactos": contactos,
+        "notas": i.notas,
+    }
+
+
+def _caminantes(retiro, con_pagos, con_ficha):
     inscripciones = (
         retiro.inscripciones.select_related("persona", "padrino")
         .order_by("persona__nombre")
@@ -91,11 +143,14 @@ def _caminantes(retiro, con_pagos):
         por_estado[i.estado] += 1
         fila = {
             "id": i.pk,
+            "persona_id": i.persona_id,
             "persona": i.persona.nombre,
             "telefono": i.persona.telefono,
             "padrino": i.padrino.nombre if i.padrino_id else "",
             "estado": i.estado,
         }
+        if con_ficha:
+            fila["ficha"] = _ficha(i, retiro)
         if con_pagos:
             pagado = i.pagado or 0
             cancelada = i.estado == Inscripcion.Estado.CANCELADA
@@ -148,6 +203,34 @@ def _equipo(retiro):
     }
 
 
+def _servidores(retiro):
+    """Cada servidor con lo que lleva pagado de su cuota (pagos a su nombre que no
+    son la cuota de un caminante)."""
+    pagado = dict(
+        retiro.pagos.filter(inscripcion__isnull=True, persona__isnull=False)
+        .values_list("persona").annotate(t=Sum("monto_base"))
+    )
+    participaciones = (
+        retiro.participaciones.exclude(tipo=Participacion.Tipo.CAMINANTE)
+        .select_related("persona").prefetch_related("servicios__area")
+        .order_by("persona__nombre")
+    )
+    filas = []
+    for p in participaciones:
+        total = pagado.get(p.persona_id, 0)
+        filas.append({
+            "id": p.pk,
+            "persona": p.persona.nombre,
+            "telefono": p.persona.telefono,
+            "tipo": p.get_tipo_display(),
+            "areas": ", ".join(s.area.nombre for s in p.servicios.all()),
+            "pagado": total,
+            "saldo": max(retiro.cuota_servidor - total, 0),
+            "estado_pago": EstadoPago.de(total, retiro.cuota_servidor),
+        })
+    return {"filas": filas, "por_cobrar": sum(f["saldo"] for f in filas)}
+
+
 def _finanzas(retiro, caminantes):
     ingresos, egresos = _total(retiro.pagos), _total(retiro.gastos)
     datos = {
@@ -172,7 +255,9 @@ def panel_retiro(request, pk):
     retiro = get_object_or_404(Retiro.objects.select_related("tipo", "parroquia"), pk=pk)
     finanzas = _ve(user, Pago) and _ve(user, Gasto)
 
-    caminantes = _caminantes(retiro, con_pagos=finanzas) if _ve(user, Inscripcion) else None
+    caminantes = _caminantes(
+        retiro, con_pagos=finanzas, con_ficha=ve_sensibles(request)
+    ) if _ve(user, Inscripcion) else None
     return Response({
         "retiro": {
             "id": retiro.pk,
@@ -183,11 +268,13 @@ def panel_retiro(request, pk):
             "sede": retiro.sede,
             "cupo": retiro.cupo,
             "cuota": retiro.cuota,
+            "cuota_servidor": retiro.cuota_servidor,
             "estado": retiro.estado,
             "estado_display": retiro.get_estado_display(),
         },
         "caminantes": caminantes,
         "equipo": _equipo(retiro) if _ve(user, Participacion) else None,
+        "servidores": _servidores(retiro) if finanzas and _ve(user, Participacion) else None,
         "charlas": [
             {"id": c.pk, "orden": c.orden, "tema": c.tema,
              "expositor": c.expositor.nombre if c.expositor_id else ""}

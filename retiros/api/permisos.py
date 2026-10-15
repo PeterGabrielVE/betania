@@ -2,7 +2,8 @@ from rest_framework import permissions
 
 # Mismos roles que rol_datos_sensibles() en rls_policies.sql.
 ROLES_DATOS_SENSIBLES = {
-    "coord_parroquia", "coord_retiro", "secretaria", "admin_diocesano", "super_admin",
+    "coord_parroquia", "coord_retiro", "logistica", "secretaria", "admin_diocesano",
+    "super_admin",
 }
 
 

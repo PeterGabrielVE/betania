@@ -113,6 +113,7 @@ export type Campo = {
   opciones?: { valor: string; etiqueta: string }[]; // tipo "opcion"
   recurso?: string; // tipo "fk": slug del módulo relacionado
   seccion?: string; // título bajo el que va en el formulario
+  ayuda?: string; // texto bajo el control
   // tipo "json": datos que el formulario pide por separado y guarda en ese JSON
   subcampos?: Campo[];
 };
@@ -139,6 +140,19 @@ export type Registro = { id: string; etiqueta: string } & Record<
 
 type Opcion = { valor: string; etiqueta: string };
 
+export type FichaCaminante = {
+  edad: number | null;
+  procedencia: string;
+  celular: string;
+  condicion_medica: string;
+  tratamiento: string;
+  alimentacion: string;
+  requerimientos: string;
+  talla_camiseta: string;
+  contactos: { nombre: string; relacion: string; telefono: string }[];
+  notas: string;
+};
+
 // Panel de un retiro (/api/retiros/<id>/panel/). Cada sección llega en null si
 // el usuario no tiene permiso para verla.
 export type PanelRetiro = {
@@ -151,16 +165,20 @@ export type PanelRetiro = {
     sede: string;
     cupo: number;
     cuota: number;
+    cuota_servidor: number;
     estado: string;
     estado_display: string;
   };
   caminantes: {
     filas: {
       id: string;
+      persona_id: string;
       persona: string;
       telefono: string;
       padrino: string;
       estado: string;
+      // Solo para roles con acceso a datos confidenciales:
+      ficha?: FichaCaminante;
       // Solo con acceso a finanzas:
       pagado?: number;
       saldo?: number;
@@ -178,6 +196,20 @@ export type PanelRetiro = {
       area: string;
       personas: { nombre: string; es_coordinador: boolean }[];
     }[];
+  } | null;
+  // Lo que lleva pagado cada servidor; solo con acceso a finanzas.
+  servidores: {
+    filas: {
+      id: string;
+      persona: string;
+      telefono: string;
+      tipo: string;
+      areas: string;
+      pagado: number;
+      saldo: number;
+      estado_pago: string;
+    }[];
+    por_cobrar: number;
   } | null;
   charlas:
     { id: string; orden: number; tema: string; expositor: string }[] | null;
@@ -205,6 +237,8 @@ export type Resumen = {
   ingresos: number;
   egresos: number;
   balance: number;
+  // Tasa oficial del BCV, en bolívares; null si no se pudo consultar.
+  tasas_bcv: { fecha: string; USD: number; EUR: number } | null;
   proximos_retiros: {
     id: string;
     etiqueta: string;

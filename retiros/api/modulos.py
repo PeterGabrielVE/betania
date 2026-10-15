@@ -19,6 +19,7 @@ RETIROS, PERSONAS, FINANZAS, CATALOGOS = "Retiros", "Personas", "Finanzas", "Cat
 # Secciones del formulario de inscripción para caminantes (el de papel).
 _DATOS, _CIVIL, _SACRAMENTOS = "Datos del caminante", "Estado civil", "Sacramentos"
 _INSCRIPCION, _SALUD, _LLAMAR = "Inscripción", "Salud", "Persona a quien llamar"
+_LLAMAR2 = "Otro familiar de contacto"
 _COMENTARIOS = "Comentarios"
 
 # Una inscripción cuenta como "inscrito" mientras no esté cancelada.
@@ -30,7 +31,7 @@ MODULOS = [
     Modulo(
         "retiros", Retiro, "Retiros", "retiro", RETIROS,
         campos=["parroquia", "tipo", "edicion", "fecha_inicio", "fecha_fin", "sede", "cupo",
-                "cuota", "estado"],
+                "cuota", "cuota_servidor", "estado"],
         lista=["tipo", "edicion", "parroquia", "fecha_inicio", "fecha_fin", "sede",
                "inscritos", "cupo", "estado", "lista_pdf"],
         buscar=["tipo__nombre", "sede", "parroquia__nombre"],
@@ -78,7 +79,10 @@ MODULOS = [
         subcampos={
             "salud_alimentacion": [
                 sub("condicion_medica", "Condición médica a reportar", _SALUD, "area"),
+                sub("tratamiento", "Tratamiento o medicamentos que toma", _SALUD, "area"),
                 sub("regimen_alimenticio", "Régimen alimenticio especial", _SALUD, "area"),
+                sub("requerimientos", "Requerimientos especiales (movilidad, descanso...)",
+                    _SALUD, "area"),
                 sub("eps", "EPS", _SALUD),
                 sub("talla_camiseta", "Talla de camiseta", _SALUD, "opcion",
                     ["S", "M", "L", "XL"]),
@@ -89,6 +93,9 @@ MODULOS = [
                 sub("telefono", "Teléfono", _LLAMAR),
                 sub("celular", "Celular", _LLAMAR),
                 sub("correo", "Correo", _LLAMAR, "email"),
+                sub("nombre2", "Nombre", _LLAMAR2),
+                sub("relacion2", "Tipo de relación", _LLAMAR2),
+                sub("telefono2", "Teléfono", _LLAMAR2),
             ],
         },
     ),
@@ -138,6 +145,7 @@ MODULOS = [
             "datos_sensibles": [
                 sub("celular", "Celular", _DATOS),
                 sub("telefono_oficina", "Teléfono de oficina", _DATOS),
+                sub("procedencia", "De dónde es (ciudad o sector)", _DATOS),
                 sub("direccion", "Dirección", _DATOS),
                 sub("conjunto", "Conjunto", _DATOS),
                 sub("ocupacion", "Ocupación", _DATOS),
@@ -235,7 +243,14 @@ ETIQUETAS = {
     "inscripcion": "Inscripción", "es_coordinador": "Coordina el área",
     "consentimiento_datos": "Consentimiento de datos", "creado": "Alta",
     "salud_alimentacion": "Salud y alimentación", "tipo": "Tipo",
-    "cuota": f"Cuota ({settings.MONEDA})", "monto": "Monto",
+    "cuota": f"Cuota del caminante ({settings.MONEDA})",
+    "cuota_servidor": f"Cuota del servidor ({settings.MONEDA})", "monto": "Monto",
     "tasa": f"Tasa de cambio (por 1 {settings.MONEDA})",
     "monto_base": f"Equivalente en {settings.MONEDA}",
+}
+
+# Texto de ayuda bajo el control de un campo.
+AYUDAS = {
+    "tasa": "Déjala vacía para usar la tasa oficial del BCV de hoy.",
+    "inscripcion": "Para la cuota de un caminante basta con elegir la persona.",
 }

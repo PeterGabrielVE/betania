@@ -6,8 +6,8 @@ export default function SignIn() {
   return (
     <>
       <PageMeta
-        title="Iniciar sesión | Gestión de retiros"
-        description="Acceso al sistema de gestión de retiros"
+        title="Iniciar sesión | Betania"
+        description="Acceso a Betania, el sistema de gestión de retiros"
       />
       <AuthLayout>
         <SignInForm />

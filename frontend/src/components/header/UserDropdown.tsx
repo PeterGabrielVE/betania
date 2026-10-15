@@ -56,8 +56,8 @@ export default function UserDropdown() {
         onClick={toggleDropdown}
         className="dropdown-toggle flex items-center text-gray-700 dark:text-gray-400"
       >
-        <span className="me-3 h-11 w-11 overflow-hidden rounded-full">
-          <img src="/images/user/owner.png" alt="User" />
+        <span className="me-3 flex h-11 w-11 items-center justify-center rounded-full bg-brand-50 font-semibold text-brand-500 uppercase dark:bg-brand-500/15 dark:text-brand-400">
+          {nombre.charAt(0)}
         </span>
 
         <span className="me-1 block text-theme-sm font-medium">{nombre}</span>

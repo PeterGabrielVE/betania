@@ -1,5 +1,6 @@
 "use client";
 
+import Logo from "@/components/common/Logo";
 import { ThemeToggleButton } from "@/components/common/ThemeToggleButton";
 import UserDropdown from "@/components/header/UserDropdown";
 import { useSidebar } from "@/context/SidebarContext";
@@ -73,16 +74,7 @@ const AppHeader: React.FC = () => {
           </button>
 
           <Link to="/" className="xl:hidden">
-            <img
-              className="dark:hidden"
-              src="/images/logo/logo.svg"
-              alt="Logo"
-            />
-            <img
-              className="hidden dark:block"
-              src="/images/logo/logo-dark.svg"
-              alt="Logo"
-            />
+            <Logo />
           </Link>
 
           <button

@@ -14,7 +14,7 @@ from rest_framework import filters, routers, serializers, status, viewsets
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-from .modulos import ETIQUETAS, MODULOS, POR_MODELO
+from .modulos import AYUDAS, ETIQUETAS, MODULOS, POR_MODELO
 from .permisos import PermisosModelo, ve_sensibles
 
 _TIPOS = [
@@ -55,6 +55,8 @@ def _describir(modulo, nombre):
         "requerido": not f.blank and not f.has_default(),
         "seccion": next((t for t, campos in modulo.secciones.items() if nombre in campos), ""),
     }
+    if nombre in AYUDAS:
+        info["ayuda"] = AYUDAS[nombre]
     if nombre in modulo.subcampos:
         info["subcampos"] = modulo.subcampos[nombre]
     if f.is_relation:

@@ -1,12 +1,13 @@
 """
 Fija el contexto de RLS (app.rol / app.parroquia_id / app.diocesis_id) en cada
 petición. El superusuario de Django obtiene 'super_admin' (ve todo), lo que
-permite usar el admin de inmediato.
-
-Pendiente para usuarios NO superadmin: enlaza tu auth.User con el modelo
-Usuario/AsignacionRol y devuelve su rol/parroquia en _asignacion_activa().
+permite usar el admin de inmediato. Los demás toman el de su AsignacionRol de
+mayor alcance (ver acceso.py); un rol de retiro ve la parroquia de ese retiro.
 """
 from django.db import connection
+
+from .acceso import asignaciones
+from .models import Retiro
 
 
 class RLSContextMiddleware:
@@ -35,12 +36,16 @@ class RLSContextMiddleware:
             return "", "", ""
         if user.is_superuser:
             return "super_admin", "", ""
-        asign = self._asignacion_activa(request, user)
-        if asign:
-            return asign.rol, str(asign.parroquia_id or ""), str(asign.diocesis_id or "")
-        return "", "", ""
-
-    def _asignacion_activa(self, request, user):
-        # TODO: enlazar auth.User -> Usuario y devolver la AsignacionRol activa
-        # (p. ej. según la parroquia seleccionada en la sesión del usuario).
-        return None
+        asign = next(iter(asignaciones(user)), None)
+        if asign is None:
+            return "", "", ""
+        parroquia_id = asign.parroquia_id
+        if not parroquia_id and asign.retiro_id:
+            # El RLS oculta el retiro mientras no haya contexto: su parroquia se
+            # lee antes de fijar el definitivo.
+            self._set("super_admin", "", "")
+            parroquia_id = (
+                Retiro.objects.filter(pk=asign.retiro_id)
+                .values_list("parroquia_id", flat=True).first()
+            )
+        return asign.rol, str(parroquia_id or ""), str(asign.diocesis_id or "")

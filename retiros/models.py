@@ -20,6 +20,8 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 
+from .tasas import TasaNoDisponible, tasa_bcv
+
 
 class Moneda(models.TextChoices):
     VES = "VES", "Bolívar"
@@ -40,6 +42,7 @@ class Rol(models.TextChoices):
     ADMIN_DIOCESANO = "admin_diocesano", "Administrador diocesano"  # ámbito diócesis
     COORD_PARROQUIA = "coord_parroquia", "Coordinador de parroquia"  # ámbito parroquia
     COORD_RETIRO = "coord_retiro", "Coordinador de retiro"       # ámbito retiro
+    LOGISTICA = "logistica", "Coordinador de logística"          # ámbito retiro
     TESORERIA = "tesoreria", "Tesorería"                         # ámbito parroquia
     SECRETARIA = "secretaria", "Secretaría / inscripciones"      # ámbito parroquia
     SERVIDOR = "servidor", "Servidor / equipo"                  # ámbito parroquia o retiro
@@ -123,11 +126,15 @@ class Persona(models.Model):
 
 class Usuario(models.Model):
     """
-    Identidad de acceso. Enlázala a auth.User (OneToOne) o úsala como base de tu
-    modelo de autenticación. Los permisos viven en AsignacionRol, no aquí.
+    Identidad de acceso: une la cuenta con la que se entra (auth.User) con su
+    persona. Los permisos viven en AsignacionRol, no aquí (ver acceso.py).
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     persona = models.OneToOneField(Persona, on_delete=models.CASCADE, related_name="usuario")
+    cuenta = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="usuario_retiros", help_text="Usuario y contraseña con que entra.",
+    )
     activo = models.BooleanField(default=True)
 
     def __str__(self):
@@ -140,7 +147,7 @@ class AsignacionRol(models.Model):
       - super_admin      → sin ámbito (acceso global)
       - admin_diocesano  → diocesis
       - coord_parroquia / tesoreria / secretaria → parroquia
-      - coord_retiro     → retiro
+      - coord_retiro / logistica → retiro
       - servidor         → parroquia (equipo estable) o retiro (equipo de ese retiro)
     Un usuario puede acumular varias asignaciones.
     """
@@ -176,6 +183,7 @@ class AsignacionRol(models.Model):
             Rol.TESORERIA: "parroquia",
             Rol.SECRETARIA: "parroquia",
             Rol.COORD_RETIRO: "retiro",
+            Rol.LOGISTICA: "retiro",
         }
         campo = requiere.get(self.rol)
         if campo and getattr(self, f"{campo}_id") is None:
@@ -208,8 +216,9 @@ class Retiro(models.Model):
     fecha_fin = models.DateField()
     sede = models.CharField(max_length=200, blank=True)
     cupo = models.PositiveIntegerField(default=0)
-    # Monto esperado por caminante, en la moneda base.
+    # Montos esperados por caminante y por servidor, en la moneda base.
     cuota = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    cuota_servidor = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     estado = models.CharField(max_length=20, choices=Estado.choices, default=Estado.PLANEACION)
 
     class Meta:
@@ -346,6 +355,8 @@ class EstadoPago(models.TextChoices):
 
     @classmethod
     def de(cls, pagado, cuota):
+        if cuota <= 0:
+            return cls.PAGADO  # sin cuota no hay nada que deber
         if not pagado or pagado <= 0:
             return cls.PENDIENTE
         return cls.PAGADO if pagado >= cuota else cls.PARCIAL
@@ -354,15 +365,16 @@ class EstadoPago(models.TextChoices):
 class Movimiento(models.Model):
     """
     Lo común a pagos y gastos: un monto en bolívares, dólares o euros. Para poder
-    sumar monedas distintas, cada movimiento guarda la tasa de cambio del día y
-    su equivalente en la moneda base; los totales se hacen sobre monto_base.
+    sumar monedas distintas, cada movimiento guarda la tasa de cambio con que se
+    registró y su equivalente en la moneda base; los totales se hacen sobre
+    monto_base. Si no se escribe la tasa, se toma la oficial del BCV del momento.
     """
     monto = models.DecimalField(max_digits=14, decimal_places=2)
     moneda = models.CharField(max_length=3, choices=Moneda.choices,
                               default=moneda_predeterminada)
     # Cuántas unidades de `moneda` equivalen a 1 de la moneda base (p. ej. Bs por
-    # dólar). No hace falta si el movimiento ya está en la moneda base.
-    tasa = models.DecimalField(max_digits=14, decimal_places=4, null=True, blank=True)
+    # dólar). Nula si el movimiento ya está en la moneda base.
+    tasa = models.DecimalField(max_digits=18, decimal_places=8, null=True, blank=True)
     monto_base = models.DecimalField(max_digits=14, decimal_places=2, default=0,
                                      editable=False)
 
@@ -375,16 +387,21 @@ class Movimiento(models.Model):
         if self.moneda == settings.MONEDA:
             return
         if self.tasa is None:
-            raise ValidationError({"tasa": (
-                f"Indica la tasa: cuántos {self.get_moneda_display().lower()} "
-                f"equivalen a 1 {settings.MONEDA}."
-            )})
-        if self.tasa <= 0:
+            try:
+                tasa_bcv(self.moneda)  # queda en caché para save()
+            except TasaNoDisponible:
+                raise ValidationError({"tasa": (
+                    "No se pudo consultar la tasa del BCV. Escríbela: cuántos "
+                    f"{self.get_moneda_display().lower()} equivalen a 1 {settings.MONEDA}."
+                )})
+        elif self.tasa <= 0:
             raise ValidationError({"tasa": "La tasa debe ser mayor que cero."})
 
     def save(self, *args, **kwargs):
         if self.moneda == settings.MONEDA:
             self.tasa = None
+        elif self.tasa is None:
+            self.tasa = tasa_bcv(self.moneda)
         self.monto_base = (Decimal(self.monto) / (self.tasa or 1)).quantize(Decimal("0.01"))
         super().save(*args, **kwargs)
 
@@ -428,6 +445,17 @@ class Pago(Movimiento):
         super().clean()
         if self.inscripcion_id and self.inscripcion.retiro_id != self.retiro_id:
             raise ValidationError({"inscripcion": "Esa inscripción es de otro retiro."})
+
+    def save(self, *args, **kwargs):
+        # Basta con elegir la persona o la inscripción: se completa la otra, para
+        # que la cuota de un caminante cuente aunque solo se haya elegido su nombre.
+        if self.inscripcion_id and not self.persona_id:
+            self.persona_id = self.inscripcion.persona_id
+        elif self.persona_id and not self.inscripcion_id and self.concepto == self.Concepto.CUOTA:
+            self.inscripcion = Inscripcion.objects.filter(
+                retiro_id=self.retiro_id, persona_id=self.persona_id
+            ).first()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.get_concepto_display()} {self.monto} {self.moneda}"

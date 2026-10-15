@@ -162,6 +162,11 @@ export default function CamposModulo({
                     )}
                   </Label>
                   {control(entrada, id)}
+                  {entrada.ayuda && (
+                    <p className="mt-1 text-theme-xs text-gray-500 dark:text-gray-400">
+                      {entrada.ayuda}
+                    </p>
+                  )}
                   {errores[entrada.clave]?.map((mensaje) => (
                     <p
                       key={mensaje}

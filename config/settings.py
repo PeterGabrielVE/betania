@@ -65,6 +65,12 @@ DATABASES = {
     )
 }
 
+# Los permisos de coordinación y logística salen de sus roles (retiros/acceso.py).
+AUTHENTICATION_BACKENDS = [
+    "django.contrib.auth.backends.ModelBackend",
+    "retiros.acceso.RolBackend",
+]
+
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": f"django.contrib.auth.password_validation.{nombre}"}
     for nombre in (
@@ -86,6 +92,10 @@ USE_TZ = True
 # Moneda base: VES, USD o EUR (retiros.models.Moneda). En ella van las cuotas y
 # los totales; los pagos y gastos en otra moneda se convierten con su tasa.
 MONEDA = os.environ.get("MONEDA", "USD")
+# De dónde sale la tasa oficial del BCV (recurso: "dolares" o "euros").
+TASAS_BCV_URL = os.environ.get(
+    "TASAS_BCV_URL", "https://ve.dolarapi.com/v1/{recurso}/oficial"
+)
 # Formato regional con que el frontend muestra montos y fechas.
 REGION = os.environ.get("REGION", "es-VE")
 

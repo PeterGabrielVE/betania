@@ -19,7 +19,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='gasto',
             name='tasa',
-            field=models.DecimalField(blank=True, decimal_places=4, max_digits=14, null=True),
+            field=models.DecimalField(blank=True, decimal_places=8, max_digits=18, null=True),
         ),
         migrations.AddField(
             model_name='pago',
@@ -29,7 +29,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='pago',
             name='tasa',
-            field=models.DecimalField(blank=True, decimal_places=4, max_digits=14, null=True),
+            field=models.DecimalField(blank=True, decimal_places=8, max_digits=18, null=True),
         ),
         migrations.AlterField(
             model_name='gasto',

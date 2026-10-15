@@ -1,8 +1,14 @@
-import { api, ApiError, type PanelRetiro } from "@/api/client";
+import {
+  api,
+  ApiError,
+  type FichaCaminante,
+  type PanelRetiro,
+} from "@/api/client";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
 import {
   claseBoton,
+  claseControl,
   claseEnlace,
   claseTarjeta,
 } from "@/components/modulos/estilos";
@@ -19,7 +25,7 @@ import { useAuth } from "@/context/AuthContext";
 import { BoxIconLine, CalenderIcon, DollarLineIcon, GroupIcon } from "@/icons";
 import NotFound from "@/pages/OtherPage/NotFound";
 import { colorEstado, dinero, fecha } from "@/utils/formato";
-import { useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 
 const claseTitulo = "text-lg font-semibold text-gray-800 dark:text-white/90";
@@ -72,21 +78,193 @@ function Desglose({
   );
 }
 
+type FilaCaminante = NonNullable<PanelRetiro["caminantes"]>["filas"][number];
+
+// Filtros rápidos de la tabla de caminantes. `requiere` dice qué datos hacen
+// falta para ofrecerlo (finanzas o la ficha confidencial).
+const filtrosCaminante: {
+  valor: string;
+  etiqueta: string;
+  requiere?: "pagos" | "ficha";
+  cumple: (f: FilaCaminante) => boolean;
+}[] = [
+  { valor: "", etiqueta: "Todos", cumple: () => true },
+  {
+    valor: "deben",
+    etiqueta: "Deben",
+    requiere: "pagos",
+    cumple: (f) => (f.saldo ?? 0) > 0,
+  },
+  {
+    valor: "salud",
+    etiqueta: "Salud o tratamiento",
+    requiere: "ficha",
+    cumple: (f) => !!(f.ficha?.condicion_medica || f.ficha?.tratamiento),
+  },
+  {
+    valor: "comida",
+    etiqueta: "Comida especial",
+    requiere: "ficha",
+    cumple: (f) => !!f.ficha?.alimentacion,
+  },
+  {
+    valor: "requerimientos",
+    etiqueta: "Requerimiento especial",
+    requiere: "ficha",
+    cumple: (f) => !!f.ficha?.requerimientos,
+  },
+];
+
+// Avisos junto al nombre, para ver de un vistazo a quién hay que atender.
+function Avisos({ ficha }: { ficha?: FichaCaminante }) {
+  if (!ficha) return null;
+  const avisos: [string, "error" | "warning" | "info"][] = [];
+  if (ficha.condicion_medica || ficha.tratamiento) {
+    avisos.push(["Salud", "error"]);
+  }
+  if (ficha.alimentacion) avisos.push(["Comida", "warning"]);
+  if (ficha.requerimientos) avisos.push(["Requerimiento", "info"]);
+  return (
+    <>
+      {avisos.map(([texto, color]) => (
+        <span key={texto} className="ml-2">
+          <Badge size="sm" color={color}>
+            {texto}
+          </Badge>
+        </span>
+      ))}
+    </>
+  );
+}
+
+function Dato({ titulo, valor }: { titulo: string; valor: React.ReactNode }) {
+  return (
+    <div>
+      <dt className="text-theme-xs font-medium text-gray-500 dark:text-gray-400">
+        {titulo}
+      </dt>
+      <dd className="mt-0.5 text-theme-sm whitespace-pre-line text-gray-800 dark:text-white/90">
+        {valor || "—"}
+      </dd>
+    </div>
+  );
+}
+
+// Todo lo confidencial de un caminante, con enlaces para corregirlo.
+function Ficha({
+  fila,
+  retiroId,
+  puedeEditar,
+}: {
+  fila: FilaCaminante;
+  retiroId: string;
+  puedeEditar: (slug: string) => boolean;
+}) {
+  const ficha = fila.ficha!;
+  // Al guardar o cancelar la edición se vuelve a este panel.
+  const volver = encodeURIComponent(`/retiros/${retiroId}`);
+  return (
+    <div className="rounded-xl bg-gray-50 p-4 whitespace-normal dark:bg-white/3">
+      <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Dato titulo="Condición médica" valor={ficha.condicion_medica} />
+        <Dato titulo="Tratamiento o medicamentos" valor={ficha.tratamiento} />
+        <Dato titulo="Alimentación especial" valor={ficha.alimentacion} />
+        <Dato titulo="Requerimientos especiales" valor={ficha.requerimientos} />
+        <Dato
+          titulo="Teléfonos del caminante"
+          valor={[fila.telefono, ficha.celular].filter(Boolean).join(" / ")}
+        />
+        <Dato
+          titulo="Familiares / contacto de emergencia"
+          valor={
+            ficha.contactos.length > 0 && (
+              <ul className="space-y-1">
+                {ficha.contactos.map((c, i) => (
+                  <li key={i}>
+                    {c.nombre || "Sin nombre"}
+                    {c.relacion && ` (${c.relacion})`}
+                    {c.telefono && ` · ${c.telefono}`}
+                  </li>
+                ))}
+              </ul>
+            )
+          }
+        />
+        <Dato titulo="Quién lo invitó" valor={fila.padrino} />
+        <Dato titulo="Talla de camiseta" valor={ficha.talla_camiseta} />
+        {ficha.notas && <Dato titulo="Comentario" valor={ficha.notas} />}
+      </dl>
+      <div className="mt-4 flex flex-wrap gap-4 text-sm">
+        {puedeEditar("inscripciones") && (
+          <Link
+            to={`/inscripciones?editar=${fila.id}&volver=${volver}`}
+            className={claseEnlace}
+          >
+            Editar salud y contactos
+          </Link>
+        )}
+        {puedeEditar("personas") && (
+          <Link
+            to={`/personas?editar=${fila.persona_id}&volver=${volver}`}
+            className={claseEnlace}
+          >
+            Editar datos personales
+          </Link>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function Caminantes({
   caminantes,
   opcionesPago,
+  retiroId,
+  puedeEditar,
 }: {
   caminantes: NonNullable<PanelRetiro["caminantes"]>;
   opcionesPago: PanelRetiro["opciones_pago"];
+  retiroId: string;
+  puedeEditar: (slug: string) => boolean;
 }) {
   const { filas, por_estado } = caminantes;
+  const [filtro, setFiltro] = useState("");
+  const [texto, setTexto] = useState("");
+  const [abiertos, setAbiertos] = useState<Set<string>>(new Set());
   const conPagos = filas.some((f) => f.estado_pago !== undefined);
+  const conFicha = filas.some((f) => f.ficha !== undefined);
   const estados = new Map(por_estado.map((e) => [e.estado, e.etiqueta]));
   const pagos = new Map(opcionesPago.map((o) => [o.valor, o.etiqueta]));
 
   if (filas.length === 0) {
     return <p className={claseVacio}>Todavía no hay inscripciones.</p>;
   }
+
+  const disponibles = filtrosCaminante.filter(
+    (f) => !f.requiere || (f.requiere === "pagos" ? conPagos : conFicha),
+  );
+  const elegido = disponibles.find((f) => f.valor === filtro) ?? disponibles[0];
+  const buscado = texto.trim().toLowerCase();
+  const visibles = filas.filter(
+    (f) =>
+      elegido.cumple(f) &&
+      (!buscado || f.persona.toLowerCase().includes(buscado)),
+  );
+
+  const alternar = (id: string) =>
+    setAbiertos((actual) => {
+      const nuevo = new Set(actual);
+      if (nuevo.has(id)) nuevo.delete(id);
+      else nuevo.add(id);
+      return nuevo;
+    });
+
+  const titulos = conFicha
+    ? ["Caminante", "Edad", "De dónde es", "Teléfono", "Estado"]
+    : ["Caminante", "Teléfono", "Quién lo invitó", "Estado"];
+  if (conPagos) titulos.push("Pago", "Pagado", "Debe");
+  if (conFicha) titulos.push("");
+
   return (
     <>
       <div className="mb-4 flex flex-wrap gap-2">
@@ -98,16 +276,187 @@ function Caminantes({
             </Badge>
           ))}
       </div>
+      <div className="mb-4 flex flex-wrap gap-3">
+        <input
+          type="search"
+          placeholder="Buscar caminante…"
+          value={texto}
+          onChange={(e) => setTexto(e.target.value)}
+          className={`${claseControl} w-full sm:w-64`}
+        />
+        {disponibles.length > 1 && (
+          <select
+            value={elegido.valor}
+            onChange={(e) => setFiltro(e.target.value)}
+            className={claseControl}
+            aria-label="Filtrar caminantes"
+          >
+            {disponibles.map((f) => (
+              <option key={f.valor} value={f.valor}>
+                {f.etiqueta} ({filas.filter(f.cumple).length})
+              </option>
+            ))}
+          </select>
+        )}
+        {conFicha && (
+          <button
+            type="button"
+            className={claseBoton}
+            onClick={() =>
+              setAbiertos(
+                abiertos.size ? new Set() : new Set(visibles.map((f) => f.id)),
+              )
+            }
+          >
+            {abiertos.size ? "Cerrar fichas" : "Abrir todas las fichas"}
+          </button>
+        )}
+      </div>
+      {visibles.length === 0 ? (
+        <p className={claseVacio}>Ningún caminante coincide.</p>
+      ) : (
+        <div className="max-w-full overflow-x-auto">
+          <Table>
+            <TableHeader className="border-b border-gray-100 dark:border-white/5">
+              <TableRow>
+                {titulos.map((titulo, i) => (
+                  <TableCell key={i} isHeader className={claseEncabezado}>
+                    {titulo}
+                  </TableCell>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody className="divide-y divide-gray-100 dark:divide-white/5">
+              {visibles.map((f) => (
+                <Fragment key={f.id}>
+                  <TableRow>
+                    <TableCell
+                      className={`${claseCelda} font-medium text-gray-800 dark:text-white/90`}
+                    >
+                      {f.persona}
+                      <Avisos ficha={f.ficha} />
+                    </TableCell>
+                    {conFicha && (
+                      <>
+                        <TableCell className={claseCelda}>
+                          {f.ficha?.edad ?? "—"}
+                        </TableCell>
+                        <TableCell className={claseCelda}>
+                          {f.ficha?.procedencia || "—"}
+                        </TableCell>
+                      </>
+                    )}
+                    <TableCell className={claseCelda}>
+                      {f.telefono || f.ficha?.celular || "—"}
+                    </TableCell>
+                    {!conFicha && (
+                      <TableCell className={claseCelda}>
+                        {f.padrino || "—"}
+                      </TableCell>
+                    )}
+                    <TableCell className={claseCelda}>
+                      <Badge size="sm" color={colorEstado(f.estado)}>
+                        {estados.get(f.estado)}
+                      </Badge>
+                    </TableCell>
+                    {conPagos && (
+                      <>
+                        <TableCell className={claseCelda}>
+                          <Badge size="sm" color={colorEstado(f.estado_pago!)}>
+                            {pagos.get(f.estado_pago!)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className={claseCelda}>
+                          {dinero(f.pagado!)}
+                        </TableCell>
+                        <TableCell className={claseCelda}>
+                          {dinero(f.saldo!)}
+                        </TableCell>
+                      </>
+                    )}
+                    {conFicha && (
+                      <TableCell className={claseCelda}>
+                        <button
+                          type="button"
+                          className={claseEnlace}
+                          aria-expanded={abiertos.has(f.id)}
+                          onClick={() => alternar(f.id)}
+                        >
+                          {abiertos.has(f.id) ? "Ocultar ficha" : "Ver ficha"}
+                        </button>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                  {abiertos.has(f.id) && f.ficha && (
+                    <TableRow>
+                      <TableCell colSpan={titulos.length} className="px-4 pb-4">
+                        <Ficha
+                          fila={f}
+                          retiroId={retiroId}
+                          puedeEditar={puedeEditar}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </Fragment>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </>
+  );
+}
+
+// Lo que lleva pagado y lo que debe cada servidor de su cuota.
+function Servidores({
+  servidores,
+  cuota,
+  opcionesPago,
+}: {
+  servidores: NonNullable<PanelRetiro["servidores"]>;
+  cuota: number;
+  opcionesPago: PanelRetiro["opciones_pago"];
+}) {
+  const [soloDeben, setSoloDeben] = useState(false);
+  const pagos = new Map(opcionesPago.map((o) => [o.valor, o.etiqueta]));
+  if (servidores.filas.length === 0) {
+    return <p className={claseVacio}>Todavía no hay servidores asignados.</p>;
+  }
+  const conCuota = cuota > 0;
+  const visibles = soloDeben
+    ? servidores.filas.filter((f) => f.saldo > 0)
+    : servidores.filas;
+  return (
+    <>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-sm text-gray-500 dark:text-gray-400">
+        <span>
+          {conCuota
+            ? `Cuota por servidor: ${dinero(cuota)}`
+            : "Este retiro no tiene cuota de servidor: se muestra lo aportado."}
+        </span>
+        {conCuota && (
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={soloDeben}
+              onChange={(e) => setSoloDeben(e.target.checked)}
+            />
+            Solo los que deben
+          </label>
+        )}
+      </div>
       <div className="max-w-full overflow-x-auto">
         <Table>
           <TableHeader className="border-b border-gray-100 dark:border-white/5">
             <TableRow>
               {[
-                "Caminante",
+                "Servidor",
+                "Área",
                 "Teléfono",
-                "Quién lo invitó",
-                "Estado",
-                ...(conPagos ? ["Pago", "Saldo"] : []),
+                ...(conCuota ? ["Pago"] : []),
+                "Pagado",
+                ...(conCuota ? ["Debe"] : []),
               ].map((titulo) => (
                 <TableCell key={titulo} isHeader className={claseEncabezado}>
                   {titulo}
@@ -116,7 +465,7 @@ function Caminantes({
             </TableRow>
           </TableHeader>
           <TableBody className="divide-y divide-gray-100 dark:divide-white/5">
-            {filas.map((f) => (
+            {visibles.map((f) => (
               <TableRow key={f.id}>
                 <TableCell
                   className={`${claseCelda} font-medium text-gray-800 dark:text-white/90`}
@@ -124,25 +473,23 @@ function Caminantes({
                   {f.persona}
                 </TableCell>
                 <TableCell className={claseCelda}>
+                  {f.areas || f.tipo}
+                </TableCell>
+                <TableCell className={claseCelda}>
                   {f.telefono || "—"}
                 </TableCell>
-                <TableCell className={claseCelda}>{f.padrino || "—"}</TableCell>
-                <TableCell className={claseCelda}>
-                  <Badge size="sm" color={colorEstado(f.estado)}>
-                    {estados.get(f.estado)}
-                  </Badge>
-                </TableCell>
-                {conPagos && (
-                  <>
-                    <TableCell className={claseCelda}>
-                      <Badge size="sm" color={colorEstado(f.estado_pago!)}>
-                        {pagos.get(f.estado_pago!)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className={claseCelda}>
-                      {dinero(f.saldo!)}
-                    </TableCell>
-                  </>
+                {conCuota && (
+                  <TableCell className={claseCelda}>
+                    <Badge size="sm" color={colorEstado(f.estado_pago)}>
+                      {pagos.get(f.estado_pago)}
+                    </Badge>
+                  </TableCell>
+                )}
+                <TableCell className={claseCelda}>{dinero(f.pagado)}</TableCell>
+                {conCuota && (
+                  <TableCell className={claseCelda}>
+                    {dinero(f.saldo)}
+                  </TableCell>
                 )}
               </TableRow>
             ))}
@@ -207,6 +554,15 @@ function Equipo({ equipo }: { equipo: NonNullable<PanelRetiro["equipo"]> }) {
   );
 }
 
+// Cada cuánto se vuelve a consultar el panel mientras está a la vista, para
+// que los pagos y cambios que registran otros aparezcan sin recargar.
+const ACTUALIZAR_CADA_MS = 30_000;
+
+const formatoHora = new Intl.DateTimeFormat(undefined, {
+  hour: "numeric",
+  minute: "2-digit",
+});
+
 // Todo lo de un retiro en una pantalla: caminantes, equipo, charlas y finanzas.
 export default function RetiroPanel() {
   const { id } = useParams();
@@ -215,34 +571,68 @@ export default function RetiroPanel() {
     id?: string;
     panel?: PanelRetiro;
     error?: ApiError | Error;
+    hora?: Date;
   }>({});
+  const [consultando, setConsultando] = useState(false);
+
+  const cargar = useCallback(
+    (vigente: () => boolean = () => true) =>
+      api<PanelRetiro>(`/retiros/${id}/panel/`)
+        .then((panel) => {
+          if (vigente()) setResultado({ id, panel, hora: new Date() });
+        })
+        .catch((error: Error) => {
+          // Si falla una actualización, queda a la vista lo último que llegó.
+          if (vigente()) {
+            setResultado((r) =>
+              r.id === id && r.panel ? { ...r, error } : { id, error },
+            );
+          }
+        }),
+    [id],
+  );
+
+  const actualizarAhora = () => {
+    setConsultando(true);
+    cargar().finally(() => setConsultando(false));
+  };
 
   useEffect(() => {
-    let vigente = true;
-    api<PanelRetiro>(`/retiros/${id}/panel/`)
-      .then((panel) => vigente && setResultado({ id, panel }))
-      .catch((error: Error) => vigente && setResultado({ id, error }));
-    return () => {
-      vigente = false;
+    let activo = true;
+    const vigente = () => activo;
+    cargar(vigente);
+    const actualizar = () => {
+      if (!document.hidden) cargar(vigente);
     };
-  }, [id]);
+    const intervalo = setInterval(actualizar, ACTUALIZAR_CADA_MS);
+    // Al volver a la pestaña (o al celular) se actualiza enseguida.
+    document.addEventListener("visibilitychange", actualizar);
+    return () => {
+      activo = false;
+      clearInterval(intervalo);
+      document.removeEventListener("visibilitychange", actualizar);
+    };
+  }, [cargar]);
 
   const { panel, error } = resultado;
   if (resultado.id !== id) return <p className={claseVacio}>Cargando…</p>;
-  if (error instanceof ApiError && [403, 404].includes(error.status)) {
-    return <NotFound />;
+  if (!panel) {
+    if (error instanceof ApiError && [403, 404].includes(error.status)) {
+      return <NotFound />;
+    }
+    return <p className={claseVacio}>{error?.message}</p>;
   }
-  if (!panel) return <p className={claseVacio}>{error?.message}</p>;
 
-  const { retiro, caminantes, equipo, charlas, finanzas } = panel;
-  const puede = (slug: string) =>
-    modulos.find((m) => m.slug === slug)?.puede_agregar;
+  const { retiro, caminantes, equipo, servidores, charlas, finanzas } = panel;
+  const modulo = (slug: string) => modulos.find((m) => m.slug === slug);
+  const puede = (slug: string) => modulo(slug)?.puede_agregar;
+  const puedeEditar = (slug: string) => !!modulo(slug)?.puede_cambiar;
   const puedeInscribir = puede("personas") && puede("inscripciones");
 
   return (
     <>
       <PageMeta
-        title={`${retiro.etiqueta} | Gestión de retiros`}
+        title={`${retiro.etiqueta} | Betania`}
         description={`Caminantes, equipo, charlas y finanzas de ${retiro.etiqueta}`}
       />
       <PageBreadcrumb pageTitle={retiro.etiqueta} />
@@ -258,7 +648,28 @@ export default function RetiroPanel() {
           <span>{retiro.parroquia}</span>
           {retiro.sede && <span>Sede: {retiro.sede}</span>}
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            className="text-xs text-gray-500 dark:text-gray-400"
+            title="El panel se actualiza solo cada 30 segundos"
+          >
+            {error
+              ? "No se pudo actualizar"
+              : `Actualizado ${formatoHora.format(resultado.hora)}`}
+          </span>
+          <button
+            type="button"
+            className={claseBoton}
+            onClick={actualizarAhora}
+            disabled={consultando}
+          >
+            {consultando ? "Actualizando…" : "Actualizar"}
+          </button>
+          {puede("pagos") && (
+            <Link to="/pagos" className={claseBoton}>
+              Registrar pago
+            </Link>
+          )}
           {caminantes && (
             // Lo sirve Django, no React Router.
             <a href={`/retiros/${retiro.id}/lista.pdf`} className={claseBoton}>
@@ -297,11 +708,11 @@ export default function RetiroPanel() {
           )}
           <Metrica
             icono={<CalenderIcon className="size-6" />}
-            etiqueta="Cuota"
+            etiqueta="Cuota del caminante"
             valor={dinero(retiro.cuota)}
             detalle={
               finanzas?.por_cobrar !== undefined
-                ? `${dinero(finanzas.por_cobrar)} por cobrar`
+                ? `${dinero(finanzas.por_cobrar)} por cobrar a caminantes`
                 : undefined
             }
           />
@@ -327,6 +738,30 @@ export default function RetiroPanel() {
           >
             <Caminantes
               caminantes={caminantes}
+              opcionesPago={panel.opciones_pago}
+              retiroId={retiro.id}
+              puedeEditar={puedeEditar}
+            />
+          </Seccion>
+        )}
+
+        {servidores && (
+          <Seccion
+            titulo={
+              retiro.cuota_servidor > 0
+                ? `Pagos de servidores · ${dinero(servidores.por_cobrar)} por cobrar`
+                : "Aportes de servidores"
+            }
+            className="col-span-12"
+            enlace={
+              <Link to="/pagos" className={`text-sm ${claseEnlace}`}>
+                Ver pagos
+              </Link>
+            }
+          >
+            <Servidores
+              servidores={servidores}
+              cuota={retiro.cuota_servidor}
               opcionesPago={panel.opciones_pago}
             />
           </Seccion>

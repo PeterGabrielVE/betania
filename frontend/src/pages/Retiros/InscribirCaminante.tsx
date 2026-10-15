@@ -133,7 +133,7 @@ export default function InscribirCaminante() {
   return (
     <>
       <PageMeta
-        title="Inscribir caminante | Gestión de retiros"
+        title="Inscribir caminante | Betania"
         description="Formulario de inscripción para caminantes"
       />
       <PageBreadcrumb pageTitle="Inscribir caminante" />
