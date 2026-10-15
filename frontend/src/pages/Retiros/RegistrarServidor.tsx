@@ -46,8 +46,12 @@ export default function RegistrarServidor() {
     !!modulos.find((m) => m.slug === slug)?.puede_agregar;
   const personas = modulos.find((m) => m.slug === "personas");
   // Desde el panel de un retiro viene ese; si no, la edición preferida.
-  const desdePanel = (useLocation().state as { retiro?: RetiroElegido } | null)
-    ?.retiro;
+  // Desde el panel de un retiro llega el retiro; desde la ficha, la persona.
+  const estado = useLocation().state as {
+    retiro?: RetiroElegido;
+    persona?: string;
+  } | null;
+  const desdePanel = estado?.retiro;
   const { sesion } = useAuth();
   const retiroInicial =
     desdePanel ??
@@ -73,6 +77,7 @@ export default function RegistrarServidor() {
   const asistente = useAsistente(pasos, formulario);
   const registro = useRegistroPersona(formulario, {
     retiroInicial: retiroInicial?.id,
+    personaInicial: estado?.persona,
     vaciar: (pais) => valoresServidor(getValues("retiro"), pais),
   });
   if (registro.venezuela !== venezuela) setVenezuela(registro.venezuela);
@@ -201,7 +206,7 @@ export default function RegistrarServidor() {
     });
     if (fallidas.length) {
       registro.setError(
-        `Se registró en el equipo, pero no en: ${fallidas.join(", ")}. Agrégalas en Servidores por área.`,
+        `Se registró en el equipo, pero no en: ${fallidas.join(", ")}. Agrégalas desde la ficha de la persona.`,
       );
     }
     empezarDeNuevo(v.retiro, !fallidas.length);

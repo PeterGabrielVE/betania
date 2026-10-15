@@ -83,6 +83,10 @@ def _filtro(modulo, nombre):
     info = _describir(modulo, nombre)
     if info["tipo"] == "bool":
         info.update(tipo="opcion", opciones=_opciones([("true", "Sí"), ("false", "No")]))
+    # Sin las opciones que el módulo nunca muestra (Modulo.excluir).
+    if nombre in modulo.excluir and "opciones" in info:
+        info["opciones"] = [o for o in info["opciones"]
+                            if o["valor"] != modulo.excluir[nombre]]
     return info
 
 
@@ -193,7 +197,9 @@ def _crear_viewset(modulo):
     )
     queryset = (
         modulo.modelo.objects
+        .exclude(**modulo.excluir)
         .select_related(*modulo.relacionados)
+        .prefetch_related(*modulo.prefetch)
         .annotate(**modulo.anotaciones)
         .order_by(*modulo.orden, "pk")
     )
@@ -242,6 +248,7 @@ def esquema(request):
             "titulo": m.titulo,
             "singular": m.singular,
             "grupo": m.grupo,
+            "en_menu": m.en_menu,
             "campos": [con_fijo(_describir(m, n)) for n in campos],
             "lista": lista_desc,
             "filtros": [con_fijo(_filtro(m, n)) for n in m.filtros],

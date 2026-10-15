@@ -206,10 +206,10 @@ function TableroRetiro({ t }: { t: Tablero }) {
       icono: <TaskIcon className="size-5" />,
       texto: "Ver tareas",
     },
-    modulo("servicios") && {
-      a: "/servicios",
+    modulo("participaciones") && {
+      a: "/participaciones",
       icono: <GroupIcon className="size-5" />,
-      texto: "Servidores por área",
+      texto: "Servidores",
     },
     modulo("charlas") && {
       a: "/charlas",
@@ -411,7 +411,7 @@ function TableroRetiro({ t }: { t: Tablero }) {
       {servidores && (
         <Tarjeta
           titulo="Servidores por área"
-          enlace={{ a: "/servicios", texto: "Asignar áreas" }}
+          enlace={{ a: "/participaciones", texto: "Ver servidores" }}
           className="col-span-12 xl:col-span-5"
         >
           <BarrasHorizontales

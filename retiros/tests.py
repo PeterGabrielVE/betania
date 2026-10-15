@@ -705,6 +705,93 @@ class PreferenciasTests(Base):
         self.assertEqual(self.cambiar(retiro=str(self.retiro.pk)).status_code, 200)
 
 
+class FichaYServidoresTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.ana = self.persona("Ana Pérez", fecha_nacimiento=date(1990, 1, 1))
+        self.luis = self.persona("Luis Gómez")
+        anterior = Retiro.objects.create(
+            parroquia=self.parroquia, tipo=self.retiro.tipo, edicion=11,
+            fecha_inicio=date(2026, 3, 6), fecha_fin=date(2026, 3, 8), cuota=50,
+            cuota_servidor=20,
+        )
+        # Ana fue caminante en la 11 (invitada por Luis) y sirve en la 12.
+        ins = Inscripcion.objects.create(retiro=anterior, persona=self.ana, padrino=self.luis,
+                                         estado=Inscripcion.Estado.CONFIRMADA)
+        Pago.objects.create(retiro=anterior, inscripcion=ins, monto=50, concepto="cuota",
+                            fecha=date(2026, 3, 1))
+        servidora = Participacion.objects.create(retiro=self.retiro, persona=self.ana,
+                                                 tipo="servidor")
+        cocina = AreaServicio.objects.create(nombre="Cocina")
+        musica = AreaServicio.objects.create(nombre="Música")
+        AsignacionServicio.objects.create(participacion=servidora, area=cocina,
+                                          es_coordinador=True)
+        AsignacionServicio.objects.create(participacion=servidora, area=musica)
+        # Una participación de caminante no es del equipo.
+        Participacion.objects.create(retiro=anterior, persona=self.luis, tipo="caminante")
+        Tarea.objects.create(retiro=self.retiro, titulo="Comprar café", responsable=self.ana)
+
+    def test_ficha_junta_todo_lo_de_la_persona(self):
+        ficha = self.client.get(f"/api/personas/{self.ana.pk}/ficha/").json()
+        self.assertEqual(ficha["persona"]["nombre"], "Ana Pérez")
+        self.assertIsNotNone(ficha["persona"]["edad"])
+        (caminante,) = ficha["caminante"]
+        self.assertEqual((caminante["retiro"]["etiqueta"], caminante["estado"],
+                          caminante["padrino"], caminante["estado_pago"]),
+                         ("Emaús hombres #11", "confirmada", "Luis Gómez", "pagado"))
+        (servidor,) = ficha["servidor"]
+        self.assertEqual(servidor["retiro"]["etiqueta"], "Emaús hombres #12")
+        self.assertEqual([(a["nombre"], a["es_coordinador"]) for a in servidor["areas"]],
+                         [("Cocina", True), ("Música", False)])
+        self.assertEqual([t["titulo"] for t in ficha["tareas"]], ["Comprar café"])
+        self.assertIsNone(ficha["acceso"])  # no tiene usuario
+
+        luis = self.client.get(f"/api/personas/{self.luis.pk}/ficha/").json()
+        self.assertEqual([i["nombre"] for i in luis["invito"]], ["Ana Pérez"])
+        self.assertEqual(luis["servidor"], [])  # ser caminante no es servir
+
+    def test_ficha_con_usuario_y_roles(self):
+        usuario = Usuario.objects.create(
+            persona=self.ana, cuenta=User.objects.create_user("ana", password="x"))
+        AsignacionRol.objects.create(usuario=usuario, rol=Rol.LOGISTICA, retiro=self.retiro)
+        acceso = self.client.get(f"/api/personas/{self.ana.pk}/ficha/").json()["acceso"]
+        self.assertEqual(acceso["usuario"], "ana")
+        self.assertEqual(acceso["roles"], [{"rol": "logistica",
+                                            "rol_display": "Coordinador de logística",
+                                            "ambito": "Emaús hombres #12"}])
+
+    def test_ficha_respeta_permisos(self):
+        user = User.objects.create_user("lector", password="x")
+        user.user_permissions.add(Permission.objects.get(codename="view_persona"))
+        self.client.force_login(user)
+        ficha = self.client.get(f"/api/personas/{self.ana.pk}/ficha/").json()
+        self.assertIsNone(ficha["caminante"])
+        self.assertIsNone(ficha["servidor"])
+        self.assertNotIn("acceso", ficha)
+        self.assertNotIn("datos_sensibles", ficha["persona"])
+        user.user_permissions.clear()
+        self.assertEqual(
+            self.client.get(f"/api/personas/{self.ana.pk}/ficha/").status_code, 403)
+
+    def test_servidores_con_sus_areas_y_sin_caminantes(self):
+        filas = self.client.get("/api/participaciones/").json()["results"]
+        self.assertEqual([(f["persona_etiqueta"], f["areas"]) for f in filas],
+                         [("Ana Pérez", "Cocina (coordina), Música")])
+        buscadas = self.client.get("/api/participaciones/?search=Música").json()["results"]
+        self.assertEqual(len(buscadas), 1)
+
+    def test_menu_por_grupos(self):
+        modulos = {m["slug"]: m for m in self.client.get("/api/esquema/").json()}
+        self.assertEqual(
+            [s for s, m in modulos.items() if m["grupo"] == "Personas"],
+            ["personas", "inscripciones", "participaciones", "servicios", "usuarios", "roles"])
+        self.assertEqual((modulos["inscripciones"]["titulo"],
+                          modulos["participaciones"]["titulo"]), ("Caminantes", "Servidores"))
+        self.assertFalse(modulos["servicios"]["en_menu"])
+        tipo = next(f for f in modulos["participaciones"]["filtros"] if f["nombre"] == "tipo")
+        self.assertEqual([o["valor"] for o in tipo["opciones"]], ["servidor", "coordinador"])
+
+
 class ReportesTests(Base):
     def test_pdf_exige_sesion_y_permiso(self):
         ruta = f"/retiros/{self.retiro.pk}/lista.pdf"

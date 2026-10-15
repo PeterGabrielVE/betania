@@ -42,10 +42,12 @@ export function useRegistroPersona<T extends FieldValues>(
   formulario: UseFormReturn<T>,
   {
     retiroInicial,
+    personaInicial, // al llegar desde la ficha de una persona
     vaciar, // valores vacíos de los campos de la persona (al cambiar de persona)
     datosExtra = () => ({}), // lo que además se carga de una persona registrada
   }: {
     retiroInicial?: string;
+    personaInicial?: string;
     vaciar: (pais: string) => Record<string, unknown>;
     datosExtra?: (persona: Registro) => Record<string, unknown>;
   },
@@ -76,22 +78,6 @@ export function useRegistroPersona<T extends FieldValues>(
         if (!personaElegida.current) setValue("parroquia", r.parroquia, true);
       })
       .catch((e: Error) => setError(e.message));
-
-  useEffect(() => {
-    if (retiroInicial) usarParroquiaDe(retiroInicial);
-    api<Pagina<Registro>>("/paises/?page_size=100")
-      .then((d) => {
-        setPaises(
-          d.results.map((p) => ({ id: p.id, nombre: p.nombre as string })),
-        );
-        const ve = d.results.find((p) => p.codigo === "VE")?.id ?? "";
-        setVenezuela(ve);
-        if (!getValues("pais")) setValue("pais", ve);
-      })
-      .catch((e: Error) => setError(e.message));
-    // Solo al abrir la pantalla.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const elegirPersona = async (id: string | null) => {
     setError("");
@@ -160,6 +146,33 @@ export function useRegistroPersona<T extends FieldValues>(
     }
     return null;
   };
+
+  // Al abrir la pantalla: la persona o el retiro con que se llegó, y los
+  // países (Venezuela por defecto).
+  useEffect(() => {
+    if (personaInicial) {
+      // Fuera del cuerpo del efecto: elegirPersona cambia estado.
+      Promise.resolve()
+        .then(() => elegirPersona(personaInicial))
+        .then(() =>
+          setAviso("Se cargaron sus datos; revísalos en los pasos siguientes."),
+        );
+    } else if (retiroInicial) {
+      usarParroquiaDe(retiroInicial);
+    }
+    api<Pagina<Registro>>("/paises/?page_size=100")
+      .then((d) => {
+        setPaises(
+          d.results.map((p) => ({ id: p.id, nombre: p.nombre as string })),
+        );
+        const ve = d.results.find((p) => p.codigo === "VE")?.id ?? "";
+        setVenezuela(ve);
+        if (!getValues("pais")) setValue("pais", ve);
+      })
+      .catch((e: Error) => setError(e.message));
+    // Solo al abrir la pantalla.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return {
     paises,

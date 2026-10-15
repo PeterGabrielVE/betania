@@ -64,15 +64,15 @@ const AppSidebar: React.FC = () => {
         icon: iconosGrupo[grupo] ?? <ListIcon fontSize={24} />,
         name: grupo,
         subItems: modulos
-          .filter((m) => m.grupo === grupo)
+          .filter((m) => m.grupo === grupo && m.en_menu)
           .flatMap((m) => [
             { name: m.titulo, path: `/${m.slug}` },
             // El formulario de caminantes (el de papel) va junto a su listado.
             ...(m.slug === "inscripciones" && puedeInscribir
               ? [{ name: "Inscribir caminante", path: "/inscribir" }]
               : []),
-            // Y el de servidores, junto a Servidores por área.
-            ...(m.slug === "servicios" && puedeRegistrarServidor
+            // Y el de servidores, junto a su listado.
+            ...(m.slug === "participaciones" && puedeRegistrarServidor
               ? [{ name: "Registrar servidor", path: "/registrar-servidor" }]
               : []),
           ]),

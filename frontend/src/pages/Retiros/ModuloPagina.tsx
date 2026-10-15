@@ -89,7 +89,21 @@ function BotonesFila({
   );
 }
 
-// El primer dato de la fila; un retiro abre su panel.
+const ALTA_POR_PASOS: Record<string, string> = {
+  inscripciones: "/inscribir",
+  participaciones: "/registrar-servidor",
+};
+
+// A dónde lleva el primer dato de cada fila: un retiro, a su panel; una
+// persona (o su inscripción o su lugar en el equipo), a su ficha.
+const DESTINO: Record<string, (fila: Registro) => string> = {
+  retiros: (f) => `/retiros/${f.id}`,
+  personas: (f) => `/personas/${f.id}`,
+  inscripciones: (f) => `/personas/${f.persona}`,
+  participaciones: (f) => `/personas/${f.persona}`,
+};
+
+// El primer dato de la fila, con enlace si el módulo tiene a dónde llevar.
 function Titulo({
   modulo,
   columna,
@@ -100,9 +114,10 @@ function Titulo({
   fila: Registro;
 }) {
   const contenido = celda(columna, fila);
-  return modulo.slug === "retiros" ? (
+  const destino = DESTINO[modulo.slug];
+  return destino ? (
     <Link
-      to={`/retiros/${fila.id}`}
+      to={destino(fila)}
       className="text-gray-800 hover:text-brand-500 dark:text-white/90 dark:hover:text-brand-400"
     >
       {contenido}
@@ -396,9 +411,9 @@ function Listado({ modulo }: { modulo: Modulo }) {
           <Button
             size="sm"
             onClick={() =>
-              // Las inscripciones se dan de alta con el formulario de caminantes.
-              modulo.slug === "inscripciones"
-                ? navigate("/inscribir")
+              // Caminantes y servidores se dan de alta con su formulario por pasos.
+              ALTA_POR_PASOS[modulo.slug]
+                ? navigate(ALTA_POR_PASOS[modulo.slug])
                 : setEditando(null)
             }
           >

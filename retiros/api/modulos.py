@@ -55,74 +55,6 @@ MODULOS = [
         },
     ),
     Modulo(
-        "inscripciones", Inscripcion, "Inscripciones", "inscripción", RETIROS,
-        campos=["retiro", "persona", "padrino", "estado", "salud_alimentacion",
-                "contacto_emergencia", "notas", "consentimiento_datos"],
-        lista=["persona", "retiro", "padrino", "estado", "estado_pago", "total_pagado",
-               "consentimiento_datos", "creado"],
-        buscar=["persona__nombre", "padrino__nombre", "retiro__tipo__nombre"],
-        filtros=["estado", "retiro"],
-        orden=["-creado"],
-        relacionados=["persona", "padrino", "retiro__tipo"],
-        sensibles=["salud_alimentacion", "contacto_emergencia"],
-        anotaciones={"total_pagado": Sum("pagos__monto_base")},
-        extras={
-            "total_pagado": Extra("Pagado", "decimal", anotado("total_pagado"),
-                                  requiere=Pago),
-            "estado_pago": Extra(
-                # Recién creada no trae la anotación: todavía no tiene pagos.
-                "Pago", "opcion",
-                lambda o: EstadoPago.de(getattr(o, "total_pagado", None), o.retiro.cuota),
-                opciones=EstadoPago.choices, requiere=Pago,
-            ),
-        },
-        etiquetas={"padrino": "Quién lo invitó al retiro", "notas": "Comentario"},
-        secciones={
-            _INSCRIPCION: ["retiro", "persona", "padrino", "estado"],
-            _COMENTARIOS: ["notas", "consentimiento_datos"],
-        },
-        subcampos={
-            "salud_alimentacion": [
-                sub("condicion_medica", "Condición médica a reportar", _SALUD, "area"),
-                sub("tratamiento", "Tratamiento o medicamentos que toma", _SALUD, "area"),
-                sub("regimen_alimenticio", "Régimen alimenticio especial", _SALUD, "area"),
-                sub("requerimientos", "Requerimientos especiales (movilidad, descanso...)",
-                    _SALUD, "area"),
-                sub("talla_camiseta", "Talla de camiseta", _SALUD, "opcion",
-                    ["S", "M", "L", "XL"]),
-            ],
-            "contacto_emergencia": [
-                sub("nombre", "Nombre", _LLAMAR),
-                sub("relacion", "Tipo de relación", _LLAMAR),
-                sub("telefono", "Teléfono", _LLAMAR),
-                sub("celular", "Celular", _LLAMAR),
-                sub("correo", "Correo", _LLAMAR, "email"),
-                sub("nombre2", "Nombre", _LLAMAR2),
-                sub("relacion2", "Tipo de relación", _LLAMAR2),
-                sub("telefono2", "Teléfono", _LLAMAR2),
-            ],
-        },
-    ),
-    Modulo(
-        "participaciones", Participacion, "Participaciones", "participación", RETIROS,
-        campos=["retiro", "persona", "tipo"],
-        lista=["persona", "tipo", "retiro"],
-        buscar=["persona__nombre", "retiro__tipo__nombre"],
-        filtros=["tipo", "retiro"],
-        orden=["persona__nombre"],
-        relacionados=["persona", "retiro__tipo"],
-    ),
-    Modulo(
-        "servicios", AsignacionServicio, "Servidores por área", "asignación de servicio",
-        RETIROS,
-        campos=["participacion", "area", "es_coordinador"],
-        lista=["participacion", "area", "es_coordinador"],
-        buscar=["participacion__persona__nombre", "area__nombre"],
-        filtros=["area"],
-        orden=["area__nombre", "participacion__persona__nombre"],
-        relacionados=["participacion__persona", "participacion__retiro__tipo", "area"],
-    ),
-    Modulo(
         "charlas", Charla, "Charlas", "charla", RETIROS,
         campos=["retiro", "tema", "expositor", "orden", "materiales"],
         lista=["orden", "tema", "expositor", "retiro"],
@@ -142,7 +74,7 @@ MODULOS = [
         relacionados=["retiro__tipo", "area", "responsable"],
         etiquetas={"titulo": "Tarea", "hecha": "Hecha"},
     ),
-    # ---- Personas y acceso ----
+    # ---- Personas: caminantes, servidores y acceso ----
     Modulo(
         "personas", Persona, "Personas", "persona", PERSONAS,
         campos=["tipo_documento", "documento", "primer_nombre", "segundo_nombre",
@@ -194,6 +126,92 @@ MODULOS = [
         },
     ),
     Modulo(
+        "inscripciones", Inscripcion, "Caminantes", "inscripción", PERSONAS,
+        campos=["retiro", "persona", "padrino", "estado", "salud_alimentacion",
+                "contacto_emergencia", "notas", "consentimiento_datos"],
+        lista=["persona", "retiro", "padrino", "estado", "estado_pago", "total_pagado",
+               "consentimiento_datos", "creado"],
+        buscar=["persona__nombre", "padrino__nombre", "retiro__tipo__nombre"],
+        filtros=["estado", "retiro"],
+        orden=["-creado"],
+        relacionados=["persona", "padrino", "retiro__tipo"],
+        sensibles=["salud_alimentacion", "contacto_emergencia"],
+        anotaciones={"total_pagado": Sum("pagos__monto_base")},
+        extras={
+            "total_pagado": Extra("Pagado", "decimal", anotado("total_pagado"),
+                                  requiere=Pago),
+            "estado_pago": Extra(
+                # Recién creada no trae la anotación: todavía no tiene pagos.
+                "Pago", "opcion",
+                lambda o: EstadoPago.de(getattr(o, "total_pagado", None), o.retiro.cuota),
+                opciones=EstadoPago.choices, requiere=Pago,
+            ),
+        },
+        etiquetas={"padrino": "Quién lo invitó al retiro", "notas": "Comentario"},
+        secciones={
+            _INSCRIPCION: ["retiro", "persona", "padrino", "estado"],
+            _COMENTARIOS: ["notas", "consentimiento_datos"],
+        },
+        subcampos={
+            "salud_alimentacion": [
+                sub("condicion_medica", "Condición médica a reportar", _SALUD, "area"),
+                sub("tratamiento", "Tratamiento o medicamentos que toma", _SALUD, "area"),
+                sub("regimen_alimenticio", "Régimen alimenticio especial", _SALUD, "area"),
+                sub("requerimientos", "Requerimientos especiales (movilidad, descanso...)",
+                    _SALUD, "area"),
+                sub("talla_camiseta", "Talla de camiseta", _SALUD, "opcion",
+                    ["S", "M", "L", "XL"]),
+            ],
+            "contacto_emergencia": [
+                sub("nombre", "Nombre", _LLAMAR),
+                sub("relacion", "Tipo de relación", _LLAMAR),
+                sub("telefono", "Teléfono", _LLAMAR),
+                sub("celular", "Celular", _LLAMAR),
+                sub("correo", "Correo", _LLAMAR, "email"),
+                sub("nombre2", "Nombre", _LLAMAR2),
+                sub("relacion2", "Tipo de relación", _LLAMAR2),
+                sub("telefono2", "Teléfono", _LLAMAR2),
+            ],
+        },
+    ),
+    Modulo(
+        # Los servidores de cada retiro, con sus áreas (AsignacionServicio). Las
+        # participaciones de caminante no van aquí: los caminantes son las
+        # inscripciones.
+        "participaciones", Participacion, "Servidores", "servidor", PERSONAS,
+        campos=["retiro", "persona", "tipo"],
+        lista=["persona", "documento", "telefono", "areas", "tipo", "retiro"],
+        buscar=["persona__nombre", "persona__documento", "servicios__area__nombre",
+                "retiro__tipo__nombre"],
+        excluir={"tipo": Participacion.Tipo.CAMINANTE},
+        prefetch=["servicios__area"],
+        extras={
+            "documento": Extra("Documento", "texto", lambda o: o.persona.documento_completo),
+            "telefono": Extra("Celular", "texto", lambda o: o.persona.telefono),
+            # "Cocina (coordina), Música".
+            "areas": Extra("Áreas", "texto", lambda o: ", ".join(
+                f"{s.area.nombre} (coordina)" if s.es_coordinador else s.area.nombre
+                for s in sorted(o.servicios.all(), key=lambda s: s.area.nombre)
+            )),
+        },
+        filtros=["tipo", "retiro"],
+        etiquetas={"persona": "Servidor", "tipo": "Participa como"},
+        orden=["persona__nombre"],
+        relacionados=["persona", "retiro__tipo"],
+    ),
+    Modulo(
+        "servicios", AsignacionServicio, "Servidores por área", "asignación de servicio",
+        PERSONAS,
+        # Las áreas se ven en Servidores y se editan en la ficha de la persona.
+        en_menu=False,
+        campos=["participacion", "area", "es_coordinador"],
+        lista=["participacion", "area", "es_coordinador"],
+        buscar=["participacion__persona__nombre", "area__nombre"],
+        filtros=["area"],
+        orden=["area__nombre", "participacion__persona__nombre"],
+        relacionados=["participacion__persona", "participacion__retiro__tipo", "area"],
+    ),
+    Modulo(
         "usuarios", Usuario, "Usuarios", "usuario", PERSONAS,
         campos=["persona", "activo"],
         lista=["persona", "activo"],
@@ -202,7 +220,7 @@ MODULOS = [
         relacionados=["persona"],
     ),
     Modulo(
-        "roles", AsignacionRol, "Asignaciones de rol", "asignación de rol", PERSONAS,
+        "roles", AsignacionRol, "Roles", "asignación de rol", PERSONAS,
         campos=["usuario", "rol", "diocesis", "parroquia", "retiro"],
         lista=["usuario", "rol", "diocesis", "parroquia", "retiro"],
         buscar=["usuario__persona__nombre"],

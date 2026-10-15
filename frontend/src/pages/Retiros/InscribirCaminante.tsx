@@ -46,8 +46,12 @@ export default function InscribirCaminante() {
   const inscripciones = modulos.find((m) => m.slug === "inscripciones");
   // Al llegar desde el panel de un retiro, ese retiro ya viene elegido.
   // Desde el panel de un retiro viene ese; si no, la edición preferida.
-  const desdePanel = (useLocation().state as { retiro?: RetiroElegido } | null)
-    ?.retiro;
+  // Desde el panel de un retiro llega el retiro; desde la ficha, la persona.
+  const estado = useLocation().state as {
+    retiro?: RetiroElegido;
+    persona?: string;
+  } | null;
+  const desdePanel = estado?.retiro;
   const { sesion } = useAuth();
   const retiroInicial =
     desdePanel ??
@@ -80,6 +84,7 @@ export default function InscribirCaminante() {
   const asistente = useAsistente(pasos, formulario);
   const registro = useRegistroPersona(formulario, {
     retiroInicial: retiroInicial?.id,
+    personaInicial: estado?.persona,
     vaciar: (pais) => valoresIniciales(getValues("retiro"), pais),
     datosExtra: datosDePersona,
   });

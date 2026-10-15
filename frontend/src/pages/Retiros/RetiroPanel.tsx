@@ -341,7 +341,12 @@ function Caminantes({
                     <TableCell
                       className={`${claseCelda} font-medium text-gray-800 dark:text-white/90`}
                     >
-                      {f.persona}
+                      <Link
+                        to={`/personas/${f.persona_id}`}
+                        className="hover:text-brand-500"
+                      >
+                        {f.persona}
+                      </Link>
                       <Avisos ficha={f.ficha} />
                     </TableCell>
                     {conFicha && (
@@ -478,7 +483,12 @@ function Servidores({
                 <TableCell
                   className={`${claseCelda} font-medium text-gray-800 dark:text-white/90`}
                 >
-                  {f.persona}
+                  <Link
+                    to={`/personas/${f.persona_id}`}
+                    className="hover:text-brand-500"
+                  >
+                    {f.persona}
+                  </Link>
                 </TableCell>
                 <TableCell className={claseCelda}>
                   {f.areas || f.tipo}
@@ -728,8 +738,8 @@ export default function RetiroPanel() {
             titulo="Equipo por área"
             className="col-span-12 xl:col-span-6"
             enlace={
-              <Link to="/servicios" className={`text-sm ${claseEnlace}`}>
-                Servidores por área
+              <Link to="/participaciones" className={`text-sm ${claseEnlace}`}>
+                Ver servidores
               </Link>
             }
           >

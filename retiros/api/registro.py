@@ -47,6 +47,11 @@ class Modulo:
     # acceso.ambito_fijo): el listado solo muestra ese valor y el formulario lo
     # trae puesto.
     por_ambito: list = field(default_factory=list)
+    # Filas que el módulo no muestra nunca (p. ej. {"tipo": "caminante"}).
+    excluir: dict = field(default_factory=dict)
+    prefetch: list = field(default_factory=list)      # prefetch_related
+    # False: el módulo existe (API, formularios) pero no aparece en el menú.
+    en_menu: bool = True
 
     def campo(self, nombre):
         return self.modelo._meta.get_field(nombre)

@@ -142,6 +142,7 @@ export type Modulo = {
   titulo: string;
   singular: string;
   grupo: string;
+  en_menu: boolean; // false: existe (API, formularios) pero no va en el menú
   campos: Campo[]; // formulario
   lista: Campo[]; // columnas de la tabla
   filtros: Campo[];
@@ -223,6 +224,7 @@ export type PanelRetiro = {
     filas: {
       id: string;
       persona: string;
+      persona_id: string;
       telefono: string;
       tipo: string;
       areas: string;
@@ -346,4 +348,84 @@ export type Resumen = {
   // Retiros que se pueden elegir en el tablero y el tablero del elegido.
   retiros_tablero: { id: string; etiqueta: string; fecha_inicio: string }[];
   tablero: Tablero | null;
+};
+
+// Ficha de una persona (/api/personas/<id>/ficha/). Cada sección llega en null
+// si el usuario no tiene permiso para verla.
+type RetiroCorto = {
+  id: string;
+  etiqueta: string;
+  fecha_inicio: string;
+  estado: string;
+};
+type PagoResumido = {
+  pagado?: number;
+  saldo?: number;
+  estado_pago?: string;
+};
+
+export type FichaPersona = {
+  persona: {
+    id: string;
+    nombre: string;
+    documento: string; // "V-12345678"
+    fecha_nacimiento: string | null;
+    edad: number | null;
+    telefono: string;
+    email: string;
+    procedencia: string;
+    parroquia: string;
+    creado: string;
+    datos_sensibles?: Record<string, unknown>; // solo con acceso confidencial
+  };
+  caminante:
+    | ({
+        id: string;
+        retiro: RetiroCorto;
+        estado: string;
+        estado_display: string;
+        padrino: string;
+        padrino_id: string | null;
+        salud?: Record<string, unknown>;
+        contacto?: Record<string, unknown>;
+      } & PagoResumido)[]
+    | null;
+  servidor:
+    | ({
+        id: string;
+        retiro: RetiroCorto;
+        tipo: string;
+        tipo_display: string;
+        // Una por área: id de la asignación, id del área y si la coordina.
+        areas: {
+          id: string;
+          area: string;
+          nombre: string;
+          es_coordinador: boolean;
+        }[];
+      } & PagoResumido)[]
+    | null;
+  invito:
+    | {
+        persona_id: string;
+        nombre: string;
+        retiro: string;
+        estado_display: string;
+      }[]
+    | null;
+  tareas:
+    | {
+        id: string;
+        titulo: string;
+        retiro: string;
+        fecha_limite: string | null;
+        vencida: boolean;
+      }[]
+    | null;
+  // null: no tiene usuario; sin la clave: no se puede ver.
+  acceso?: {
+    usuario: string;
+    activo: boolean;
+    roles: { rol: string; rol_display: string; ambito: string }[];
+  } | null;
 };

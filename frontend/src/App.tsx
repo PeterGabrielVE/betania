@@ -7,6 +7,7 @@ import NotFound from "./pages/OtherPage/NotFound";
 import Inicio from "./pages/Retiros/Inicio";
 import InscribirCaminante from "./pages/Retiros/InscribirCaminante";
 import ModuloPagina from "./pages/Retiros/ModuloPagina";
+import PersonaFicha from "./pages/Retiros/PersonaFicha";
 import RegistrarServidor from "./pages/Retiros/RegistrarServidor";
 import RetiroPanel from "./pages/Retiros/RetiroPanel";
 
@@ -22,6 +23,7 @@ export default function App() {
             <Route path="/inscribir" element={<InscribirCaminante />} />
             <Route path="/registrar-servidor" element={<RegistrarServidor />} />
             <Route path="/retiros/:id" element={<RetiroPanel />} />
+            <Route path="/personas/:id" element={<PersonaFicha />} />
             {/* Cualquier módulo de /api/esquema/ (retiros, personas, pagos...) */}
             <Route path="/:slug" element={<ModuloPagina />} />
           </Route>

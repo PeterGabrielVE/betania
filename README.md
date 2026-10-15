@@ -152,6 +152,21 @@ Lo que paga un servidor se registra en **Pagos** con su nombre en *Persona*
 servidor** del retiro. Para la cuota de un caminante basta elegir su nombre: el
 pago se liga solo a su inscripción.
 
+## Personas: caminantes, servidores y acceso
+
+El menú **Personas** junta todo lo de la gente: Personas, Caminantes (las
+inscripciones, con "Inscribir caminante"), Servidores (con sus áreas y
+"Registrar servidor"), Usuarios y Roles. **Retiros** queda con Retiros, Charlas
+y Tareas.
+
+Cada persona tiene su **ficha** (`/personas/<id>`, `GET /api/personas/<id>/ficha/`):
+sus datos, sus retiros como caminante (estado, quién lo invitó, pagos), como
+servidor (áreas y cuáles coordina, aportes; las áreas se editan ahí mismo), a
+quién invitó, sus tareas pendientes y su acceso al sistema. Desde la ficha se
+la puede inscribir en un retiro o registrar como servidor con sus datos ya
+cargados. Se llega desde Personas, Caminantes, Servidores y el panel de un
+retiro.
+
 ## Preferencias de cada usuario
 
 En el encabezado cada usuario elige la **edición** (el retiro) con la que

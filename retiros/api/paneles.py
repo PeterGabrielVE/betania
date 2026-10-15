@@ -456,6 +456,7 @@ def _servidores(retiro):
         filas.append({
             "id": p.pk,
             "persona": p.persona.nombre,
+            "persona_id": p.persona_id,
             "telefono": p.persona.telefono,
             "tipo": p.get_tipo_display(),
             "areas": ", ".join(s.area.nombre for s in p.servicios.all()),
@@ -520,3 +521,144 @@ def panel_retiro(request, pk):
             {"valor": valor, "etiqueta": etiqueta} for valor, etiqueta in EstadoPago.choices
         ],
     })
+
+
+# --------------------------------------------------------------------------- #
+# Ficha de una persona: todo lo suyo en un lugar
+# --------------------------------------------------------------------------- #
+def _retiro_corto(r):
+    return {"id": r.pk, "etiqueta": str(r), "fecha_inicio": r.fecha_inicio,
+            "estado": r.estado}
+
+
+def _como_caminante(persona, con_pagos, sensibles):
+    inscripciones = (
+        persona.inscripciones.select_related("retiro__tipo", "padrino")
+        .order_by("-retiro__fecha_inicio")
+    )
+    if con_pagos:
+        inscripciones = inscripciones.annotate(pagado=Sum("pagos__monto_base"))
+    filas = []
+    for i in inscripciones:
+        fila = {
+            "id": i.pk,
+            "retiro": _retiro_corto(i.retiro),
+            "estado": i.estado,
+            "estado_display": i.get_estado_display(),
+            "padrino": i.padrino.nombre if i.padrino_id else "",
+            "padrino_id": i.padrino_id,
+        }
+        if sensibles:
+            fila["salud"] = i.salud_alimentacion or {}
+            fila["contacto"] = i.contacto_emergencia or {}
+        if con_pagos:
+            pagado = i.pagado or 0
+            cancelada = i.estado == Inscripcion.Estado.CANCELADA
+            fila.update(pagado=pagado,
+                        saldo=0 if cancelada else max(i.retiro.cuota - pagado, 0),
+                        estado_pago=EstadoPago.de(pagado, i.retiro.cuota))
+        filas.append(fila)
+    return filas
+
+
+def _como_servidor(persona, con_pagos):
+    participaciones = (
+        persona.participaciones.exclude(tipo=Participacion.Tipo.CAMINANTE)
+        .select_related("retiro__tipo").prefetch_related("servicios__area")
+        .order_by("-retiro__fecha_inicio")
+    )
+    aportado = dict(
+        persona.pagos.filter(inscripcion__isnull=True)
+        .values_list("retiro").annotate(t=Sum("monto_base"))
+    ) if con_pagos else {}
+    filas = []
+    for p in participaciones:
+        fila = {
+            "id": p.pk,
+            "retiro": _retiro_corto(p.retiro),
+            "tipo": p.tipo,
+            "tipo_display": p.get_tipo_display(),
+            "areas": [
+                {"id": s.pk, "area": s.area_id, "nombre": s.area.nombre,
+                 "es_coordinador": s.es_coordinador}
+                for s in sorted(p.servicios.all(), key=lambda s: s.area.nombre)
+            ],
+        }
+        if con_pagos:
+            total = aportado.get(p.retiro_id, 0)
+            fila.update(pagado=total,
+                        saldo=max(p.retiro.cuota_servidor - total, 0),
+                        estado_pago=EstadoPago.de(total, p.retiro.cuota_servidor))
+        filas.append(fila)
+    return filas
+
+
+def _acceso(persona):
+    usuario = getattr(persona, "usuario", None)
+    if usuario is None:
+        return None
+    return {
+        "usuario": usuario.cuenta.get_username() if usuario.cuenta_id else "",
+        "activo": usuario.activo,
+        "roles": [
+            {"rol": a.rol, "rol_display": a.get_rol_display(),
+             "ambito": str(a.retiro or a.parroquia or a.diocesis or "Todo el sistema")}
+            for a in usuario.roles.select_related("retiro__tipo", "parroquia", "diocesis")
+        ],
+    }
+
+
+@api_view(["GET"])
+def ficha_persona(request, pk):
+    """Todo lo de una persona: sus datos, sus retiros como caminante y como
+    servidor, a quién invitó, sus tareas y su acceso al sistema. Cada sección
+    llega en null si falta el permiso para verla."""
+    user = request.user
+    if not _ve(user, Persona):
+        raise PermissionDenied()
+    persona = get_object_or_404(
+        Persona.objects.select_related("parroquia", "pais", "estado", "ciudad"), pk=pk)
+    sensibles = ve_sensibles(request)
+    finanzas = _ve(user, Pago) and _ve(user, Gasto)
+    hoy = timezone.localdate()
+    datos = {
+        "id": persona.pk,
+        "nombre": persona.nombre,
+        "documento": persona.documento_completo,
+        "fecha_nacimiento": persona.fecha_nacimiento,
+        "edad": _edad(persona.fecha_nacimiento, hoy),
+        "telefono": persona.telefono,
+        "email": persona.email,
+        "procedencia": persona.procedencia,
+        "parroquia": persona.parroquia.nombre,
+        "creado": persona.creado,
+    }
+    if sensibles:
+        datos["datos_sensibles"] = persona.datos_sensibles or {}
+    ve_inscripciones = _ve(user, Inscripcion)
+    ficha = {
+        "persona": datos,
+        "caminante": (_como_caminante(persona, finanzas, sensibles)
+                      if ve_inscripciones else None),
+        "servidor": (_como_servidor(persona, finanzas)
+                     if _ve(user, Participacion) else None),
+        # A quién invitó a un retiro.
+        "invito": [
+            {"persona_id": i.persona_id, "nombre": i.persona.nombre,
+             "retiro": str(i.retiro), "estado_display": i.get_estado_display()}
+            for i in persona.apadrinados.select_related("persona", "retiro__tipo")
+            .order_by("-retiro__fecha_inicio")
+        ] if ve_inscripciones else None,
+        "tareas": [
+            {"id": t.pk, "titulo": t.titulo, "retiro": str(t.retiro),
+             "fecha_limite": t.fecha_limite,
+             "vencida": bool(t.fecha_limite and t.fecha_limite < hoy)}
+            for t in persona.tareas.filter(hecha=False).select_related("retiro__tipo")
+            .order_by(F("fecha_limite").asc(nulls_last=True))
+        ] if _ve(user, Tarea) else None,
+    }
+    # Su acceso al sistema (null: no tiene usuario). Sin permiso para ver
+    # usuarios, la sección no viene.
+    if user.has_perm("retiros.view_usuario"):
+        ficha["acceso"] = _acceso(persona)
+    return Response(ficha)
