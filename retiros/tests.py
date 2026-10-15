@@ -13,14 +13,15 @@ from unittest import mock
 import tablib
 from django.contrib.auth.models import Permission, User
 from django.core.cache import cache
+from django.core.management import call_command
 from django.test import TestCase
 from django.utils import timezone
 
 from . import tasas
 from .models import (
-    AreaServicio, AsignacionRol, AsignacionServicio, Charla, Diocesis, EstadoPago, Gasto,
-    Inscripcion, Pago, Parroquia, Participacion, Persona, Retiro, Rol, Tarea, TipoRetiro,
-    Usuario,
+    AreaServicio, AsignacionRol, AsignacionServicio, Charla, Ciudad, Diocesis, Estado,
+    EstadoPago, Gasto, Inscripcion, Pago, Pais, Parroquia, Participacion, Persona, Retiro, Rol,
+    Tarea, TipoRetiro, Usuario,
 )
 from .reportes import PersonaResource
 
@@ -267,8 +268,13 @@ class PanelRetiroTests(Base):
 
     def test_ficha_de_cada_caminante(self):
         ana = Inscripcion.objects.get(persona__nombre="Ana")
+        aragua = Estado.objects.create(
+            pais=Pais.objects.create(nombre="Venezuela", codigo="VE"), nombre="Aragua")
         ana.persona.fecha_nacimiento = date(1990, 3, 13)
-        ana.persona.datos_sensibles = {"procedencia": "Maracay", "celular": "0414"}
+        ana.persona.estado = aragua
+        ana.persona.ciudad = Ciudad.objects.create(estado=aragua, nombre="Maracay")
+        ana.persona.documento = "12345678"
+        ana.persona.datos_sensibles = {"telefono_casa": "0243-5551234"}
         ana.persona.save()
         ana.salud_alimentacion = {"tratamiento": "Insulina", "regimen_alimenticio": "Sin sal",
                                   "requerimientos": "Silla de ruedas"}
@@ -279,9 +285,10 @@ class PanelRetiroTests(Base):
         ficha = self.client.get(self.ruta).json()["caminantes"]["filas"][0]["ficha"]
         self.assertEqual(ficha["edad"], 36)  # cumple 37 el día después de empezar
         self.assertEqual(
-            (ficha["procedencia"], ficha["tratamiento"], ficha["alimentacion"],
-             ficha["requerimientos"]),
-            ("Maracay", "Insulina", "Sin sal", "Silla de ruedas"),
+            (ficha["procedencia"], ficha["documento"], ficha["telefono_casa"],
+             ficha["tratamiento"], ficha["alimentacion"], ficha["requerimientos"]),
+            ("Maracay, Aragua", "V-12345678", "0243-5551234", "Insulina", "Sin sal",
+             "Silla de ruedas"),
         )
         self.assertEqual(ficha["contactos"], [
             {"nombre": "Rosa", "relacion": "Madre", "telefono": "0412 / 0424"},
@@ -470,6 +477,64 @@ class AccesoPorRolTests(Base):
         self.assertEqual(self.client.get(self.ruta).status_code, 403)
 
 
+class DocumentoYGeografiaTests(Base):
+    def crear(self, **datos):
+        return self.post("/api/personas/", {
+            "nombre": "Ana Pérez", "parroquia": str(self.parroquia.pk), **datos,
+        })
+
+    def test_el_documento_se_normaliza_y_no_se_repite(self):
+        r = self.crear(tipo_documento="V", documento="v-12.345.678")
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertEqual(Persona.objects.get().documento, "12345678")
+
+        r = self.crear(tipo_documento="V", documento="12345678")
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("Ya está registrada con ese documento", r.json()["documento"][0])
+        # El mismo número con otro tipo de documento es otra persona.
+        self.assertEqual(self.crear(tipo_documento="E", documento="12345678").status_code, 201)
+
+    def test_formato_del_documento(self):
+        r = self.crear(tipo_documento="V", documento="12A45")
+        self.assertIn("solo números", r.json()["documento"][0])
+        r = self.crear(tipo_documento="P", documento="AB1")
+        self.assertIn("pasaporte", r.json()["documento"][0])
+        self.assertEqual(self.crear(tipo_documento="P", documento="ab123456").status_code, 201)
+
+    def test_edad_minima_de_18(self):
+        hoy = timezone.localdate()
+        menor = hoy.replace(year=hoy.year - 17).isoformat()
+        r = self.crear(fecha_nacimiento=menor)
+        self.assertEqual(r.json()["fecha_nacimiento"], ["Debe tener al menos 18 años."])
+        adulto = hoy.replace(year=hoy.year - 18, day=1).isoformat()
+        self.assertEqual(self.crear(fecha_nacimiento=adulto).status_code, 201)
+
+    def test_sembrar_geografia_no_duplica(self):
+        call_command("sembrar_geografia", stdout=open("/dev/null", "w"))
+        call_command("sembrar_geografia", stdout=open("/dev/null", "w"))
+        venezuela = Pais.objects.get(codigo="VE")
+        self.assertEqual(venezuela.estados.count(), 25)
+        self.assertTrue(Ciudad.objects.filter(estado__nombre="Miranda", nombre="Los Teques")
+                        .exists())
+        self.assertEqual(Ciudad.objects.filter(nombre="Caracas").count(), 1)
+
+    def test_la_ciudad_debe_ser_del_estado(self):
+        call_command("sembrar_geografia", stdout=open("/dev/null", "w"))
+        zulia = Estado.objects.get(nombre="Zulia")
+        teques = Ciudad.objects.get(nombre="Los Teques")
+        r = self.crear(estado=str(zulia.pk), ciudad=str(teques.pk))
+        self.assertEqual(r.json()["ciudad"], ["Esa ciudad no es de ese estado."])
+
+    def test_estados_y_ciudades_por_api(self):
+        call_command("sembrar_geografia", stdout=open("/dev/null", "w"))
+        venezuela = Pais.objects.get(codigo="VE")
+        estados = self.client.get(f"/api/estados/?pais={venezuela.pk}&page_size=100").json()
+        self.assertEqual(estados["count"], 25)
+        miranda = next(e for e in estados["results"] if e["nombre"] == "Miranda")
+        ciudades = self.client.get(f"/api/ciudades/?estado={miranda['id']}&page_size=100").json()
+        self.assertIn("Los Teques", [c["nombre"] for c in ciudades["results"]])
+
+
 class ReportesTests(Base):
     def test_pdf_exige_sesion_y_permiso(self):
         ruta = f"/retiros/{self.retiro.pk}/lista.pdf"
@@ -514,9 +579,19 @@ class ReportesTests(Base):
         PersonaResource().import_data(datos, raise_errors=True)
         self.assertEqual(Persona.objects.filter(nombre="Luis Gómez").count(), 1)
 
+    def test_importar_casa_por_documento(self):
+        self.persona("Ana Pérez", documento="12345678")
+        datos = tablib.Dataset(
+            ["V", "V-12.345.678", "Ana María Pérez", "San José"],
+            headers=["tipo_documento", "documento", "nombre", "parroquia"],
+        )
+        PersonaResource().import_data(datos, raise_errors=True)
+        self.assertEqual(Persona.objects.get().nombre, "Ana María Pérez")
+
     def test_exportar_personas_omite_datos_sensibles(self):
         self.persona("Ana", datos_sensibles={"direccion": "Calle 1"})
         exportado = PersonaResource().export()
         self.assertEqual(exportado.headers,
-                         ["nombre", "telefono", "email", "fecha_nacimiento", "parroquia"])
-        self.assertEqual(exportado[0][4], "San José")
+                         ["tipo_documento", "documento", "nombre", "telefono", "email",
+                          "fecha_nacimiento", "parroquia"])
+        self.assertEqual(exportado[0][6], "San José")

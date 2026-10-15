@@ -13,6 +13,7 @@ from import_export.admin import ImportExportModelAdmin
 
 from .models import (
     Diocesis, Parroquia, TipoRetiro, AreaServicio, Persona, Usuario, AsignacionRol,
+    Pais, Estado, Ciudad,
     Retiro, Charla, Inscripcion, Participacion, AsignacionServicio, Pago, Gasto, EstadoPago,
     Tarea,
 )
@@ -79,9 +80,14 @@ def _total_del_retiro(modelo):
 @admin.register(Persona)
 class PersonaAdmin(ImportExportModelAdmin):
     resource_class = PersonaResource
-    list_display = ("nombre", "telefono", "email", "parroquia", "creado")
+    list_display = ("nombre", "documento_completo", "telefono", "ciudad", "parroquia", "creado")
     list_filter = ("parroquia", AnioCaminanteFilter)
-    search_fields = ("nombre", "telefono", "email")
+    search_fields = ("nombre", "documento", "telefono", "email")
+    autocomplete_fields = ("pais", "estado", "ciudad")
+
+    @admin.display(description="Documento", ordering="documento")
+    def documento_completo(self, obj):
+        return obj.documento_completo
 
 
 class AsignacionRolInline(admin.TabularInline):
@@ -213,6 +219,26 @@ class TareaAdmin(admin.ModelAdmin):
     list_filter = ("hecha", "retiro", "area")
     search_fields = ("titulo", "responsable__nombre")
     autocomplete_fields = ("retiro", "area", "responsable")
+
+
+@admin.register(Pais)
+class PaisAdmin(admin.ModelAdmin):
+    list_display = ("nombre", "codigo")
+    search_fields = ("nombre", "codigo")
+
+
+@admin.register(Estado)
+class EstadoAdmin(admin.ModelAdmin):
+    list_display = ("nombre", "pais")
+    list_filter = ("pais",)
+    search_fields = ("nombre",)
+
+
+@admin.register(Ciudad)
+class CiudadAdmin(admin.ModelAdmin):
+    list_display = ("nombre", "estado")
+    list_filter = ("estado",)
+    search_fields = ("nombre",)
 
 
 admin.site.register(TipoRetiro)

@@ -8,8 +8,9 @@ from django.conf import settings
 from django.db.models import Count, Q, Sum
 
 from ..models import (
-    AreaServicio, AsignacionRol, AsignacionServicio, Charla, Diocesis, EstadoPago, Gasto,
-    Inscripcion, Pago, Parroquia, Participacion, Persona, Retiro, Tarea, TipoRetiro, Usuario,
+    AreaServicio, AsignacionRol, AsignacionServicio, Charla, Ciudad, Diocesis, Estado,
+    EstadoPago, Gasto, Inscripcion, Pago, Pais, Parroquia, Participacion, Persona, Retiro, Tarea,
+    TipoRetiro, Usuario,
 )
 from .registro import Extra, Modulo, anotado, sub
 
@@ -18,6 +19,7 @@ RETIROS, PERSONAS, FINANZAS, CATALOGOS = "Retiros", "Personas", "Finanzas", "Cat
 
 # Secciones del formulario de inscripción para caminantes (el de papel).
 _DATOS, _CIVIL, _SACRAMENTOS = "Datos del caminante", "Estado civil", "Sacramentos"
+_UBICACION = "De dónde es"
 _INSCRIPCION, _SALUD, _LLAMAR = "Inscripción", "Salud", "Persona a quien llamar"
 _LLAMAR2 = "Otro familiar de contacto"
 _COMENTARIOS = "Comentarios"
@@ -86,7 +88,6 @@ MODULOS = [
                 sub("regimen_alimenticio", "Régimen alimenticio especial", _SALUD, "area"),
                 sub("requerimientos", "Requerimientos especiales (movilidad, descanso...)",
                     _SALUD, "area"),
-                sub("eps", "EPS", _SALUD),
                 sub("talla_camiseta", "Talla de camiseta", _SALUD, "opcion",
                     ["S", "M", "L", "XL"]),
             ],
@@ -144,24 +145,32 @@ MODULOS = [
     # ---- Personas y acceso ----
     Modulo(
         "personas", Persona, "Personas", "persona", PERSONAS,
-        campos=["nombre", "parroquia", "telefono", "email", "fecha_nacimiento",
-                "datos_sensibles"],
-        lista=["nombre", "telefono", "email", "fecha_nacimiento", "parroquia", "creado"],
-        buscar=["nombre", "telefono", "email"],
+        campos=["tipo_documento", "documento", "nombre", "parroquia", "fecha_nacimiento",
+                "telefono", "email", "pais", "estado", "ciudad", "datos_sensibles"],
+        lista=["nombre", "documento_completo", "telefono", "ciudad", "fecha_nacimiento",
+               "parroquia", "creado"],
+        buscar=["nombre", "documento", "telefono", "email"],
         filtros=["parroquia"],
         orden=["nombre"],
-        relacionados=["parroquia"],
+        relacionados=["parroquia", "pais", "estado", "ciudad"],
         sensibles=["datos_sensibles"],
+        extras={
+            # "V-12345678" o "Pasaporte 123456789".
+            "documento_completo": Extra("Documento", "texto", lambda o: o.documento_completo),
+        },
         etiquetas={"nombre": "Nombres y apellidos", "fecha_nacimiento": "Nacimiento",
-                   "email": "Correo", "parroquia": "Parroquia (del sistema)"},
-        secciones={_DATOS: ["nombre", "parroquia", "fecha_nacimiento", "telefono", "email"]},
+                   "email": "Correo", "parroquia": "Parroquia (del sistema)",
+                   "telefono": "Celular", "documento": "Número de documento",
+                   "tipo_documento": "Tipo de documento"},
+        secciones={
+            _DATOS: ["tipo_documento", "documento", "nombre", "parroquia", "fecha_nacimiento",
+                     "telefono", "email"],
+            _UBICACION: ["pais", "estado", "ciudad"],
+        },
         subcampos={
             "datos_sensibles": [
-                sub("celular", "Celular", _DATOS),
-                sub("telefono_oficina", "Teléfono de oficina", _DATOS),
-                sub("procedencia", "De dónde es (ciudad o sector)", _DATOS),
-                sub("direccion", "Dirección", _DATOS),
-                sub("conjunto", "Conjunto", _DATOS),
+                sub("telefono_casa", "Teléfono de casa", _DATOS),
+                sub("direccion", "Sector / urbanización / dirección", _UBICACION, "area"),
                 sub("ocupacion", "Ocupación", _DATOS),
                 sub("estado_civil", "Estado civil", _CIVIL, "opcion",
                     ["Soltero", "Casado", "Divorciado", "Viudo", "Unión libre"]),
@@ -233,6 +242,23 @@ MODULOS = [
         relacionados=["diocesis"],
     ),
     Modulo(
+        "paises", Pais, "Países", "país", CATALOGOS,
+        campos=["nombre", "codigo"], lista=["nombre", "codigo"],
+        buscar=["nombre", "codigo"], orden=["nombre"],
+    ),
+    Modulo(
+        "estados", Estado, "Estados", "estado", CATALOGOS,
+        campos=["pais", "nombre"], lista=["nombre", "pais"],
+        buscar=["nombre"], filtros=["pais"], orden=["nombre"],
+        relacionados=["pais"],
+    ),
+    Modulo(
+        "ciudades", Ciudad, "Ciudades", "ciudad", CATALOGOS,
+        campos=["estado", "nombre"], lista=["nombre", "estado"],
+        buscar=["nombre", "estado__nombre"], filtros=["estado"], orden=["nombre"],
+        relacionados=["estado"],
+    ),
+    Modulo(
         "tipos-retiro", TipoRetiro, "Tipos de retiro", "tipo de retiro", CATALOGOS,
         campos=["nombre", "parroquia"], lista=["nombre", "parroquia"],
         buscar=["nombre"], filtros=["parroquia"], orden=["nombre"],
@@ -262,6 +288,7 @@ ETIQUETAS = {
     "tasa": f"Tasa de cambio (por 1 {settings.MONEDA})",
     "monto_base": f"Equivalente en {settings.MONEDA}",
     "fecha_limite": "Fecha límite",
+    "pais": "País", "codigo": "Código (ISO)",
 }
 
 # Texto de ayuda bajo el control de un campo.

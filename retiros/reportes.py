@@ -32,12 +32,21 @@ class PersonaResource(resources.ModelResource):
     class Meta:
         model = Persona
         # No se exportan datos_sensibles.
-        fields = ("nombre", "telefono", "email", "fecha_nacimiento", "parroquia")
+        fields = ("tipo_documento", "documento", "nombre", "telefono", "email",
+                  "fecha_nacimiento", "parroquia")
         export_order = fields
         import_id_fields = ()
 
     def get_instance(self, instance_loader, row):
-        """Al importar, casa por correo o teléfono para no duplicar personas."""
+        """Al importar, casa por documento, correo o teléfono para no duplicar personas."""
+        documento = Persona.normalizar_documento(str(row.get("documento") or ""))
+        if documento:
+            encontrada = Persona.objects.filter(
+                tipo_documento=str(row.get("tipo_documento") or "V").strip().upper(),
+                documento=documento,
+            ).first()
+            if encontrada:
+                return encontrada
         for campo in ("email", "telefono"):
             valor = str(row.get(campo) or "").strip()
             encontrada = valor and Persona.objects.filter(**{campo: valor}).first()

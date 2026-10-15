@@ -23,7 +23,7 @@ PRIORIDAD = [
 ]
 
 _VER = [
-    "diocesis", "parroquia", "tiporetiro", "areaservicio", "persona", "retiro", "charla",
+    "diocesis", "parroquia", "pais", "estado", "ciudad", "tiporetiro", "areaservicio", "persona", "retiro", "charla",
     "inscripcion", "participacion", "asignacionservicio", "pago", "gasto", "tarea",
 ]
 _EQUIPO = ["persona", "inscripcion", "participacion", "asignacionservicio", "tarea"]

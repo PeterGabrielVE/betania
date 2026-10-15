@@ -163,13 +163,24 @@ function Ficha({
   return (
     <div className="rounded-xl bg-gray-50 p-4 whitespace-normal dark:bg-white/3">
       <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Dato titulo="Documento" valor={ficha.documento} />
+        <Dato titulo="De dónde es" valor={ficha.procedencia} />
+        <Dato
+          titulo="Sector / urbanización / dirección"
+          valor={ficha.direccion}
+        />
         <Dato titulo="Condición médica" valor={ficha.condicion_medica} />
         <Dato titulo="Tratamiento o medicamentos" valor={ficha.tratamiento} />
         <Dato titulo="Alimentación especial" valor={ficha.alimentacion} />
         <Dato titulo="Requerimientos especiales" valor={ficha.requerimientos} />
         <Dato
           titulo="Teléfonos del caminante"
-          valor={[fila.telefono, ficha.celular].filter(Boolean).join(" / ")}
+          valor={[
+            fila.telefono && `Celular: ${fila.telefono}`,
+            ficha.telefono_casa && `Casa: ${ficha.telefono_casa}`,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
         />
         <Dato
           titulo="Familiares / contacto de emergencia"
@@ -344,7 +355,7 @@ function Caminantes({
                       </>
                     )}
                     <TableCell className={claseCelda}>
-                      {f.telefono || f.ficha?.celular || "—"}
+                      {f.telefono || f.ficha?.telefono_casa || "—"}
                     </TableCell>
                     {!conFicha && (
                       <TableCell className={claseCelda}>

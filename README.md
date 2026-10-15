@@ -14,7 +14,9 @@ docker compose up --build   # 2. construye y levanta app + base de datos
 ```
 
 Al arrancar, el contenedor `web` espera a Postgres, corre las migraciones,
-aplica las políticas de RLS, recopila los estáticos y, la primera vez, crea un
+carga países, estados y ciudades (`python manage.py sembrar_geografia`, ver
+`retiros/geografia.py`; se puede correr cuando sea, no duplica nada), aplica las
+políticas de RLS, recopila los estáticos y, la primera vez, crea un
 superusuario.
 
 Cuando veas que arrancó, abre:
@@ -61,6 +63,19 @@ El frontend dibuja el menú, las tablas y los formularios a partir de
 `/api/esquema/`: para agregar un módulo o un campo basta con tocar `MODULOS`.
 Las dos pantallas hechas a mano son el panel de un retiro (`/retiros/<id>`, se
 abre al hacer clic en un retiro) y el formulario de caminantes (`/inscribir`).
+
+El formulario de caminantes va por pasos (Retiro, Datos personales, Familia y
+fe, Salud, Contactos y Confirmar). Cada paso se valida antes de seguir, con
+[zod](https://zod.dev) y [react-hook-form](https://react-hook-form.com); las
+reglas (qué es obligatorio, teléfonos, correo, edad, pareja si está casado,
+consentimiento…) están en `frontend/src/components/inscripcion/esquema.ts`.
+Los pasos de datos confidenciales solo aparecen a quien puede verlos.
+
+Cada persona se identifica por su documento: cédula venezolana (V), cédula de
+extranjero (E) o pasaporte. No se puede repetir, y al escribirlo en el primer
+paso, si ya está registrada, sus datos se cargan solos. El celular se elige por
+operadora (0412, 0414, 0416, 0422, 0424, 0426) o "Otro país", y se guarda como
+`0414-1234567` o con su código (`+57 300 1234567`). La edad mínima es 18 años.
 
 Permisos y confidencialidad:
 

@@ -13,7 +13,9 @@ Confidencialidad por fila y por columna: ver rls_policies.sql.
 Este archivo asume app_label = "retiros".
 """
 
+import re
 import uuid
+from datetime import date
 from decimal import Decimal
 
 from django.conf import settings
@@ -104,21 +106,146 @@ class AreaServicio(models.Model):
 
 
 # --------------------------------------------------------------------------- #
+# Geografía: país, estado y ciudad (los carga `manage.py sembrar_geografia`)
+# --------------------------------------------------------------------------- #
+class Pais(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    nombre = models.CharField(max_length=100, unique=True)
+    codigo = models.CharField(max_length=2, unique=True)  # ISO 3166-1 alfa-2: "VE"
+
+    class Meta:
+        verbose_name = "país"
+        verbose_name_plural = "países"
+        ordering = ["nombre"]
+
+    def __str__(self):
+        return self.nombre
+
+
+class Estado(models.Model):
+    """Estado (o entidad federal) de un país."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    pais = models.ForeignKey(Pais, on_delete=models.CASCADE, related_name="estados")
+    nombre = models.CharField(max_length=100)
+
+    class Meta:
+        ordering = ["nombre"]
+        constraints = [
+            models.UniqueConstraint(fields=["pais", "nombre"], name="uniq_estado_pais")
+        ]
+
+    def __str__(self):
+        return self.nombre
+
+
+class Ciudad(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    estado = models.ForeignKey(Estado, on_delete=models.CASCADE, related_name="ciudades")
+    nombre = models.CharField(max_length=100)
+
+    class Meta:
+        verbose_name_plural = "ciudades"
+        ordering = ["nombre"]
+        constraints = [
+            models.UniqueConstraint(fields=["estado", "nombre"], name="uniq_ciudad_estado")
+        ]
+
+    def __str__(self):
+        return self.nombre
+
+
+# --------------------------------------------------------------------------- #
 # Personas y acceso
 # --------------------------------------------------------------------------- #
+EDAD_MINIMA = 18
+
+
+def edad_en(nacimiento, dia):
+    return dia.year - nacimiento.year - ((dia.month, dia.day) < (nacimiento.month, nacimiento.day))
+
+
 class Persona(models.Model):
+    class TipoDocumento(models.TextChoices):
+        VENEZOLANO = "V", "Cédula venezolana (V)"
+        EXTRANJERO = "E", "Cédula de extranjero (E)"
+        PASAPORTE = "P", "Pasaporte"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     parroquia = models.ForeignKey(Parroquia, on_delete=models.PROTECT, related_name="personas")
+    # Con lo que se identifica a la persona (y se evita duplicarla).
+    tipo_documento = models.CharField(max_length=1, choices=TipoDocumento.choices,
+                                      default=TipoDocumento.VENEZOLANO)
+    documento = models.CharField(max_length=20, blank=True, db_index=True)
     nombre = models.CharField(max_length=200)
+    # Celular: el teléfono principal ("0414-1234567" o, si es extranjero, "+57...").
     telefono = models.CharField(max_length=40, blank=True, db_index=True)   # clave para deduplicar
     email = models.EmailField(blank=True, db_index=True)                    # clave para deduplicar
     fecha_nacimiento = models.DateField(null=True, blank=True)
+    # De dónde es. El detalle (sector, urbanización, dirección) va en datos_sensibles.
+    pais = models.ForeignKey(Pais, on_delete=models.PROTECT, null=True, blank=True,
+                             related_name="personas")
+    estado = models.ForeignKey(Estado, on_delete=models.PROTECT, null=True, blank=True,
+                               related_name="personas")
+    ciudad = models.ForeignKey(Ciudad, on_delete=models.PROTECT, null=True, blank=True,
+                               related_name="personas")
     # Confidencial (salud, alergias, notas pastorales...). Solo roles autorizados. Ver RLS.
     datos_sensibles = models.JSONField(default=dict, blank=True)
     creado = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         indexes = [models.Index(fields=["parroquia", "nombre"])]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tipo_documento", "documento"], condition=~models.Q(documento=""),
+                name="uniq_persona_documento",
+            )
+        ]
+
+    @property
+    def documento_completo(self):
+        """"V-12345678", "E-81234567" o "Pasaporte 123456789"."""
+        if not self.documento:
+            return ""
+        if self.tipo_documento == self.TipoDocumento.PASAPORTE:
+            return f"Pasaporte {self.documento}"
+        return f"{self.tipo_documento}-{self.documento}"
+
+    @staticmethod
+    def normalizar_documento(documento):
+        """"v-12.345.678" -> "12345678": sin letra, puntos, guiones ni espacios."""
+        return re.sub(r"^[VEP]-|[\s.-]", "", (documento or "").strip().upper())
+
+    def save(self, *args, **kwargs):
+        self.documento = self.normalizar_documento(self.documento)
+        super().save(*args, **kwargs)
+
+    def clean(self):
+        errores = {}
+        self.documento = self.normalizar_documento(self.documento)
+        if self.documento:
+            if self.tipo_documento == self.TipoDocumento.PASAPORTE:
+                if not re.fullmatch(r"[A-Z0-9]{5,20}", self.documento):
+                    errores["documento"] = "El pasaporte lleva de 5 a 20 letras o números."
+            elif not re.fullmatch(r"\d{5,9}", self.documento):
+                errores["documento"] = "La cédula lleva solo números (de 5 a 9 cifras)."
+            else:
+                otra = (Persona.objects.exclude(pk=self.pk)
+                        .filter(tipo_documento=self.tipo_documento, documento=self.documento)
+                        .first())
+                if otra:
+                    errores["documento"] = f"Ya está registrada con ese documento: {otra}."
+        if self.fecha_nacimiento:
+            hoy = date.today()
+            if self.fecha_nacimiento > hoy:
+                errores["fecha_nacimiento"] = "La fecha de nacimiento no puede ser futura."
+            elif edad_en(self.fecha_nacimiento, hoy) < EDAD_MINIMA:
+                errores["fecha_nacimiento"] = f"Debe tener al menos {EDAD_MINIMA} años."
+        if self.ciudad_id and self.estado_id and self.ciudad.estado_id != self.estado_id:
+            errores["ciudad"] = "Esa ciudad no es de ese estado."
+        if self.estado_id and self.pais_id and self.estado.pais_id != self.pais_id:
+            errores["estado"] = "Ese estado no es de ese país."
+        if errores:
+            raise ValidationError(errores)
 
     def __str__(self):
         return self.nombre

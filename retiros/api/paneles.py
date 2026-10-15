@@ -18,6 +18,7 @@ from rest_framework.response import Response
 from ..models import (
     Charla, EstadoPago, Gasto, Inscripcion, Pago, Participacion, Persona, Retiro, Tarea,
 )
+from ..geografia import VENEZUELA
 from ..tasas import TasaNoDisponible, tasas_bcv
 from .modulos import INSCRITAS, POR_MODELO
 from .permisos import permiso, ve_sensibles
@@ -330,6 +331,15 @@ def _texto(datos, clave):
     return str(datos.get(clave) or "").strip()
 
 
+def _procedencia(persona, datos):
+    """"Los Teques, Miranda"; fuera de Venezuela, también el país."""
+    partes = [str(x) for x in (persona.ciudad, persona.estado) if x]
+    if persona.pais and persona.pais.codigo != VENEZUELA:
+        partes.append(str(persona.pais))
+    # Registros de antes de los catálogos de geografía.
+    return ", ".join(partes) or _texto(datos, "procedencia")
+
+
 def _ficha(i, retiro):
     """Lo confidencial de un caminante: salud, alimentación y a quién llamar."""
     persona, salud = i.persona, i.salud_alimentacion or {}
@@ -345,9 +355,11 @@ def _ficha(i, retiro):
                 "telefono": " / ".join(t for t in telefonos if t),
             })
     return {
+        "documento": persona.documento_completo,
         "edad": _edad(persona.fecha_nacimiento, retiro.fecha_inicio),
-        "procedencia": _texto(datos, "procedencia") or _texto(datos, "direccion"),
-        "celular": _texto(datos, "celular"),
+        "procedencia": _procedencia(persona, datos),
+        "direccion": _texto(datos, "direccion"),
+        "telefono_casa": _texto(datos, "telefono_casa"),
         "condicion_medica": _texto(salud, "condicion_medica"),
         "tratamiento": _texto(salud, "tratamiento"),
         "alimentacion": _texto(salud, "regimen_alimenticio"),
@@ -360,7 +372,8 @@ def _ficha(i, retiro):
 
 def _caminantes(retiro, con_pagos, con_ficha):
     inscripciones = (
-        retiro.inscripciones.select_related("persona", "padrino")
+        retiro.inscripciones
+        .select_related("persona__pais", "persona__estado", "persona__ciudad", "padrino")
         .order_by("persona__nombre")
     )
     if con_pagos:

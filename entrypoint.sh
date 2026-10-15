@@ -9,6 +9,9 @@ done
 echo ">> Migraciones..."
 python manage.py migrate --noinput
 
+echo ">> Países, estados y ciudades..."
+python manage.py sembrar_geografia
+
 echo ">> Aplicando políticas RLS..."
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f retiros/sql/rls_policies.sql
 

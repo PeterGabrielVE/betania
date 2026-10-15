@@ -145,8 +145,10 @@ type Opcion = { valor: string; etiqueta: string };
 
 export type FichaCaminante = {
   edad: number | null;
-  procedencia: string;
-  celular: string;
+  documento: string; // "V-12345678"
+  procedencia: string; // "Los Teques, Miranda"
+  direccion: string; // sector / urbanización / dirección
+  telefono_casa: string;
   condicion_medica: string;
   tratamiento: string;
   alimentacion: string;
