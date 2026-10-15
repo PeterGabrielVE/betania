@@ -61,10 +61,10 @@ const AppSidebar: React.FC = () => {
         subItems: modulos
           .filter((m) => m.grupo === grupo)
           .flatMap((m) => [
-            { name: `${m.emoji} ${m.titulo}`, path: `/${m.slug}` },
+            { name: m.titulo, path: `/${m.slug}` },
             // El formulario de caminantes (el de papel) va junto a su listado.
             ...(m.slug === "inscripciones" && puedeInscribir
-              ? [{ name: "✍️ Inscribir caminante", path: "/inscribir" }]
+              ? [{ name: "Inscribir caminante", path: "/inscribir" }]
               : []),
           ]),
       })),

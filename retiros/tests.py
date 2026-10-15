@@ -446,7 +446,6 @@ class AccesoPorRolTests(Base):
                          {"valor": str(self.parroquia.pk), "etiqueta": "San José"})
         self.assertEqual(fijos["tipo"]["etiqueta"], "Emaús hombres")
         self.assertIsNone(fijos["estado"])
-        self.assertEqual(modulo["emoji"], "⛪")
 
         # El inicio y el panel tampoco muestran el retiro del otro tipo.
         resumen = self.client.get("/api/resumen/").json()

@@ -126,7 +126,6 @@ export type Modulo = {
   titulo: string;
   singular: string;
   grupo: string;
-  emoji: string;
   campos: Campo[]; // formulario
   lista: Campo[]; // columnas de la tabla
   filtros: Campo[];

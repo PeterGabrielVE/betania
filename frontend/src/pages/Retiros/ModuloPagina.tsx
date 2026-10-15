@@ -24,8 +24,7 @@ import {
 } from "@/components/ui/table";
 import { useAuth } from "@/context/AuthContext";
 import NotFound from "@/pages/OtherPage/NotFound";
-import { PencilIcon, TrashBinIcon } from "@/icons";
-import { emojiOpcion } from "@/utils/formato";
+import { LockIcon, PencilIcon, TrashBinIcon } from "@/icons";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 
@@ -396,7 +395,7 @@ function Listado({ modulo }: { modulo: Modulo }) {
                 : setEditando(null)
             }
           >
-            ➕ Agregar {modulo.singular}
+            Agregar {modulo.singular}
           </Button>
         )}
       </div>
@@ -408,7 +407,7 @@ function Listado({ modulo }: { modulo: Modulo }) {
             type="search"
             value={texto}
             onChange={(e) => setTexto(e.target.value)}
-            placeholder="🔍 Buscar…"
+            placeholder="Buscar…"
             className={`${claseControl} w-full sm:w-72`}
           />
         )}
@@ -418,7 +417,7 @@ function Listado({ modulo }: { modulo: Modulo }) {
             className="inline-flex h-11 w-full items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-4 text-sm text-gray-600 sm:w-auto dark:border-gray-800 dark:bg-white/3 dark:text-gray-300"
             title="Lo fija tu rol"
           >
-            <span aria-hidden="true">🔒</span>
+            <LockIcon className="size-4 shrink-0" aria-hidden="true" />
             {filtro.etiqueta}:
             <strong className="font-medium text-gray-800 dark:text-white/90">
               {filtro.fijo!.etiqueta}
@@ -449,7 +448,7 @@ function Listado({ modulo }: { modulo: Modulo }) {
               <option value="">{filtro.etiqueta}: todos</option>
               {filtro.opciones?.map((o) => (
                 <option key={o.valor} value={o.valor}>
-                  {[emojiOpcion(o.valor), o.etiqueta].filter(Boolean).join(" ")}
+                  {o.etiqueta}
                 </option>
               ))}
             </select>
@@ -477,10 +476,7 @@ function Listado({ modulo }: { modulo: Modulo }) {
         <Esqueleto />
       ) : filas.length === 0 ? (
         <div className="border-t border-gray-100 px-5 py-12 text-center dark:border-white/5">
-          <p className="text-3xl" aria-hidden="true">
-            {error ? "⚠️" : "📭"}
-          </p>
-          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
             {error ??
               (hayFiltros
                 ? "Nada coincide con la búsqueda o los filtros."
@@ -560,7 +556,7 @@ export default function ModuloPagina() {
         title={`${modulo.titulo} | Betania`}
         description={`Listado de ${modulo.titulo.toLowerCase()}`}
       />
-      <PageBreadcrumb pageTitle={`${modulo.emoji} ${modulo.titulo}`} />
+      <PageBreadcrumb pageTitle={modulo.titulo} />
       {/* key: al cambiar de módulo se reinician búsqueda, filtros y página. */}
       <Listado key={modulo.slug} modulo={modulo} />
     </>

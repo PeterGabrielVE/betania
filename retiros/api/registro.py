@@ -29,7 +29,6 @@ class Modulo:
     titulo: str
     singular: str
     grupo: str                # sección del menú
-    emoji: str                # junto al título, en el menú y el listado
     campos: list              # campos editables, en el orden del formulario
     lista: list               # columnas de la tabla (campos o extras)
     buscar: list = field(default_factory=list)

@@ -1,6 +1,6 @@
 import type { Campo, Registro } from "@/api/client";
 import Badge from "@/components/ui/badge/Badge";
-import { colorEstado, dinero, emojiOpcion, fecha } from "@/utils/formato";
+import { colorEstado, dinero, fecha } from "@/utils/formato";
 import { claseEnlace } from "./estilos";
 
 // Lo que se muestra de un campo en un listado (tabla o tarjeta).
@@ -11,15 +11,8 @@ export function celda(campo: Campo, fila: Registro): React.ReactNode {
       return (fila[`${campo.nombre}_etiqueta`] as string) || "—";
     case "opcion": {
       if (valor === null || valor === "") return "—";
-      const emoji = emojiOpcion(valor as string);
       return (
-        <Badge
-          size="sm"
-          color={colorEstado(valor as string)}
-          startIcon={
-            emoji ? <span aria-hidden="true">{emoji}</span> : undefined
-          }
-        >
+        <Badge size="sm" color={colorEstado(valor as string)}>
           {campo.opciones?.find((o) => o.valor === valor)?.etiqueta ??
             (valor as string)}
         </Badge>
@@ -27,7 +20,7 @@ export function celda(campo: Campo, fila: Registro): React.ReactNode {
     }
     case "bool":
       return valor ? (
-        <span className="text-gray-800 dark:text-white/90">✅ Sí</span>
+        <span className="text-gray-800 dark:text-white/90">Sí</span>
       ) : (
         <span className="text-gray-400 dark:text-gray-500">No</span>
       );
@@ -46,7 +39,7 @@ export function celda(campo: Campo, fila: Registro): React.ReactNode {
       // Lo sirve Django (p. ej. el PDF de un retiro), no React Router.
       return (
         <a href={valor as string} className={claseEnlace}>
-          📄 PDF
+          PDF
         </a>
       );
     default:

@@ -106,7 +106,7 @@ Para dar acceso a alguien, en `/admin/`:
 El rol también fija lo que se ve: un coordinador de parroquia solo ve los
 retiros de su parroquia, y uno de retiro o de logística, además, solo los de su
 tipo (p. ej. Emaús hombres). En el listado de retiros esos filtros aparecen
-bloqueados (🔒), y el inicio y el panel aplican el mismo límite. Para agregar
+bloqueados (con un candado), y el inicio y el panel aplican el mismo límite. Para agregar
 otro campo así, se agrega a `por_ambito` del módulo en `retiros/api/modulos.py`.
 
 Luego se le comparte el enlace del panel del retiro (`/retiros/<id>`): ahí ven

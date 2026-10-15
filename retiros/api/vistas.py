@@ -233,7 +233,6 @@ def esquema(request):
             "titulo": m.titulo,
             "singular": m.singular,
             "grupo": m.grupo,
-            "emoji": m.emoji,
             "campos": [con_fijo(_describir(m, n)) for n in campos],
             "lista": [_describir(m, n) for n in lista],
             "filtros": [con_fijo(_filtro(m, n)) for n in m.filtros],
