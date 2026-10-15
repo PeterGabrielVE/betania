@@ -210,6 +210,16 @@ export type PanelRetiro = {
     disponibles: number;
     por_estado: { estado: string; etiqueta: string; total: number }[];
   } | null;
+  // Para organizar al equipo: quiénes duermen, cuántos por turno y camisas.
+  logistica_equipo: {
+    total: number;
+    duermen: number;
+    no_duermen: number;
+    sin_responder: number;
+    turnos: (Opcion & { total: number })[]; // valor: "viernes_manana"
+    camisas: (Opcion & { total: number })[];
+    tallas: (Opcion & { total: number })[];
+  } | null;
   equipo: {
     total: number;
     coordinadores: string[];
@@ -228,6 +238,9 @@ export type PanelRetiro = {
       telefono: string;
       tipo: string;
       areas: string;
+      duerme_en_casa: boolean | null; // null: no lo indicó
+      turnos: string; // "Vie: noche · Sáb: todo el día"
+      camisa: string; // "Azul de servicio · talla M"
       pagado: number;
       saldo: number;
       estado_pago: string;
@@ -396,6 +409,9 @@ export type FichaPersona = {
         retiro: RetiroCorto;
         tipo: string;
         tipo_display: string;
+        duerme_en_casa: boolean | null;
+        turnos: string;
+        camisa: string;
         // Una por área: id de la asignación, id del área y si la coordina.
         areas: {
           id: string;

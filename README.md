@@ -92,7 +92,12 @@ un retiro no puede ser servidor de ese mismo retiro (ni al revés).
 Los servidores se registran con su propio formulario por pasos
 (`/registrar-servidor`: Identificación, Datos personales, Servicio y Confirmar),
 que comparte con el de caminantes la identificación y los datos personales; en
-Servicio se marcan sus áreas y cuáles coordina.
+Servicio se marcan sus áreas y cuáles coordina, y en Disponibilidad si dormirá
+en la casa de retiro, los turnos del fin de semana en que puede servir (viernes
+y sábado mañana/tarde/noche, domingo mañana/tarde, o el día completo) y la
+camisa que necesita (azul, blanca o polo de la Rosa) con su talla. El panel del
+retiro resume la logística del equipo: cuántos duermen, cuántos hay por turno
+y cuántas camisas encargar por tipo y talla.
 
 Permisos y confidencialidad:
 

@@ -8,6 +8,7 @@ import {
   claseTarjeta,
 } from "@/components/modulos/estilos";
 import Actualizacion from "@/components/retiros/Actualizacion";
+import LogisticaEquipo from "@/components/retiros/LogisticaEquipo";
 import Metrica from "@/components/retiros/Metrica";
 import Badge from "@/components/ui/badge/Badge";
 import {
@@ -467,6 +468,9 @@ function Servidores({
                 "Servidor",
                 "Área",
                 "Teléfono",
+                "Duerme",
+                "Turnos",
+                "Camisa",
                 ...(conCuota ? ["Pago"] : []),
                 "Pagado",
                 ...(conCuota ? ["Debe"] : []),
@@ -496,6 +500,15 @@ function Servidores({
                 <TableCell className={claseCelda}>
                   {f.telefono || "—"}
                 </TableCell>
+                <TableCell className={claseCelda}>
+                  {f.duerme_en_casa === null
+                    ? "—"
+                    : f.duerme_en_casa
+                      ? "Sí"
+                      : "No"}
+                </TableCell>
+                <TableCell className={claseCelda}>{f.turnos || "—"}</TableCell>
+                <TableCell className={claseCelda}>{f.camisa || "—"}</TableCell>
                 {conCuota && (
                   <TableCell className={claseCelda}>
                     <Badge size="sm" color={colorEstado(f.estado_pago)}>
@@ -744,6 +757,15 @@ export default function RetiroPanel() {
             }
           >
             <Equipo equipo={equipo} />
+          </Seccion>
+        )}
+
+        {panel.logistica_equipo && (
+          <Seccion
+            titulo="Logística del equipo"
+            className="col-span-12 xl:col-span-6"
+          >
+            <LogisticaEquipo logistica={panel.logistica_equipo} />
           </Seccion>
         )}
 

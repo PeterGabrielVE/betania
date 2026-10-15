@@ -324,6 +324,22 @@ export default function PersonaFicha() {
                             ))
                           )}
                         </div>
+                        {(s.duerme_en_casa !== null ||
+                          s.turnos ||
+                          s.camisa) && (
+                          <p className="text-theme-xs text-gray-500 dark:text-gray-400">
+                            {[
+                              s.duerme_en_casa !== null &&
+                                (s.duerme_en_casa
+                                  ? "Duerme en la casa"
+                                  : "No duerme en la casa"),
+                              s.turnos,
+                              s.camisa && `Camisa: ${s.camisa}`,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </p>
+                        )}
                         <Pago fila={s} />
                         {puede("servicios", "puede_agregar") && (
                           <button

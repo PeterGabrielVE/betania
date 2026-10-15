@@ -8,8 +8,12 @@ import {
 } from "@/components/inscripcion/esquemaPersona";
 import {
   campoDeParticipacion,
+  CAMISAS,
   crearEsquemaServidor,
+  cuerpoDisponibilidad,
   ETIQUETAS_SERVIDOR,
+  resumenTurnos,
+  TALLAS_CAMISA,
   pasosServidor,
   TIPOS_PARTICIPACION,
   valoresServidor,
@@ -17,6 +21,7 @@ import {
 } from "@/components/inscripcion/esquemaServidor";
 import PasoPersonales from "@/components/inscripcion/PasoPersonales";
 import {
+  PasoDisponibilidad,
   PasoIdentificacionServidor,
   PasoServicio,
 } from "@/components/inscripcion/PasosServidor";
@@ -161,7 +166,12 @@ export default function RegistrarServidor() {
       // 2. Su lugar en el equipo del retiro.
       participacion = await api<Registro>("/participaciones/", {
         method: "POST",
-        body: { retiro: v.retiro, persona: guardada.id, tipo: v.tipo },
+        body: {
+          retiro: v.retiro,
+          persona: guardada.id,
+          tipo: v.tipo,
+          ...cuerpoDisponibilidad(v),
+        },
       });
     } catch (err) {
       errorDeApi(
@@ -247,6 +257,7 @@ export default function RegistrarServidor() {
       <PasoPersonales sensibles={sensibles} paises={registro.paises} />
     ),
     servicio: <PasoServicio onAreas={setAreas} />,
+    disponibilidad: <PasoDisponibilidad />,
     confirmar: (
       <Resumen
         pasos={pasos.slice(0, -1)}
@@ -259,6 +270,16 @@ export default function RegistrarServidor() {
           }
           if (campo === "areas" || campo === "coordina") {
             return (valor as string[]).map(nombreArea).join(", ");
+          }
+          if (campo === "duerme") {
+            return valor === "si" ? "Sí" : valor === "no" ? "No" : "";
+          }
+          if (campo === "turnos") return resumenTurnos(valor as string[]);
+          if (campo === "camisas" || campo === "tallas") {
+            const lista = campo === "camisas" ? CAMISAS : TALLAS_CAMISA;
+            return (valor as string[])
+              .map((c) => lista.find((o) => o.valor === c)?.etiqueta ?? c)
+              .join(", ");
           }
           return undefined;
         }}

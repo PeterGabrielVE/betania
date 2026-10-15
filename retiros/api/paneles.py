@@ -16,6 +16,7 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
 from ..models import (
+    CAMISAS_SERVICIO, TALLAS_CAMISA, TURNOS_SERVICIO,
     Charla, EstadoPago, Gasto, Inscripcion, Pago, Participacion, Persona, Retiro, Tarea,
 )
 from ..tasas import TasaNoDisponible, tasas_bcv
@@ -460,11 +461,34 @@ def _servidores(retiro):
             "telefono": p.persona.telefono,
             "tipo": p.get_tipo_display(),
             "areas": ", ".join(s.area.nombre for s in p.servicios.all()),
+            "duerme_en_casa": p.duerme_en_casa,
+            "turnos": p.resumen_turnos(),
+            "camisa": p.resumen_camisas(),
             "pagado": total,
             "saldo": max(retiro.cuota_servidor - total, 0),
             "estado_pago": EstadoPago.de(total, retiro.cuota_servidor),
         })
     return {"filas": filas, "por_cobrar": sum(f["saldo"] for f in filas)}
+
+
+def _logistica_equipo(retiro):
+    """Para organizar al equipo: cuántos duermen en la casa, cuántos sirven en
+    cada turno y cuántas camisas hacen falta, por tipo y por talla."""
+    equipo = list(retiro.participaciones.exclude(tipo=Participacion.Tipo.CAMINANTE))
+
+    def conteo(opciones, marcadas):
+        return [{"valor": c, "etiqueta": e, "total": sum(c in marcadas(p) for p in equipo)}
+                for c, e in opciones]
+
+    return {
+        "total": len(equipo),
+        "duermen": sum(p.duerme_en_casa is True for p in equipo),
+        "no_duermen": sum(p.duerme_en_casa is False for p in equipo),
+        "sin_responder": sum(p.duerme_en_casa is None for p in equipo),
+        "turnos": conteo(TURNOS_SERVICIO, lambda p: p.turnos),
+        "camisas": conteo(CAMISAS_SERVICIO, lambda p: p.camisas_pedidas),
+        "tallas": conteo(TALLAS_CAMISA, lambda p: p.tallas),
+    }
 
 
 def _finanzas(retiro, caminantes):
@@ -510,6 +534,8 @@ def panel_retiro(request, pk):
         },
         "caminantes": caminantes,
         "equipo": _equipo(retiro) if _ve(user, Participacion) else None,
+        "logistica_equipo": (_logistica_equipo(retiro)
+                             if _ve(user, Participacion) else None),
         "servidores": _servidores(retiro) if finanzas and _ve(user, Participacion) else None,
         "charlas": [
             {"id": c.pk, "orden": c.orden, "tema": c.tema,
@@ -578,6 +604,9 @@ def _como_servidor(persona, con_pagos):
             "retiro": _retiro_corto(p.retiro),
             "tipo": p.tipo,
             "tipo_display": p.get_tipo_display(),
+            "duerme_en_casa": p.duerme_en_casa,
+            "turnos": p.resumen_turnos(),
+            "camisa": p.resumen_camisas(),
             "areas": [
                 {"id": s.pk, "area": s.area_id, "nombre": s.area.nombre,
                  "es_coordinador": s.es_coordinador}

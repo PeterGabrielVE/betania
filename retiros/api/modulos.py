@@ -8,6 +8,7 @@ from django.conf import settings
 from django.db.models import Count, Q, Sum
 
 from ..models import (
+    CAMISAS_SERVICIO, TALLAS_CAMISA, TURNOS_SERVICIO,
     AreaServicio, AsignacionRol, AsignacionServicio, Charla, Ciudad, Diocesis, Estado,
     EstadoPago, Gasto, Inscripcion, Pago, Pais, Parroquia, Participacion, Persona, Retiro, Tarea,
     TipoRetiro, Usuario,
@@ -22,6 +23,7 @@ _DATOS, _CIVIL, _SACRAMENTOS = "Datos del caminante", "Estado civil", "Sacrament
 _UBICACION = "De dónde es"
 _INSCRIPCION, _SALUD, _LLAMAR = "Inscripción", "Salud", "Persona a quien llamar"
 _LLAMAR2 = "Otro familiar de contacto"
+_TURNOS, _CAMISA = "Turnos en que puede servir", "Camisa para servir"
 _COMENTARIOS = "Comentarios"
 
 # Una inscripción cuenta como "inscrito" mientras no esté cancelada.
@@ -179,8 +181,10 @@ MODULOS = [
         # participaciones de caminante no van aquí: los caminantes son las
         # inscripciones.
         "participaciones", Participacion, "Servidores", "servidor", PERSONAS,
-        campos=["retiro", "persona", "tipo"],
-        lista=["persona", "documento", "telefono", "areas", "tipo", "retiro"],
+        campos=["retiro", "persona", "tipo", "duerme_en_casa", "disponibilidad", "camisas",
+                "tallas_camisa"],
+        lista=["persona", "documento", "telefono", "areas", "tipo", "duerme", "turnos",
+               "camisa", "retiro"],
         buscar=["persona__nombre", "persona__documento", "servicios__area__nombre",
                 "retiro__tipo__nombre"],
         excluir={"tipo": Participacion.Tipo.CAMINANTE},
@@ -189,13 +193,24 @@ MODULOS = [
             "documento": Extra("Documento", "texto", lambda o: o.persona.documento_completo),
             "telefono": Extra("Celular", "texto", lambda o: o.persona.telefono),
             # "Cocina (coordina), Música".
+            "duerme": Extra("Duerme en la casa", "texto", lambda o: (
+                "" if o.duerme_en_casa is None else "Sí" if o.duerme_en_casa else "No")),
+            "turnos": Extra("Turnos", "texto", lambda o: o.resumen_turnos()),
+            "camisa": Extra("Camisa", "texto", lambda o: o.resumen_camisas()),
             "areas": Extra("Áreas", "texto", lambda o: ", ".join(
                 f"{s.area.nombre} (coordina)" if s.es_coordinador else s.area.nombre
                 for s in sorted(o.servicios.all(), key=lambda s: s.area.nombre)
             )),
         },
         filtros=["tipo", "retiro"],
-        etiquetas={"persona": "Servidor", "tipo": "Participa como"},
+        etiquetas={"persona": "Servidor", "tipo": "Participa como",
+                   "duerme_en_casa": "Dormirá en la casa de retiro"},
+        subcampos={
+            "disponibilidad": [sub(c, e, _TURNOS, "bool") for c, e in TURNOS_SERVICIO],
+            "camisas": [sub(c, e, _CAMISA, "bool") for c, e in CAMISAS_SERVICIO],
+            "tallas_camisa": [sub(c, f"Talla {e}", _CAMISA, "bool")
+                              for c, e in TALLAS_CAMISA],
+        },
         orden=["persona__nombre"],
         relacionados=["persona", "retiro__tipo"],
     ),

@@ -554,6 +554,32 @@ class Inscripcion(models.Model):
         return f"{self.persona} → {self.retiro} [{self.get_estado_display()}]"
 
 
+# Lo que un servidor indica para cada retiro (ver Participacion): los turnos del
+# fin de semana en que puede servir, las camisas que necesita y sus tallas. Se
+# guardan como {clave: true} con las claves de abajo.
+TURNOS_SERVICIO = [
+    ("viernes_manana", "Viernes · Mañana"), ("viernes_tarde", "Viernes · Tarde"),
+    ("viernes_noche", "Viernes · Noche"),
+    ("sabado_manana", "Sábado · Mañana"), ("sabado_tarde", "Sábado · Tarde"),
+    ("sabado_noche", "Sábado · Noche"),
+    ("domingo_manana", "Domingo · Mañana"), ("domingo_tarde", "Domingo · Tarde"),
+]
+CAMISAS_SERVICIO = [
+    ("azul", "Azul de servicio"), ("blanca", "Blanca de servicio"),
+    ("polo", "Polo de la Rosa"),
+]
+TALLAS_CAMISA = [
+    ("S", "Pequeña"), ("M", "Mediana"), ("L", "Grande"), ("XL", "X Grande"),
+    ("XXL", "XX Grande"), ("XXXL", "XXX Grande"),
+]
+
+
+def _marcadas(valor, opciones):
+    """Las claves marcadas de un {clave: true}, en el orden de `opciones`."""
+    valor = valor or {}
+    return [clave for clave, _ in opciones if valor.get(clave)]
+
+
 class Participacion(models.Model):
     """Rol confirmado de una persona en un retiro. Para servidores, ver AsignacionServicio."""
     class Tipo(models.TextChoices):
@@ -565,6 +591,12 @@ class Participacion(models.Model):
     persona = models.ForeignKey(Persona, on_delete=models.PROTECT, related_name="participaciones")
     retiro = models.ForeignKey(Retiro, on_delete=models.CASCADE, related_name="participaciones")
     tipo = models.CharField(max_length=20, choices=Tipo.choices)
+    # Logística del servidor para este retiro (vacío: no lo indicó).
+    duerme_en_casa = models.BooleanField("dormirá en la casa de retiro", null=True,
+                                         blank=True)
+    disponibilidad = models.JSONField(default=dict, blank=True)  # TURNOS_SERVICIO
+    camisas = models.JSONField(default=dict, blank=True)         # CAMISAS_SERVICIO
+    tallas_camisa = models.JSONField(default=dict, blank=True)   # TALLAS_CAMISA
 
     class Meta:
         constraints = [
@@ -572,6 +604,38 @@ class Participacion(models.Model):
                 fields=["persona", "retiro"], name="uniq_participacion_persona_retiro"
             )
         ]
+
+    @property
+    def turnos(self):
+        return _marcadas(self.disponibilidad, TURNOS_SERVICIO)
+
+    @property
+    def camisas_pedidas(self):
+        return _marcadas(self.camisas, CAMISAS_SERVICIO)
+
+    @property
+    def tallas(self):
+        return _marcadas(self.tallas_camisa, TALLAS_CAMISA)
+
+    def resumen_turnos(self):
+        """"Vie: mañana, tarde · Sáb: todo el día · Dom: mañana"."""
+        partes = []
+        for dia, corto in (("viernes", "Vie"), ("sabado", "Sáb"), ("domingo", "Dom")):
+            del_dia = [(c, e) for c, e in TURNOS_SERVICIO if c.startswith(dia)]
+            elegidos = [e.split(" · ")[1].lower() for c, e in del_dia
+                        if (self.disponibilidad or {}).get(c)]
+            if elegidos:
+                todo = len(elegidos) == len(del_dia)
+                partes.append(f"{corto}: {'todo el día' if todo else ', '.join(elegidos)}")
+        return " · ".join(partes)
+
+    def resumen_camisas(self):
+        """"Azul de servicio, Polo de la Rosa · tallas M, L"."""
+        nombres = dict(CAMISAS_SERVICIO)
+        camisas = ", ".join(nombres[c] for c in self.camisas_pedidas)
+        if not camisas:
+            return ""
+        return f"{camisas} · talla {', '.join(self.tallas)}" if self.tallas else camisas
 
     def clean(self):
         if not (self.persona_id and self.retiro_id):
@@ -582,6 +646,8 @@ class Participacion(models.Model):
             raise ValidationError({"persona": (
                 f"Ya está en este retiro como {otra.get_tipo_display().lower()}."
             )})
+        if self.camisas_pedidas and not self.tallas:
+            raise ValidationError({"tallas_camisa": "Indica la talla de la camisa."})
         if self.tipo != self.Tipo.CAMINANTE and (
             Inscripcion.objects.filter(retiro_id=self.retiro_id, persona_id=self.persona_id)
             .exclude(estado=Inscripcion.Estado.CANCELADA).exists()

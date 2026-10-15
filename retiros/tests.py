@@ -792,6 +792,50 @@ class FichaYServidoresTests(Base):
         self.assertEqual([o["valor"] for o in tipo["opciones"]], ["servidor", "coordinador"])
 
 
+class DisponibilidadServidorTests(Base):
+    def registrar(self, nombre, **datos):
+        return self.post("/api/participaciones/", {
+            "retiro": str(self.retiro.pk), "persona": str(self.persona(nombre).pk),
+            "tipo": "servidor", **datos,
+        })
+
+    def test_guarda_y_resume_lo_que_indica_el_servidor(self):
+        r = self.registrar(
+            "Ana Pérez", duerme_en_casa=True,
+            disponibilidad={"viernes_noche": True, "sabado_manana": True,
+                            "sabado_tarde": True, "sabado_noche": True,
+                            "domingo_manana": True},
+            camisas={"azul": True, "polo": True}, tallas_camisa={"M": True},
+        )
+        self.assertEqual(r.status_code, 201, r.content)
+        fila = self.client.get("/api/participaciones/").json()["results"][0]
+        self.assertEqual(fila["duerme"], "Sí")
+        self.assertEqual(fila["turnos"], "Vie: noche · Sáb: todo el día · Dom: mañana")
+        self.assertEqual(fila["camisa"], "Azul de servicio, Polo de la Rosa · talla M")
+
+    def test_camisa_sin_talla(self):
+        r = self.registrar("Ana Pérez", camisas={"blanca": True})
+        self.assertEqual(r.json()["tallas_camisa"], ["Indica la talla de la camisa."])
+
+    def test_resumen_de_logistica_en_el_panel(self):
+        self.registrar("Ana Pérez", duerme_en_casa=True, disponibilidad={"viernes_noche": True},
+                       camisas={"azul": True}, tallas_camisa={"M": True})
+        self.registrar("Luis Gómez", duerme_en_casa=False,
+                       disponibilidad={"viernes_noche": True, "domingo_tarde": True},
+                       camisas={"azul": True, "polo": True}, tallas_camisa={"XL": True})
+        self.registrar("Rosa Díaz")
+        log = self.client.get(f"/api/retiros/{self.retiro.pk}/panel/").json()["logistica_equipo"]
+        self.assertEqual((log["total"], log["duermen"], log["no_duermen"], log["sin_responder"]),
+                         (3, 1, 1, 1))
+        turnos = {t["valor"]: t["total"] for t in log["turnos"]}
+        self.assertEqual((turnos["viernes_noche"], turnos["domingo_tarde"],
+                          turnos["sabado_manana"]), (2, 1, 0))
+        self.assertEqual({c["valor"]: c["total"] for c in log["camisas"]},
+                         {"azul": 2, "blanca": 0, "polo": 1})
+        self.assertEqual({t["valor"]: t["total"] for t in log["tallas"] if t["total"]},
+                         {"M": 1, "XL": 1})
+
+
 class ReportesTests(Base):
     def test_pdf_exige_sesion_y_permiso(self):
         ruta = f"/retiros/{self.retiro.pk}/lista.pdf"
