@@ -527,6 +527,20 @@ class DocumentoYGeografiaTests(Base):
         r = self.crear(estado=str(zulia.pk), ciudad=str(teques.pk))
         self.assertEqual(r.json()["ciudad"], ["Esa ciudad no es de ese estado."])
 
+    def test_sembrar_areas_no_duplica(self):
+        propia = AreaServicio.objects.create(parroquia=self.parroquia, nombre="Cocina")
+        sin_descripcion = AreaServicio.objects.create(nombre="Música / Coro")
+        call_command("sembrar_areas", stdout=open("/dev/null", "w"))
+        call_command("sembrar_areas", stdout=open("/dev/null", "w"))
+        generales = AreaServicio.objects.filter(parroquia=None)
+        self.assertEqual(generales.count(), 11)
+        self.assertIn("Santísimo", generales.get(nombre="Intercesión / Capilla").descripcion)
+        sin_descripcion.refresh_from_db()
+        self.assertIn("alabanza", sin_descripcion.descripcion)
+        # El área propia de la parroquia no se toca.
+        propia.refresh_from_db()
+        self.assertEqual(propia.descripcion, "")
+
     def test_estados_y_ciudades_por_api(self):
         call_command("sembrar_geografia", stdout=open("/dev/null", "w"))
         venezuela = Pais.objects.get(codigo="VE")

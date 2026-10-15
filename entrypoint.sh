@@ -12,6 +12,9 @@ python manage.py migrate --noinput
 echo ">> Países, estados y ciudades..."
 python manage.py sembrar_geografia
 
+echo ">> Áreas de servicio..."
+python manage.py sembrar_areas
+
 echo ">> Aplicando políticas RLS..."
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f retiros/sql/rls_policies.sql
 

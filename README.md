@@ -15,7 +15,9 @@ docker compose up --build   # 2. construye y levanta app + base de datos
 
 Al arrancar, el contenedor `web` espera a Postgres, corre las migraciones,
 carga países, estados y ciudades (`python manage.py sembrar_geografia`, ver
-`retiros/geografia.py`; se puede correr cuando sea, no duplica nada), aplica las
+`retiros/geografia.py`) y las áreas de servicio de Emaús (`python manage.py
+sembrar_areas`, ver `retiros/areas.py`); ambos se pueden correr cuando sea, no
+duplican nada. Después aplica las
 políticas de RLS, recopila los estáticos y, la primera vez, crea un
 superusuario.
 
