@@ -2,6 +2,7 @@
 
 import Logo from "@/components/common/Logo";
 import { ThemeToggleButton } from "@/components/common/ThemeToggleButton";
+import PreferenciasUsuario from "@/components/header/PreferenciasUsuario";
 import UserDropdown from "@/components/header/UserDropdown";
 import { useSidebar } from "@/context/SidebarContext";
 import { cn } from "@/utils";
@@ -99,11 +100,14 @@ const AppHeader: React.FC = () => {
         </div>
         <div
           className={cn(
-            "flex w-full items-center justify-between gap-4 px-5 py-4 shadow-theme-md xl:flex xl:justify-end xl:px-0 xl:shadow-none",
+            // xl:w-auto/shrink-0: con los selectores de preferencias, la zona
+            // derecha toma el ancho que necesita en vez de apretarse.
+            "flex w-full items-center justify-between gap-4 px-5 py-4 shadow-theme-md xl:flex xl:w-auto xl:shrink-0 xl:justify-end xl:px-0 xl:shadow-none",
             isApplicationMenuOpen ? "flex" : "hidden",
           )}
         >
-          <div className="flex items-center gap-2 2xsm:gap-3">
+          <div className="flex flex-wrap items-center gap-2 2xsm:gap-3">
+            <PreferenciasUsuario />
             <ThemeToggleButton />
           </div>
           {/* <!-- User Area --> */}

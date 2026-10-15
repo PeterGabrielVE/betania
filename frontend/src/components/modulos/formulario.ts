@@ -39,7 +39,8 @@ export function seccionesDe(entradas: Entrada[]): [string, Entrada[]][] {
 }
 
 function valorInicial(entrada: Entrada, registro: Registro | null): unknown {
-  if (!registro && entrada.fijo) return entrada.fijo.valor;
+  const porDefecto = entrada.fijo ?? entrada.predeterminado;
+  if (!registro && porDefecto) return porDefecto.valor;
   const valor = entrada.json
     ? (registro?.[entrada.json] as Valores | undefined)?.[entrada.nombre]
     : registro?.[entrada.nombre];
@@ -66,8 +67,8 @@ export function estadoInicial(
         .filter((e) => e.tipo === "fk")
         .map((e) => [
           e.clave,
-          !registro && e.fijo
-            ? e.fijo.etiqueta
+          !registro && (e.fijo ?? e.predeterminado)
+            ? (e.fijo ?? e.predeterminado)!.etiqueta
             : ((registro?.[`${e.nombre}_etiqueta`] as string) ?? ""),
         ]),
     ),

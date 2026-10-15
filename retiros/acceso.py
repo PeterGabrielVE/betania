@@ -95,6 +95,13 @@ def _calcular_ambito(user):
     return ambito
 
 
+def retiros_visibles(user):
+    """Los retiros que el usuario ve: los de la parroquia y el tipo que fija su
+    rol (el RLS ya limita la parroquia; esto suma el tipo de retiro)."""
+    ambito = ambito_fijo(user)
+    return Retiro.objects.filter(**{n: obj.pk for n, obj in ambito.items()})
+
+
 class RolBackend(BaseBackend):
     """Permisos de Django que salen de los roles (ver PERMISOS_ROL)."""
 

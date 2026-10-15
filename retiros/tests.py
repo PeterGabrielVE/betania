@@ -638,6 +638,73 @@ class NombresYDuplicadosTests(Base):
                          ["Ya sirve en esa área."])
 
 
+class PreferenciasTests(Base):
+    def cambiar(self, **datos):
+        return self.client.patch("/api/auth/preferencias/", datos,
+                                 content_type="application/json")
+
+    def test_sin_preferencias_usa_la_moneda_base(self):
+        pref = self.client.get("/api/auth/sesion/").json()["preferencias"]
+        self.assertEqual(pref, {"retiro": None, "moneda": "USD", "moneda_vista": "USD",
+                                "factor": 1, "aviso": ""})
+
+    def test_elegir_edicion_y_moneda(self):
+        r = self.cambiar(retiro=str(self.retiro.pk), moneda="VES")
+        self.assertEqual(r.status_code, 200, r.content)
+        pref = r.json()["preferencias"]
+        self.assertEqual(pref["retiro"], {"id": str(self.retiro.pk),
+                                          "etiqueta": "Emaús hombres #12"})
+        # 180 Bs por dólar (el BCV de prueba): un monto en USD se ve x180.
+        self.assertEqual((pref["moneda_vista"], pref["factor"]), ("VES", 180.0))
+        self.assertEqual(self.cambiar(moneda="EUR").json()["preferencias"]["factor"], 0.9)
+        # Cambiar una no borra la otra.
+        self.assertEqual(self.client.get("/api/auth/sesion/").json()["preferencias"]
+                         ["retiro"]["id"], str(self.retiro.pk))
+
+    def test_columna_de_equivalente_en_la_moneda_elegida(self):
+        self.cambiar(moneda="VES")
+        (pagos,) = [m for m in self.client.get("/api/esquema/").json() if m["slug"] == "pagos"]
+        columna = next(c for c in pagos["lista"] if c["nombre"] == "monto_base")
+        self.assertEqual(columna["etiqueta"], "Equivalente en VES")
+
+    def test_sin_tasa_se_ve_en_la_moneda_base(self):
+        self.bcv.side_effect = OSError("sin red")
+        cache.clear()
+        pref = self.cambiar(moneda="VES").json()["preferencias"]
+        self.assertEqual((pref["moneda"], pref["moneda_vista"], pref["factor"]),
+                         ("VES", "USD", 1))
+        self.assertIn("No se pudo consultar la tasa", pref["aviso"])
+
+    def test_valida_lo_que_se_elige(self):
+        self.assertEqual(self.cambiar(moneda="MXN").status_code, 400)
+        self.assertEqual(
+            self.cambiar(retiro="00000000-0000-0000-0000-000000000000").status_code, 400)
+
+    def test_el_tablero_abre_la_edicion_preferida(self):
+        otro = Retiro.objects.create(
+            parroquia=self.parroquia, tipo=self.retiro.tipo, edicion=13,
+            fecha_inicio=date(2027, 1, 10), fecha_fin=date(2027, 1, 12),
+        )
+        # Sin preferencia: el próximo (el 13, que empieza antes).
+        self.assertEqual(self.client.get("/api/resumen/").json()["tablero"]["retiro"]["id"],
+                         str(otro.pk))
+        self.cambiar(retiro=str(self.retiro.pk))
+        self.assertEqual(self.client.get("/api/resumen/").json()["tablero"]["retiro"]["id"],
+                         str(self.retiro.pk))
+
+    def test_una_edicion_fuera_del_rol_no_se_puede_elegir(self):
+        samuel = Retiro.objects.create(
+            parroquia=self.parroquia, tipo=TipoRetiro.objects.create(nombre="Samuel"),
+            edicion=1, fecha_inicio=date(2027, 5, 1), fecha_fin=date(2027, 5, 3),
+        )
+        cuenta = User.objects.create_user("coord", password="x")
+        usuario = Usuario.objects.create(persona=self.persona("Coord Uno"), cuenta=cuenta)
+        AsignacionRol.objects.create(usuario=usuario, rol=Rol.COORD_RETIRO, retiro=self.retiro)
+        self.client.force_login(cuenta)
+        self.assertEqual(self.cambiar(retiro=str(samuel.pk)).status_code, 400)
+        self.assertEqual(self.cambiar(retiro=str(self.retiro.pk)).status_code, 200)
+
+
 class ReportesTests(Base):
     def test_pdf_exige_sesion_y_permiso(self):
         ruta = f"/retiros/{self.retiro.pk}/lista.pdf"

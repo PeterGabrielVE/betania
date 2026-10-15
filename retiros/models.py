@@ -327,6 +327,27 @@ class Persona(models.Model):
         return self.nombre
 
 
+class Preferencias(models.Model):
+    """Lo que cada usuario elige en el encabezado: la edición (retiro) con la
+    que trabaja y la moneda en que ve los montos. El sistema las usa por
+    defecto (tablero, formularios, filtros)."""
+    cuenta = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="preferencias"
+    )
+    retiro = models.ForeignKey(
+        "Retiro", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    # Vacía: la moneda base.
+    moneda = models.CharField(max_length=3, choices=Moneda.choices, blank=True)
+
+    class Meta:
+        verbose_name = "preferencias"
+        verbose_name_plural = "preferencias"
+
+    def __str__(self):
+        return f"Preferencias de {self.cuenta}"
+
+
 class Usuario(models.Model):
     """
     Identidad de acceso: une la cuenta con la que se entra (auth.User) con su

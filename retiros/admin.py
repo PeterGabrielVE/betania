@@ -13,7 +13,7 @@ from import_export.admin import ImportExportModelAdmin
 
 from .models import (
     Diocesis, Parroquia, TipoRetiro, AreaServicio, Persona, Usuario, AsignacionRol,
-    Pais, Estado, Ciudad,
+    Pais, Estado, Ciudad, Preferencias,
     Retiro, Charla, Inscripcion, Participacion, AsignacionServicio, Pago, Gasto, EstadoPago,
     Tarea,
 )
@@ -221,6 +221,11 @@ class TareaAdmin(admin.ModelAdmin):
     list_filter = ("hecha", "retiro", "area")
     search_fields = ("titulo", "responsable__nombre")
     autocomplete_fields = ("retiro", "area", "responsable")
+
+
+@admin.register(Preferencias)
+class PreferenciasAdmin(admin.ModelAdmin):
+    list_display = ("cuenta", "retiro", "moneda")
 
 
 @admin.register(Pais)

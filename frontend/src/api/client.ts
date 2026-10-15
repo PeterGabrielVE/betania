@@ -77,9 +77,22 @@ export type Sesion =
       email: string;
       es_staff: boolean;
       es_superusuario: boolean;
-      moneda: string; // ISO 4217
+      moneda: string; // ISO 4217: la moneda base
       region: string; // p. ej. "es-CO"
+      monedas: { valor: string; etiqueta: string }[];
+      preferencias: Preferencias;
     };
+
+// Lo que el usuario eligió en el encabezado (ver retiros/api/sesion.py).
+export type Preferencias = {
+  retiro: { id: string; etiqueta: string } | null; // la edición
+  moneda: string; // la elegida
+  // En la que se ven los montos (la base si no hay tasa del BCV) y por cuánto
+  // multiplicar un monto en la moneda base para verlo en ella.
+  moneda_vista: string;
+  factor: number;
+  aviso: string;
+};
 
 export type Pagina<T> = {
   count: number;
@@ -119,6 +132,9 @@ export type Campo = {
   // Valor que fija el rol del usuario (p. ej. su parroquia): el filtro no se
   // puede cambiar y el formulario de alta lo trae puesto.
   fijo?: { valor: string; etiqueta: string };
+  // Valor por defecto que sale de las preferencias (la edición elegida); a
+  // diferencia de `fijo`, se puede cambiar.
+  predeterminado?: { valor: string; etiqueta: string };
 };
 
 export type Modulo = {

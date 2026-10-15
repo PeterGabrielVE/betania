@@ -14,7 +14,10 @@ from rest_framework import filters, routers, serializers, status, viewsets
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
+from django.conf import settings
+
 from ..acceso import ambito_fijo
+from .sesion import _preferencias_json
 from .modulos import AYUDAS, ETIQUETAS, MODULOS, POR_MODELO
 from .permisos import PermisosModelo, ve_sensibles
 
@@ -214,6 +217,7 @@ def esquema(request):
     """Módulos que el usuario puede ver, con sus campos, columnas y permisos."""
     user = request.user
     sensibles = ve_sensibles(request)
+    vista = _preferencias_json(user)["moneda_vista"]
     modulos = []
     for m in MODULOS:
         if not user.has_perm(m.permiso("view")):
@@ -228,13 +232,18 @@ def esquema(request):
                 info["fijo"] = fijos[info["nombre"]]
             return info
 
+        lista_desc = [_describir(m, n) for n in lista]
+        if vista != settings.MONEDA:
+            for columna in lista_desc:
+                if columna["nombre"] == "monto_base":
+                    columna["etiqueta"] = f"Equivalente en {vista}"
         modulos.append({
             "slug": m.slug,
             "titulo": m.titulo,
             "singular": m.singular,
             "grupo": m.grupo,
             "campos": [con_fijo(_describir(m, n)) for n in campos],
-            "lista": [_describir(m, n) for n in lista],
+            "lista": lista_desc,
             "filtros": [con_fijo(_filtro(m, n)) for n in m.filtros],
             "buscable": bool(m.buscar),
             "puede_agregar": user.has_perm(m.permiso("add")),

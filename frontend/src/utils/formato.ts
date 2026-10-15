@@ -1,13 +1,22 @@
 // Moneda y formato regional: los fija el servidor (MONEDA y REGION en .env) y
 // llegan con la sesión. Ver AuthContext.
 let region: string;
-let monedaBase: string;
+// La moneda en que el usuario ve los montos y el factor para pasar a ella un
+// monto en la moneda base (ver Preferencias).
+let monedaVista: string;
+let factorVista = 1;
 let formatoFecha: Intl.DateTimeFormat;
 const formatosDinero = new Map<string, Intl.NumberFormat>();
 
-export function configurarFormato(nuevaRegion: string, moneda: string) {
+export function configurarFormato(
+  nuevaRegion: string,
+  moneda: string,
+  vista = moneda,
+  factor = 1,
+) {
   region = nuevaRegion;
-  monedaBase = moneda;
+  monedaVista = vista;
+  factorVista = factor;
   formatosDinero.clear();
   formatoFecha = new Intl.DateTimeFormat(region, {
     day: "numeric",
@@ -26,7 +35,14 @@ export function fecha(valor: string | null): string {
 }
 
 // Sin `moneda`, el monto está en la moneda base (cuotas, totales, equivalentes).
-export function dinero(valor: number | null, moneda = monedaBase): string {
+// Sin `moneda`, el monto está en la moneda base (cuotas, totales,
+// equivalentes) y se muestra en la que eligió el usuario. Con `moneda`, se
+// muestra tal cual (el monto de un pago en la moneda en que se hizo).
+export function dinero(valor: number | null, moneda?: string): string {
+  if (moneda === undefined) {
+    moneda = monedaVista;
+    valor = valor === null ? null : valor * factorVista;
+  }
   let formato = formatosDinero.get(moneda);
   if (!formato) {
     formato = new Intl.NumberFormat(region, {

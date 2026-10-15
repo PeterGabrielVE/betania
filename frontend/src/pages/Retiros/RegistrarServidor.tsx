@@ -45,9 +45,14 @@ export default function RegistrarServidor() {
   const puede = (slug: string) =>
     !!modulos.find((m) => m.slug === slug)?.puede_agregar;
   const personas = modulos.find((m) => m.slug === "personas");
-  const retiroInicial = (
-    useLocation().state as { retiro?: RetiroElegido } | null
-  )?.retiro;
+  // Desde el panel de un retiro viene ese; si no, la edición preferida.
+  const desdePanel = (useLocation().state as { retiro?: RetiroElegido } | null)
+    ?.retiro;
+  const { sesion } = useAuth();
+  const retiroInicial =
+    desdePanel ??
+    (sesion?.autenticado ? sesion.preferencias.retiro : null) ??
+    undefined;
 
   const sensibles = !!personas?.campos.some(
     (c) => c.nombre === "datos_sensibles",

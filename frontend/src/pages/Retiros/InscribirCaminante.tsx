@@ -45,9 +45,14 @@ export default function InscribirCaminante() {
   const personas = modulos.find((m) => m.slug === "personas");
   const inscripciones = modulos.find((m) => m.slug === "inscripciones");
   // Al llegar desde el panel de un retiro, ese retiro ya viene elegido.
-  const retiroInicial = (
-    useLocation().state as { retiro?: RetiroElegido } | null
-  )?.retiro;
+  // Desde el panel de un retiro viene ese; si no, la edición preferida.
+  const desdePanel = (useLocation().state as { retiro?: RetiroElegido } | null)
+    ?.retiro;
+  const { sesion } = useAuth();
+  const retiroInicial =
+    desdePanel ??
+    (sesion?.autenticado ? sesion.preferencias.retiro : null) ??
+    undefined;
 
   // Los datos confidenciales solo se piden a quien puede verlos (la API los
   // descarta para los demás).

@@ -241,9 +241,16 @@ function Listado({ modulo }: { modulo: Modulo }) {
   const [consulta, setConsulta] = useState({ busqueda: "", pagina: 1 });
   const [porPagina, setPorPagina] = useState(porPaginaGuardado);
   // Filtros activos: campo -> valor (y su texto, para las relaciones).
+  // Empieza con la edición preferida en el filtro "Retiro" (se puede quitar).
   const [filtros, setFiltros] = useState<
     Record<string, { valor: string; etiqueta: string }>
-  >({});
+  >(() =>
+    Object.fromEntries(
+      modulo.filtros
+        .filter((f) => f.predeterminado)
+        .map((f) => [f.nombre, f.predeterminado!]),
+    ),
+  );
   const [version, setVersion] = useState(0); // se incrementa para recargar
   const [resultado, setResultado] = useState<{
     clave: string;

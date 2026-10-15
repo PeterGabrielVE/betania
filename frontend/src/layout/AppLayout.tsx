@@ -1,3 +1,4 @@
+import { useAuth } from "@/context/AuthContext";
 import { SidebarProvider, useSidebar } from "@/context/SidebarContext";
 import { cn } from "@/utils";
 import { Outlet } from "react-router";
@@ -7,6 +8,12 @@ import Backdrop from "./Backdrop";
 
 const LayoutContent: React.FC = () => {
   const { isExpanded, isHovered, isMobileOpen } = useSidebar();
+  const { sesion } = useAuth();
+  // Al cambiar la edición o la moneda preferidas, la página se vuelve a
+  // abrir con ellas (datos, filtros y formularios por defecto).
+  const preferencias = sesion?.autenticado
+    ? `${sesion.preferencias.retiro?.id ?? ""}-${sesion.preferencias.moneda_vista}`
+    : "";
 
   return (
     <div className="min-h-screen xl:flex">
@@ -24,7 +31,7 @@ const LayoutContent: React.FC = () => {
       >
         <AppHeader />
         <main className="mx-auto max-w-(--breakpoint-2xl) p-4 md:p-6">
-          <Outlet />
+          <Outlet key={preferencias} />
         </main>
       </div>
     </div>

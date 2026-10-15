@@ -152,6 +152,18 @@ Lo que paga un servidor se registra en **Pagos** con su nombre en *Persona*
 servidor** del retiro. Para la cuota de un caminante basta elegir su nombre: el
 pago se liga solo a su inscripción.
 
+## Preferencias de cada usuario
+
+En el encabezado cada usuario elige la **edición** (el retiro) con la que
+trabaja y la **moneda** en que ve los montos. Se guardan en el servidor para
+ese usuario (modelo `Preferencias`, `PATCH /api/auth/preferencias/`), así que lo
+siguen en cualquier equipo. La edición elegida va por defecto en el tablero,
+en los formularios de caminante y servidor, en el campo "Retiro" al crear y en
+el filtro "Retiro" de los listados (que se puede quitar). Los montos se guardan
+siempre en la moneda base (`MONEDA`) y solo se *muestran* convertidos con la
+tasa BCV del día; un pago se sigue viendo en la moneda en que se hizo. Sin
+tasa del BCV, se muestran en la moneda base y el selector lo avisa.
+
 ## Tablero (página de inicio)
 
 El inicio muestra el tablero de un retiro: por omisión el próximo (o el que está
