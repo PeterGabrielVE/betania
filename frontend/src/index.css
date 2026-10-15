@@ -1129,19 +1129,11 @@ pre[class*="language-"].line-numbers {
 }
 
 /* Gráficas del tablero (validadas con el validador de paleta de dataviz):
-   - serie: un solo tono para magnitudes (barras por área, recaudación).
-   - etapa-1..4: rampa ordinal de un tono, de menos a más comprometido
-     (lista de espera → solicitada → aceptada → confirmada).
-   - bueno/aviso/critico: estado de pago; siempre van con etiqueta y cifra. */
+   - serie: un solo tono para magnitudes (barras por área, recaudación,
+     anillo de confirmados).
+   - pista: el fondo de medidores y anillos. */
 :root {
   --viz-serie: #2a78d6;
-  --viz-etapa-1: #86b6ef;
-  --viz-etapa-2: #5598e7;
-  --viz-etapa-3: #2a78d6;
-  --viz-etapa-4: #184f95;
-  --viz-bueno: #0ca30c;
-  --viz-aviso: #fab219;
-  --viz-critico: #d03b3b;
   --viz-pista: #eef0f3;
 }
 .dark {

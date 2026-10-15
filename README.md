@@ -21,6 +21,22 @@ duplican nada. Después aplica las
 políticas de RLS, recopila los estáticos y, la primera vez, crea un
 superusuario.
 
+Para ver el sistema con datos, carga la demo:
+
+```bash
+docker compose exec web python manage.py sembrar_demo            # la crea
+docker compose exec web python manage.py sembrar_demo --borrar   # la rehace desde cero
+```
+
+Crea la parroquia "San José (demo)" con tres retiros (Emaús hombres #12 con
+inscripciones abiertas, el #11 ya finalizado y Emaús mujeres #5 en planeación),
+24 caminantes con datos de salud y contactos, 15 servidores con áreas, turnos y
+camisas, pagos en dólares y bolívares, gastos, charlas y tareas. También crea
+tres usuarios para entrar con cada rol, todos con la clave `demo-betania-123`:
+`demo.coordinador` (coordinador del retiro), `demo.logistica` (coordinador de
+logística) y `demo.tesoreria` (tesorería de la parroquia). `--borrar` solo
+toca la parroquia de la demo y esas cuentas, nunca otros datos.
+
 Cuando veas que arrancó, abre:
 
 - **http://localhost:8000/** — el panel (React). Entra con `admin` / `admin1234`
@@ -88,6 +104,21 @@ No se registran duplicados: el documento no se repite, tampoco una persona sin
 documento con el mismo nombre y fecha de nacimiento que otra, nadie se inscribe
 dos veces en un retiro ni está dos veces en su equipo, y quien es caminante de
 un retiro no puede ser servidor de ese mismo retiro (ni al revés).
+
+**Asistencia.** Un caminante (inscripción) se confirma o se cancela; un
+servidor tiene su propio estado: por confirmar, confirmado o canceló. Al
+cancelar se puede anotar el motivo, y se puede reactivar. Se hace sin abrir
+formularios: botones Confirmar / Cancelar / Reactivar en el panel del retiro
+y en la ficha de la persona, y casillas en Caminantes y Servidores para
+confirmar o cancelar a varios a la vez. Quien cancela queda como historial
+(con sus áreas y pagos) pero no cuenta en el cupo, en el equipo, en la
+logística ni en lo que falta cobrar.
+
+**Editar** una persona, un caminante o un servidor usa el mismo formulario por
+pasos con que se registró (no el formulario genérico): `/personas/<id>/editar`,
+`/inscribir?inscripcion=<id>` y `/registrar-servidor?participacion=<id>`, con
+`?volver=<ruta>` para regresar al guardar. A ellos llevan el lápiz de los
+listados, la ficha y el panel del retiro.
 
 Los servidores se registran con su propio formulario por pasos
 (`/registrar-servidor`: Identificación, Datos personales, Servicio y Confirmar),

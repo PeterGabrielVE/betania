@@ -13,6 +13,7 @@ export default function Asistente({
   guardando,
   textoGuardar,
   onEmpezarDeNuevo,
+  textoReiniciar = "Empezar de nuevo",
   children,
 }: {
   pasos: Paso[];
@@ -21,6 +22,7 @@ export default function Asistente({
   guardando: boolean;
   textoGuardar: string;
   onEmpezarDeNuevo: () => void;
+  textoReiniciar?: string; // al editar: "Cancelar"
   children: React.ReactNode; // el contenido del paso actual
 }) {
   const { actual, alcanzado, conErrores, tarjeta, ultimo, ir, irA } = asistente;
@@ -59,7 +61,7 @@ export default function Asistente({
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <button type="button" className={claseBoton} onClick={onEmpezarDeNuevo}>
-          Empezar de nuevo
+          {textoReiniciar}
         </button>
         <div className="flex gap-3">
           <button

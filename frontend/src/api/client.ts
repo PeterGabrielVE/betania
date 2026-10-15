@@ -199,6 +199,7 @@ export type PanelRetiro = {
       telefono: string;
       padrino: string;
       estado: string;
+      motivo_cancelacion: string;
       // Solo para roles con acceso a datos confidenciales:
       ficha?: FichaCaminante;
       // Solo con acceso a finanzas:
@@ -237,15 +238,20 @@ export type PanelRetiro = {
       persona_id: string;
       telefono: string;
       tipo: string;
+      estado: string; // por_confirmar | confirmado | cancelado
+      estado_display: string;
+      motivo_cancelacion: string;
       areas: string;
       duerme_en_casa: boolean | null; // null: no lo indicó
       turnos: string; // "Vie: noche · Sáb: todo el día"
       camisa: string; // "Azul de servicio · talla M"
-      pagado: number;
-      saldo: number;
-      estado_pago: string;
+      // Solo con acceso a finanzas:
+      pagado?: number;
+      saldo?: number;
+      estado_pago?: string;
     }[];
-    por_cobrar: number;
+    por_estado: { estado: string; etiqueta: string; total: number }[];
+    por_cobrar?: number;
   } | null;
   charlas:
     { id: string; orden: number; tema: string; expositor: string }[] | null;
@@ -289,12 +295,24 @@ export type Tablero = {
     pagos?: Conteo[];
     por_cobrar?: number;
     recaudado?: number;
+    // Con acceso a finanzas: de los confirmados, cuántos pagaron completo.
+    confirmados_pagados?: number;
+    // Con acceso confidencial: a cuántos inscritos atender de forma especial.
+    atencion?: {
+      activos: number;
+      salud: number;
+      comida: number;
+      requerimientos: number;
+    };
   } | null;
   servidores: {
     total: number;
     coordinadores: number;
     sin_area: number;
     por_area: { area: string; total: number }[];
+    confirmados?: number;
+    por_confirmar?: number;
+    cancelados?: number;
     pagos?: Conteo[];
     por_cobrar?: number;
     recaudado?: number;
@@ -397,6 +415,7 @@ export type FichaPersona = {
         retiro: RetiroCorto;
         estado: string;
         estado_display: string;
+        motivo_cancelacion: string;
         padrino: string;
         padrino_id: string | null;
         salud?: Record<string, unknown>;
@@ -409,6 +428,9 @@ export type FichaPersona = {
         retiro: RetiroCorto;
         tipo: string;
         tipo_display: string;
+        estado: string;
+        estado_display: string;
+        motivo_cancelacion: string;
         duerme_en_casa: boolean | null;
         turnos: string;
         camisa: string;

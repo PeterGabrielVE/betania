@@ -501,6 +501,15 @@ class Tarea(models.Model):
 # --------------------------------------------------------------------------- #
 # Inscripciones (embudo de candidatos) y participación (rol confirmado)
 # --------------------------------------------------------------------------- #
+def _antes(obj, *campos):
+    """Cómo estaba guardado (None si es nuevo): para revisar las reglas de
+    duplicados solo cuando cambia algo que las afecta, y no frenar cualquier
+    otro cambio (p. ej. el estado) por datos viejos en conflicto."""
+    if obj._state.adding or not obj.pk:
+        return None
+    return type(obj).objects.filter(pk=obj.pk).values(*campos).first()
+
+
 class Inscripcion(models.Model):
     class Estado(models.TextChoices):
         SOLICITADA = "solicitada", "Solicitada"
@@ -516,6 +525,9 @@ class Inscripcion(models.Model):
         Persona, on_delete=models.SET_NULL, null=True, blank=True, related_name="apadrinados"
     )
     estado = models.CharField(max_length=20, choices=Estado.choices, default=Estado.SOLICITADA)
+    # Por qué canceló (solo con estado "cancelada").
+    motivo_cancelacion = models.CharField("motivo de la cancelación", max_length=200,
+                                          blank=True)
     # Confidenciales — ocultos al equipo general (ver vista en rls_policies.sql):
     salud_alimentacion = models.JSONField(default=dict, blank=True)
     contacto_emergencia = models.JSONField(default=dict, blank=True)
@@ -539,16 +551,32 @@ class Inscripcion(models.Model):
             raise ValidationError({"padrino": "Una persona no puede invitarse a sí misma."})
         if not (self.persona_id and self.retiro_id):
             return
-        if (Inscripcion.objects.exclude(pk=self.pk)
-                .filter(retiro_id=self.retiro_id, persona_id=self.persona_id).exists()):
+        antes = _antes(self, "persona_id", "retiro_id", "estado")
+        otra_persona = (antes is None or (antes["persona_id"], antes["retiro_id"])
+                        != (self.persona_id, self.retiro_id))
+        if otra_persona and (
+            Inscripcion.objects.exclude(pk=self.pk)
+            .filter(retiro_id=self.retiro_id, persona_id=self.persona_id).exists()
+        ):
             raise ValidationError({"persona": "Ya está inscrita en este retiro."})
+        # Que no esté también en el equipo: al inscribir, al cambiar de persona o
+        # de retiro y al reactivar a quien había cancelado.
+        vuelve = antes is not None and antes["estado"] == self.Estado.CANCELADA
+        if self.estado == self.Estado.CANCELADA or not (otra_persona or vuelve):
+            return
         equipo = (Participacion.objects
                   .filter(retiro_id=self.retiro_id, persona_id=self.persona_id)
-                  .exclude(tipo=Participacion.Tipo.CAMINANTE).first())
+                  .exclude(tipo=Participacion.Tipo.CAMINANTE)
+                  .exclude(estado=Participacion.Estado.CANCELADO).first())
         if equipo:
             raise ValidationError({"persona": (
                 f"Ya está en el equipo de este retiro como {equipo.get_tipo_display().lower()}."
             )})
+
+    def save(self, *args, **kwargs):
+        if self.estado != self.Estado.CANCELADA:
+            self.motivo_cancelacion = ""
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.persona} → {self.retiro} [{self.get_estado_display()}]"
@@ -587,10 +615,21 @@ class Participacion(models.Model):
         SERVIDOR = "servidor", "Servidor"
         COORDINADOR = "coordinador", "Coordinador general"
 
+    class Estado(models.TextChoices):
+        """Si va a servir. Quien cancela queda como historial (áreas, pagos),
+        pero no cuenta en el equipo del retiro."""
+        POR_CONFIRMAR = "por_confirmar", "Por confirmar"
+        CONFIRMADO = "confirmado", "Confirmado"
+        CANCELADO = "cancelado", "Canceló"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     persona = models.ForeignKey(Persona, on_delete=models.PROTECT, related_name="participaciones")
     retiro = models.ForeignKey(Retiro, on_delete=models.CASCADE, related_name="participaciones")
     tipo = models.CharField(max_length=20, choices=Tipo.choices)
+    estado = models.CharField(max_length=20, choices=Estado.choices,
+                              default=Estado.POR_CONFIRMAR)
+    motivo_cancelacion = models.CharField("motivo de la cancelación", max_length=200,
+                                          blank=True)
     # Logística del servidor para este retiro (vacío: no lo indicó).
     duerme_en_casa = models.BooleanField("dormirá en la casa de retiro", null=True,
                                          blank=True)
@@ -640,19 +679,34 @@ class Participacion(models.Model):
     def clean(self):
         if not (self.persona_id and self.retiro_id):
             return
+        antes = _antes(self, "persona_id", "retiro_id", "estado", "tipo")
+        otra_persona = (antes is None or (antes["persona_id"], antes["retiro_id"])
+                        != (self.persona_id, self.retiro_id))
         otra = (Participacion.objects.exclude(pk=self.pk)
-                .filter(retiro_id=self.retiro_id, persona_id=self.persona_id).first())
+                .filter(retiro_id=self.retiro_id, persona_id=self.persona_id).first()
+                if otra_persona else None)
         if otra:
             raise ValidationError({"persona": (
                 f"Ya está en este retiro como {otra.get_tipo_display().lower()}."
             )})
         if self.camisas_pedidas and not self.tallas:
             raise ValidationError({"tallas_camisa": "Indica la talla de la camisa."})
-        if self.tipo != self.Tipo.CAMINANTE and (
+        # Que no sea también caminante: al registrarlo, al cambiar de persona o
+        # de retiro, al reactivarlo o al pasarlo de caminante a servidor.
+        revisar = otra_persona or (
+            antes["estado"] == self.Estado.CANCELADO
+            or antes["tipo"] == self.Tipo.CAMINANTE
+        )
+        if revisar and self.estado != self.Estado.CANCELADO and self.tipo != self.Tipo.CAMINANTE and (
             Inscripcion.objects.filter(retiro_id=self.retiro_id, persona_id=self.persona_id)
             .exclude(estado=Inscripcion.Estado.CANCELADA).exists()
         ):
             raise ValidationError({"persona": "Está inscrita como caminante en este retiro."})
+
+    def save(self, *args, **kwargs):
+        if self.estado != self.Estado.CANCELADO:
+            self.motivo_cancelacion = ""
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.persona} · {self.get_tipo_display()} · {self.retiro}"

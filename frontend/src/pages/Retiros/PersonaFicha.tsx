@@ -7,6 +7,7 @@ import {
   claseTarjeta,
 } from "@/components/modulos/estilos";
 import EditorAreas from "@/components/personas/EditorAreas";
+import AccionesAsistencia from "@/components/retiros/AccionesAsistencia";
 import Badge from "@/components/ui/badge/Badge";
 import { useAuth } from "@/context/AuthContext";
 import { useDatosVivos } from "@/hooks/useDatosVivos";
@@ -172,7 +173,7 @@ export default function PersonaFicha() {
           <div className="flex w-full flex-wrap gap-2 sm:w-auto">
             {puede("personas", "puede_cambiar") && (
               <Link
-                to={`/personas?editar=${persona.id}&volver=${volver}`}
+                to={`/personas/${persona.id}/editar?volver=${volver}`}
                 className={claseBoton}
               >
                 Editar datos
@@ -223,10 +224,24 @@ export default function PersonaFicha() {
                       >
                         {c.retiro.etiqueta}
                       </Link>
-                      <Badge size="sm" color={colorEstado(c.estado)}>
-                        {c.estado_display}
-                      </Badge>
+                      <span className="flex flex-wrap items-center gap-1">
+                        <Badge size="sm" color={colorEstado(c.estado)}>
+                          {c.estado_display}
+                        </Badge>
+                        <AccionesAsistencia
+                          quien="caminante"
+                          id={c.id}
+                          nombre={persona.nombre}
+                          estado={c.estado}
+                          onCambio={actualizar}
+                        />
+                      </span>
                     </div>
+                    {c.motivo_cancelacion && (
+                      <p className="text-theme-xs text-gray-500 dark:text-gray-400">
+                        Motivo: {c.motivo_cancelacion}
+                      </p>
+                    )}
                     <p className="text-theme-xs text-gray-500 dark:text-gray-400">
                       {fecha(c.retiro.fecha_inicio)}
                       {c.padrino_id && (
@@ -258,7 +273,7 @@ export default function PersonaFicha() {
                     )}
                     {puede("inscripciones", "puede_cambiar") && (
                       <Link
-                        to={`/inscripciones?editar=${c.id}&volver=${volver}`}
+                        to={`/inscribir?inscripcion=${c.id}&volver=${volver}`}
                         className={`text-theme-xs ${claseEnlace}`}
                       >
                         Editar inscripción
@@ -291,10 +306,27 @@ export default function PersonaFicha() {
                       >
                         {s.retiro.etiqueta}
                       </Link>
-                      <Badge size="sm" color="primary">
-                        {s.tipo_display}
-                      </Badge>
+                      <span className="flex flex-wrap items-center gap-1">
+                        <Badge size="sm" color="primary">
+                          {s.tipo_display}
+                        </Badge>
+                        <Badge size="sm" color={colorEstado(s.estado)}>
+                          {s.estado_display}
+                        </Badge>
+                        <AccionesAsistencia
+                          quien="servidor"
+                          id={s.id}
+                          nombre={persona.nombre}
+                          estado={s.estado}
+                          onCambio={actualizar}
+                        />
+                      </span>
                     </div>
+                    {s.motivo_cancelacion && (
+                      <p className="text-theme-xs text-gray-500 dark:text-gray-400">
+                        Motivo: {s.motivo_cancelacion}
+                      </p>
+                    )}
                     {editando === s.id ? (
                       <EditorAreas
                         servicio={s}
@@ -341,6 +373,14 @@ export default function PersonaFicha() {
                           </p>
                         )}
                         <Pago fila={s} />
+                        {puede("participaciones", "puede_cambiar") && (
+                          <Link
+                            to={`/registrar-servidor?participacion=${s.id}&volver=${volver}`}
+                            className={`me-4 text-theme-xs ${claseEnlace}`}
+                          >
+                            Editar
+                          </Link>
+                        )}
                         {puede("servicios", "puede_agregar") && (
                           <button
                             type="button"

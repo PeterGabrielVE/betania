@@ -7,6 +7,7 @@ import {
   crearEsquema,
   cuerpoInscripcion,
   cuerpoPersona,
+  datosDeInscripcion,
   datosDePersona,
   pasosPara,
   valoresIniciales,
@@ -31,22 +32,26 @@ import { useAuth } from "@/context/AuthContext";
 import { CheckCircleIcon } from "@/icons";
 import NotFound from "@/pages/OtherPage/NotFound";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FormProvider, useForm, type FieldErrors } from "react-hook-form";
-import { Link, useLocation } from "react-router";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 
 type RetiroElegido = { id: string; etiqueta: string };
 
 // El formulario de inscripción para caminantes (el de papel), paso a paso:
 // cada paso se valida (zod) antes de seguir; al final se revisa todo y se
-// guardan la persona y su inscripción al retiro.
+// guardan la persona y su inscripción al retiro. Con ?inscripcion=<id> edita
+// esa inscripción (y los datos de su persona); al guardar vuelve a ?volver=.
 export default function InscribirCaminante() {
   const { modulos } = useAuth();
   const personas = modulos.find((m) => m.slug === "personas");
   const inscripciones = modulos.find((m) => m.slug === "inscripciones");
-  // Al llegar desde el panel de un retiro, ese retiro ya viene elegido.
-  // Desde el panel de un retiro viene ese; si no, la edición preferida.
+  const navigate = useNavigate();
+  const [parametros] = useSearchParams();
+  const editando = parametros.get("inscripcion");
+  const volver = parametros.get("volver");
   // Desde el panel de un retiro llega el retiro; desde la ficha, la persona.
+  // Si no, la edición preferida.
   const estado = useLocation().state as {
     retiro?: RetiroElegido;
     persona?: string;
@@ -98,17 +103,57 @@ export default function InscribirCaminante() {
     etiqueta: string;
     retiro: string;
   } | null>(null);
+  // Editando: la inscripción tal como está guardada (null mientras llega).
+  const [original, setOriginal] = useState<Registro | null>(null);
 
-  if (!personas?.puede_agregar || !inscripciones?.puede_agregar) {
-    return <NotFound />;
+  useEffect(() => {
+    if (!editando) return;
+    api<Registro>(`/inscripciones/${editando}/`)
+      .then(async (ins) => {
+        await registro.elegirPersona(ins.persona as string);
+        for (const [campo, valor] of Object.entries(datosDeInscripcion(ins))) {
+          formulario.setValue(campo as keyof Valores, valor as never);
+        }
+        setEtiquetas({
+          retiro: ins.retiro_etiqueta as string,
+          padrino: (ins.padrino_etiqueta as string) ?? "",
+        });
+        registro.setAviso("");
+        setOriginal(ins);
+      })
+      .catch((e: Error) => registro.setError(e.message));
+    // Solo al abrir la pantalla.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editando]);
+
+  const puede = editando
+    ? personas?.puede_cambiar && inscripciones?.puede_cambiar
+    : personas?.puede_agregar && inscripciones?.puede_agregar;
+  if (!puede) return <NotFound />;
+  if (editando && !original) {
+    return (
+      <p className="text-sm text-gray-500 dark:text-gray-400">
+        {registro.error || "Cargando…"}
+      </p>
+    );
   }
+
+  // Al terminar de editar, de vuelta a donde se vino (o a la ficha).
+  const salir = (persona?: string) =>
+    navigate(
+      volver?.startsWith("/")
+        ? volver
+        : persona
+          ? `/personas/${persona}`
+          : "/inscripciones",
+    );
 
   const { persona } = registro;
 
   // Del primer paso se sigue solo si la persona no está ya en ese retiro.
   const siguiente = async () => {
     if (!(await asistente.validarActual())) return;
-    if (asistente.actual === 0) {
+    if (asistente.actual === 0 && !editando) {
       const encontrada = await registro.buscarPorDocumento(pasos[0].campos);
       if (encontrada) {
         const conflicto = await conflictoEnRetiro(
@@ -163,18 +208,27 @@ export default function InscribirCaminante() {
       return;
     }
     try {
-      // 2. Su inscripción al retiro.
-      const inscripcion = await api<Registro>("/inscripciones/", {
-        method: "POST",
-        body: cuerpoInscripcion(v, guardada.id, sensibles),
-      });
+      // 2. Su inscripción al retiro (o los cambios, si se edita).
+      const inscripcion = await api<Registro>(
+        editando ? `/inscripciones/${editando}/` : "/inscripciones/",
+        {
+          method: editando ? "PATCH" : "POST",
+          body: cuerpoInscripcion(v, guardada.id, sensibles),
+        },
+      );
+      if (editando) {
+        salir(guardada.id);
+        return;
+      }
       setHecho({ etiqueta: inscripcion.etiqueta, retiro: v.retiro });
       empezarDeNuevo(v.retiro);
     } catch (err) {
       errorDeApi(
         err,
         campoDeInscripcion,
-        "Los datos de la persona se guardaron, pero no la inscripción: ",
+        editando
+          ? "Los datos de la persona se guardaron, pero no los cambios de la inscripción: "
+          : "Los datos de la persona se guardaron, pero no la inscripción: ",
       );
     }
   };
@@ -199,7 +253,10 @@ export default function InscribirCaminante() {
       <PasoIdentificacion
         persona={persona}
         onPersona={registro.elegirPersona}
-        onDocumento={() => registro.buscarPorDocumento(pasos[0].campos)}
+        onDocumento={() =>
+          // Editando no se busca a otra persona: se corrige el documento.
+          !editando && registro.buscarPorDocumento(pasos[0].campos)
+        }
         avisoDocumento={registro.aviso}
         etiquetas={etiquetas}
         onEtiqueta={(nombre, etiqueta) =>
@@ -207,6 +264,7 @@ export default function InscribirCaminante() {
         }
         onRetiro={(id) => id && registro.usarParroquiaDe(id)}
         estados={estados}
+        edicion={!!editando}
       />
     ),
     personales: (
@@ -228,10 +286,16 @@ export default function InscribirCaminante() {
   return (
     <>
       <PageMeta
-        title="Inscribir caminante | Betania"
+        title={`${editando ? "Editar inscripción" : "Inscribir caminante"} | Betania`}
         description="Formulario de inscripción para caminantes, paso a paso"
       />
-      <PageBreadcrumb pageTitle="Inscribir caminante" />
+      <PageBreadcrumb
+        pageTitle={
+          editando
+            ? `Editar inscripción · ${registro.persona?.nombre ?? ""}`
+            : "Inscribir caminante"
+        }
+      />
 
       {hecho && (
         <div className="mb-6 flex flex-wrap items-center gap-4 rounded-2xl border border-success-500/30 bg-success-50 px-5 py-4 dark:bg-success-500/15">
@@ -268,8 +332,12 @@ export default function InscribirCaminante() {
             asistente={asistente}
             general={registro.error}
             guardando={formState.isSubmitting}
-            textoGuardar="Registrar inscripción"
+            textoGuardar={
+              editando ? "Guardar cambios" : "Registrar inscripción"
+            }
+            textoReiniciar={editando ? "Cancelar" : undefined}
             onEmpezarDeNuevo={() => {
+              if (editando) return salir(original?.persona as string);
               setHecho(null);
               empezarDeNuevo();
             }}

@@ -22,8 +22,12 @@ echo ">> Archivos estáticos..."
 python manage.py collectstatic --noinput
 
 if [ "${DJANGO_CREATE_SUPERUSER:-0}" = "1" ]; then
-  echo ">> Creando superusuario (si no existe)..."
-  python manage.py createsuperuser --noinput || true
+  if python manage.py shell -v0 -c "import os, sys; from django.contrib.auth import get_user_model; sys.exit(get_user_model().objects.filter(username=os.environ.get('DJANGO_SUPERUSER_USERNAME', '')).exists())"; then
+    echo ">> Creando superusuario..."
+    python manage.py createsuperuser --noinput || true
+  else
+    echo ">> El superusuario ya existe."
+  fi
 fi
 
 echo ">> Arrancando: $*"

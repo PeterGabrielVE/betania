@@ -352,6 +352,10 @@ class PanelRetiroTests(Base):
         )
         self.assertEqual({p["valor"]: p["total"] for p in caminantes["pagos"]},
                          {"pagado": 1, "parcial": 0, "pendiente": 1})
+        # Ana (confirmada) pagó su cuota completa.
+        self.assertEqual(caminantes["confirmados_pagados"], 1)
+        self.assertEqual(caminantes["atencion"],
+                         {"activos": 2, "salud": 0, "comida": 0, "requerimientos": 0})
         self.assertEqual(tablero["servidores"]["por_area"], [{"area": "Cocina", "total": 1}])
 
         tareas = tablero["tareas"]
@@ -636,6 +640,9 @@ class NombresYDuplicadosTests(Base):
         self.assertEqual(self.post("/api/servicios/", datos).status_code, 201)
         self.assertEqual(self.post("/api/servicios/", datos).json()["area"],
                          ["Ya sirve en esa área."])
+        # Las áreas de un servidor, para editarlo.
+        r = self.client.get(f"/api/servicios/?participacion={luis.pk}").json()
+        self.assertEqual([x["area_etiqueta"] for x in r["results"]], ["Cocina"])
 
 
 class PreferenciasTests(Base):
@@ -836,6 +843,102 @@ class DisponibilidadServidorTests(Base):
                          {"M": 1, "XL": 1})
 
 
+class AsistenciaTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.retiro.cuota_servidor = 30
+        self.retiro.save()
+        cocina = AreaServicio.objects.create(nombre="Cocina")
+        self.ana = Participacion.objects.create(
+            retiro=self.retiro, persona=self.persona("Ana Pérez"), tipo="servidor",
+            duerme_en_casa=True, camisas={"azul": True}, tallas_camisa={"M": True})
+        self.luis = Participacion.objects.create(
+            retiro=self.retiro, persona=self.persona("Luis Gómez"), tipo="servidor",
+            duerme_en_casa=True)
+        for p in (self.ana, self.luis):
+            AsignacionServicio.objects.create(participacion=p, area=cocina)
+        self.panel = f"/api/retiros/{self.retiro.pk}/panel/"
+
+    def cambiar(self, ruta, **datos):
+        return self.client.patch(ruta, datos, content_type="application/json")
+
+    def test_un_servidor_empieza_por_confirmar(self):
+        self.assertEqual(self.ana.estado, Participacion.Estado.POR_CONFIRMAR)
+
+    def test_confirmar_y_cancelar_un_servidor(self):
+        r = self.cambiar(f"/api/participaciones/{self.ana.pk}/", estado="confirmado")
+        self.assertEqual(r.json()["estado"], "confirmado")
+        r = self.cambiar(f"/api/participaciones/{self.luis.pk}/", estado="cancelado",
+                         motivo_cancelacion="Viaje de trabajo")
+        self.assertEqual(r.json()["motivo_cancelacion"], "Viaje de trabajo")
+
+        panel = self.client.get(self.panel).json()
+        # Quien canceló sigue en la lista (historial), pero no en el equipo activo.
+        filas = {f["persona"]: f for f in panel["servidores"]["filas"]}
+        self.assertEqual(filas["Luis Gómez"]["estado_display"], "Canceló")
+        self.assertEqual(filas["Luis Gómez"]["saldo"], 0)  # ya no debe la cuota
+        self.assertEqual(filas["Ana Pérez"]["saldo"], 30)
+        self.assertEqual(panel["equipo"]["total"], 1)
+        self.assertEqual(panel["equipo"]["areas"][0]["personas"],
+                         [{"nombre": "Ana Pérez", "es_coordinador": False}])
+        self.assertEqual((panel["logistica_equipo"]["total"],
+                          panel["logistica_equipo"]["duermen"]), (1, 1))
+        self.assertEqual(panel["servidores"]["por_cobrar"], 30)
+
+        tablero = self.client.get("/api/resumen/").json()["tablero"]["servidores"]
+        self.assertEqual((tablero["total"], tablero["confirmados"], tablero["por_confirmar"],
+                          tablero["cancelados"]), (1, 1, 0, 1))
+
+        # Al volver, el motivo se borra.
+        r = self.cambiar(f"/api/participaciones/{self.luis.pk}/", estado="confirmado")
+        self.assertEqual(r.json()["motivo_cancelacion"], "")
+
+    def test_cancelar_un_caminante_con_motivo(self):
+        ins = Inscripcion.objects.create(retiro=self.retiro, persona=self.persona("Rosa Díaz"))
+        r = self.cambiar(f"/api/inscripciones/{ins.pk}/", estado="cancelada",
+                         motivo_cancelacion="Enfermedad")
+        self.assertEqual(r.json()["motivo_cancelacion"], "Enfermedad")
+        fila = self.client.get(self.panel).json()["caminantes"]["filas"][0]
+        self.assertEqual((fila["estado"], fila["motivo_cancelacion"]),
+                         ("cancelada", "Enfermedad"))
+        r = self.cambiar(f"/api/inscripciones/{ins.pk}/", estado="confirmada")
+        self.assertEqual(r.json()["motivo_cancelacion"], "")
+
+    def test_si_cancelo_como_servidor_puede_ser_caminante(self):
+        self.cambiar(f"/api/participaciones/{self.ana.pk}/", estado="cancelado")
+        r = self.post("/api/inscripciones/", {"retiro": str(self.retiro.pk),
+                                              "persona": str(self.ana.persona_id)})
+        self.assertEqual(r.status_code, 201, r.content)
+
+    def test_datos_viejos_en_conflicto_no_impiden_cambiar_el_estado(self):
+        # Caminante y servidor del mismo retiro, de antes de existir esa regla.
+        rosa = self.persona("Rosa Díaz")
+        ins = Inscripcion.objects.create(retiro=self.retiro, persona=rosa)
+        Participacion.objects.create(retiro=self.retiro, persona=rosa, tipo="servidor")
+        r = self.cambiar(f"/api/inscripciones/{ins.pk}/", estado="confirmada")
+        self.assertEqual(r.status_code, 200, r.content)
+        # El tablero lo avisa, para corregirlo.
+        alertas = {a["clave"]: a["total"]
+                   for a in self.client.get("/api/resumen/").json()["tablero"]["alertas"]}
+        self.assertEqual(alertas["caminante_y_servidor"], 1)
+        # Pero no se la puede pasar a otra persona que esté en el equipo.
+        r = self.cambiar(f"/api/inscripciones/{ins.pk}/", persona=str(self.ana.persona_id))
+        self.assertIn("Ya está en el equipo", r.json()["persona"][0])
+
+    def test_reactivar_si_la_regla_se_vuelve_a_revisar(self):
+        # Ana canceló como servidora y se inscribió como caminante: no puede
+        # volver al equipo mientras siga inscrita.
+        self.cambiar(f"/api/participaciones/{self.ana.pk}/", estado="cancelado")
+        Inscripcion.objects.create(retiro=self.retiro, persona=self.ana.persona)
+        r = self.cambiar(f"/api/participaciones/{self.ana.pk}/", estado="por_confirmar")
+        self.assertEqual(r.json()["persona"], ["Está inscrita como caminante en este retiro."])
+
+    def test_filtrar_servidores_por_estado(self):
+        self.cambiar(f"/api/participaciones/{self.ana.pk}/", estado="confirmado")
+        r = self.client.get("/api/participaciones/?estado=confirmado").json()
+        self.assertEqual([f["persona_etiqueta"] for f in r["results"]], ["Ana Pérez"])
+
+
 class ReportesTests(Base):
     def test_pdf_exige_sesion_y_permiso(self):
         ruta = f"/retiros/{self.retiro.pk}/lista.pdf"
@@ -897,3 +1000,24 @@ class ReportesTests(Base):
                           "segundo_nombre", "primer_apellido", "segundo_apellido", "telefono",
                           "email", "fecha_nacimiento", "parroquia"])
         self.assertEqual(exportado[0][10], "San José")
+
+
+class DemoTests(TestCase):
+    def test_sembrar_demo_valida_y_se_rehace_sin_duplicar(self):
+        from io import StringIO
+
+        from .models import Inscripcion, Participacion, Persona, Retiro
+        call_command("sembrar_demo", stdout=StringIO())
+        personas = Persona.objects.count()
+        call_command("sembrar_demo", stdout=StringIO())  # ya existe: no hace nada
+        self.assertEqual(Persona.objects.count(), personas)
+        call_command("sembrar_demo", "--borrar", stdout=StringIO())
+        self.assertEqual(Persona.objects.count(), personas)
+        retiro = Retiro.objects.get(edicion=12, parroquia__nombre="San José (demo)")
+        self.assertEqual(retiro.inscripciones.count(), 24)
+        self.assertEqual(retiro.participaciones.count(), 15)
+        for modelo in (Persona, Inscripcion, Participacion):
+            for objeto in modelo.objects.all():
+                objeto.full_clean()
+        self.assertTrue(User.objects.get(username="demo.logistica").check_password(
+            "demo-betania-123"))

@@ -1,0 +1,325 @@
+// Piezas del tablero sobre caminantes y servidores: el anillo de confirmados,
+// la tesorería (pago completo / abono parcial / sin abono), una ficha por
+// estado y los indicadores de atención especial.
+import type { Tablero } from "@/api/client";
+import { claseTarjeta } from "@/components/modulos/estilos";
+import { Link } from "react-router";
+
+type Caminantes = NonNullable<Tablero["caminantes"]>;
+type Conteo = { valor: string; etiqueta: string; total: number };
+
+const porcentaje = (parte: number, total: number) =>
+  total > 0 ? Math.round((parte / total) * 100) : 0;
+
+function Encabezado({ titulo, nota }: { titulo: string; nota: string }) {
+  return (
+    <div className="mb-4">
+      <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
+        {titulo}
+      </h3>
+      <p className="text-theme-xs text-gray-500 dark:text-gray-400">{nota}</p>
+    </div>
+  );
+}
+
+// Anillo con el % de caminantes que ya confirmaron su asistencia.
+export function AnilloConfirmados({ caminantes }: { caminantes: Caminantes }) {
+  const { confirmados, por_confirmar, inscritos } = caminantes;
+  const fraccion = inscritos > 0 ? confirmados / inscritos : 0;
+  const radio = 64;
+  const vuelta = 2 * Math.PI * radio;
+  return (
+    <section className={`${claseTarjeta} h-full`}>
+      <Encabezado
+        titulo="Caminantes confirmados"
+        nota="Confirmados frente a los que aún no confirman"
+      />
+      <div className="flex flex-col items-center gap-4">
+        <div className="relative size-40">
+          <svg
+            viewBox="0 0 160 160"
+            className="size-40 -rotate-90"
+            role="img"
+            aria-label={`${porcentaje(confirmados, inscritos)}% confirmados: ${confirmados} de ${inscritos}`}
+          >
+            <circle
+              cx="80"
+              cy="80"
+              r={radio}
+              fill="none"
+              strokeWidth="16"
+              className="stroke-(--viz-pista)"
+            />
+            {confirmados > 0 && (
+              <circle
+                cx="80"
+                cy="80"
+                r={radio}
+                fill="none"
+                strokeWidth="16"
+                strokeLinecap="round"
+                strokeDasharray={`${fraccion * vuelta} ${vuelta}`}
+                className="stroke-(--viz-serie) transition-all"
+              />
+            )}
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <span className="text-title-sm font-bold text-gray-800 tabular-nums dark:text-white/90">
+              {porcentaje(confirmados, inscritos)}%
+            </span>
+            <span className="text-theme-xs text-gray-500 dark:text-gray-400">
+              confirmados
+            </span>
+          </div>
+        </div>
+        <dl className="flex flex-wrap justify-center gap-x-5 gap-y-1 text-theme-sm">
+          <div className="flex items-center gap-1.5">
+            <span className="size-2.5 rounded-full bg-(--viz-serie)" />
+            <dt className="text-gray-500 dark:text-gray-400">Confirmados</dt>
+            <dd className="font-semibold text-gray-800 tabular-nums dark:text-white/90">
+              {confirmados}
+            </dd>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="size-2.5 rounded-full bg-(--viz-pista) ring-1 ring-gray-300 dark:ring-gray-600" />
+            <dt className="text-gray-500 dark:text-gray-400">Por confirmar</dt>
+            <dd className="font-semibold text-gray-800 tabular-nums dark:text-white/90">
+              {por_confirmar}
+            </dd>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <dt className="text-gray-500 dark:text-gray-400">Total</dt>
+            <dd className="font-semibold text-gray-800 tabular-nums dark:text-white/90">
+              {inscritos}
+            </dd>
+          </div>
+        </dl>
+      </div>
+    </section>
+  );
+}
+
+// Colores por estado de pago: siempre con su nombre escrito.
+const TONO_PAGO: Record<string, string> = {
+  pagado:
+    "bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-400",
+  parcial:
+    "bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-400",
+  pendiente: "bg-gray-50 text-gray-700 dark:bg-white/5 dark:text-gray-300",
+};
+const NOMBRE_PAGO: Record<string, string> = {
+  pagado: "Pago completo",
+  parcial: "Abono parcial",
+  pendiente: "Sin abono",
+};
+
+function FilaPagos({
+  titulo,
+  enlace,
+  pagos,
+}: {
+  titulo: string;
+  enlace: string;
+  pagos: Conteo[];
+}) {
+  return (
+    <div>
+      <Link
+        to={enlace}
+        className="mb-2 inline-block text-theme-xs font-semibold tracking-wide text-gray-600 uppercase hover:text-brand-500 dark:text-gray-400"
+      >
+        {titulo} →
+      </Link>
+      <ul className="grid grid-cols-3 gap-2">
+        {pagos.map((p) => (
+          <li
+            key={p.valor}
+            className={`rounded-xl px-3 py-3 text-center ${TONO_PAGO[p.valor]}`}
+          >
+            <span className="block text-xl font-bold tabular-nums">
+              {p.total}
+            </span>
+            <span className="block text-theme-xs font-medium">
+              {NOMBRE_PAGO[p.valor]}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// Cuántos caminantes y servidores pagaron completa la cuota, abonaron una
+// parte o no han abonado nada.
+export function Tesoreria({
+  retiroId,
+  caminantes,
+  servidores,
+}: {
+  retiroId: string;
+  caminantes?: Conteo[];
+  servidores?: Conteo[]; // solo si el retiro tiene cuota de servidor
+}) {
+  return (
+    <section className={`${claseTarjeta} h-full`}>
+      <Encabezado titulo="Tesorería" nota="Estado de pagos de este retiro" />
+      <div className="space-y-5">
+        {caminantes && (
+          <FilaPagos
+            titulo="Caminantes"
+            enlace={`/retiros/${retiroId}`}
+            pagos={caminantes}
+          />
+        )}
+        {servidores && (
+          <FilaPagos
+            titulo="Servidores"
+            enlace={`/retiros/${retiroId}`}
+            pagos={servidores}
+          />
+        )}
+      </div>
+    </section>
+  );
+}
+
+const TONO_ESTADO: Record<string, string> = {
+  solicitada:
+    "border-blue-light-200 bg-blue-light-50 text-blue-light-700 dark:border-blue-light-500/30 dark:bg-blue-light-500/10 dark:text-blue-light-400",
+  aceptada:
+    "border-brand-200 bg-brand-50 text-brand-700 dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-400",
+  lista_espera:
+    "border-warning-200 bg-warning-50 text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-400",
+  confirmada:
+    "border-success-200 bg-success-50 text-success-700 dark:border-success-500/30 dark:bg-success-500/10 dark:text-success-400",
+  cancelada:
+    "border-error-200 bg-error-50 text-error-700 dark:border-error-500/30 dark:bg-error-500/10 dark:text-error-400",
+  servidores:
+    "border-gray-200 bg-gray-50 text-gray-700 dark:border-gray-700 dark:bg-white/5 dark:text-gray-300",
+};
+
+// En plural, para leerse como "5 aceptados".
+const PLURAL: Record<string, string> = {
+  solicitada: "Solicitados",
+  aceptada: "Aceptados",
+  lista_espera: "Lista de espera",
+  confirmada: "Confirmados",
+};
+
+// Una ficha por estado de la inscripción, y los servidores del retiro.
+export function FichasPorEstado({
+  caminantes,
+  servidores,
+}: {
+  caminantes: Caminantes;
+  // Los que van (sin los que cancelaron) y, si se sabe, cuántos confirmaron.
+  servidores?: { total: number; confirmados?: number; por_confirmar?: number };
+}) {
+  const fichas = [
+    ...caminantes.por_estado.map((e) => ({
+      clave: e.estado,
+      total: e.total,
+      titulo: PLURAL[e.estado] ?? e.etiqueta,
+      nota: "caminantes",
+    })),
+    {
+      clave: "cancelada",
+      total: caminantes.cancelados,
+      titulo: "Cancelados",
+      nota: "caminantes",
+    },
+    ...(servidores !== undefined
+      ? [
+          {
+            clave: "servidores",
+            total: servidores.total,
+            titulo: "Servidores",
+            nota:
+              servidores.confirmados !== undefined
+                ? `${servidores.confirmados} confirmados · ${servidores.por_confirmar} por confirmar`
+                : "en este retiro",
+          },
+        ]
+      : []),
+  ];
+  return (
+    <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+      {fichas.map((f) => (
+        <li
+          key={f.clave}
+          className={`flex items-center gap-3 rounded-xl border px-4 py-3 ${TONO_ESTADO[f.clave]}`}
+        >
+          <span className="text-2xl font-bold tabular-nums">{f.total}</span>
+          <span className="min-w-0 leading-tight">
+            <span className="block truncate text-theme-xs font-semibold uppercase">
+              {f.titulo}
+            </span>
+            <span className="block text-theme-xs opacity-80">{f.nota}</span>
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function Indicador({
+  titulo,
+  valor,
+  nota,
+  tono,
+}: {
+  titulo: string;
+  valor: string | number;
+  nota: string;
+  tono: string;
+}) {
+  return (
+    <div className={`rounded-xl border px-4 py-4 ${tono}`}>
+      <p className="text-theme-xs font-semibold uppercase">{titulo}</p>
+      <p className="mt-1 text-title-sm font-bold tabular-nums">{valor}</p>
+      <p className="text-theme-xs opacity-80">{nota}</p>
+    </div>
+  );
+}
+
+// % con pago entre los confirmados y a cuántos hay que atender de forma
+// especial (salud, comida, requerimientos).
+export function Indicadores({ caminantes }: { caminantes: Caminantes }) {
+  const { atencion, confirmados_pagados, confirmados } = caminantes;
+  const deActivos = (n: number) =>
+    `${porcentaje(n, atencion?.activos ?? 0)}% de los inscritos`;
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {confirmados_pagados !== undefined && (
+        <Indicador
+          titulo="% con pago"
+          valor={`${porcentaje(confirmados_pagados, confirmados)}%`}
+          nota={`${confirmados_pagados} de ${confirmados} confirmados pagaron completo`}
+          tono={TONO_ESTADO.confirmada}
+        />
+      )}
+      {atencion && (
+        <>
+          <Indicador
+            titulo="Salud o tratamiento"
+            valor={atencion.salud}
+            nota={deActivos(atencion.salud)}
+            tono={TONO_ESTADO.cancelada}
+          />
+          <Indicador
+            titulo="Comida especial"
+            valor={atencion.comida}
+            nota={deActivos(atencion.comida)}
+            tono={TONO_ESTADO.lista_espera}
+          />
+          <Indicador
+            titulo="Requerimientos especiales"
+            valor={atencion.requerimientos}
+            nota={deActivos(atencion.requerimientos)}
+            tono={TONO_ESTADO.solicitada}
+          />
+        </>
+      )}
+    </div>
+  );
+}

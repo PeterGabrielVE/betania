@@ -59,9 +59,8 @@ const basicos = {
 
 // Confidenciales: solo para los roles que ven datos sensibles (si no, la API
 // los descarta, así que tampoco se piden).
-const sensibles = {
-  ...camposPersonaSensibles,
-  // Familia y fe
+// Familia y fe (Persona.datos_sensibles): también los pide "Editar persona".
+export const camposFamilia = {
   estado_civil: obligatorio("Elige el estado civil."),
   pareja_nombre: texto,
   pareja_telefono: fijo,
@@ -74,6 +73,11 @@ const sensibles = {
   matrimonio: casilla,
   uncion: casilla,
   parroquia_asiste: texto,
+};
+
+const sensibles = {
+  ...camposPersonaSensibles,
+  ...camposFamilia,
   // Salud y alimentación
   condicion_medica: texto,
   tratamiento: texto,
@@ -95,6 +99,16 @@ const esquemaCompleto = z.object({ ...basicos, ...sensibles });
 export type Valores = z.infer<typeof esquemaCompleto>;
 export type Campo = keyof Valores;
 
+// Con estos estados civiles se pide el nombre de la pareja.
+export function reglasFamilia(
+  v: { estado_civil?: string; pareja_nombre?: string },
+  falta: (campo: string, mensaje: string) => void,
+) {
+  if (CON_PAREJA.includes(v.estado_civil ?? "") && !v.pareja_nombre) {
+    falta("pareja_nombre", "Escribe el nombre de la pareja.");
+  }
+}
+
 // Reglas que cruzan campos. Con `conSensibles` en false, los campos
 // confidenciales no existen en el formulario y sus reglas no se aplican.
 function cruzadas(
@@ -108,9 +122,7 @@ function cruzadas(
 
   reglasPersona(v, falta, conEstados);
   if (!conSensibles) return;
-  if (CON_PAREJA.includes(v.estado_civil ?? "") && !v.pareja_nombre) {
-    falta("pareja_nombre", "Escribe el nombre de la pareja.");
-  }
+  reglasFamilia(v, falta);
   if (!v.contacto_telefono && !v.contacto_celular) {
     falta("contacto_celular", "Escribe al menos un teléfono del contacto.");
   }
@@ -328,9 +340,10 @@ export function valoresIniciales(retiro?: string, pais = ""): Valores {
   };
 }
 
-export function datosDePersona(persona: Registro): Partial<Valores> {
+// Familia y fe de una persona registrada, para el formulario.
+export function datosDeFamilia(persona: Registro): Record<string, unknown> {
   const datos = (persona.datos_sensibles ?? {}) as Record<string, unknown>;
-  const familia = Object.fromEntries(
+  return Object.fromEntries(
     FAMILIA.map((c) => [
       c,
       BOOLEANOS.has(c)
@@ -340,7 +353,40 @@ export function datosDePersona(persona: Registro): Partial<Valores> {
           : comoTexto(datos[c]),
     ]),
   );
-  return { ...datosDeLaPersona(persona), ...familia };
+}
+
+export function datosDePersona(persona: Registro): Partial<Valores> {
+  return { ...datosDeLaPersona(persona), ...datosDeFamilia(persona) };
+}
+
+// Familia y fe para guardarlo en Persona.datos_sensibles.
+export function paresFamilia(v: Record<string, unknown>): [string, unknown][] {
+  return FAMILIA.map((c) => [
+    c,
+    c === "hijos" && v.hijos !== "" ? Number(v.hijos) : v[c],
+  ]);
+}
+
+// Una inscripción guardada, para editarla en el formulario.
+export function datosDeInscripcion(ins: Registro): Partial<Valores> {
+  const salud = (ins.salud_alimentacion ?? {}) as Record<string, unknown>;
+  const contacto = (ins.contacto_emergencia ?? {}) as Record<string, unknown>;
+  return {
+    retiro: comoTexto(ins.retiro),
+    estado: comoTexto(ins.estado),
+    padrino: comoTexto(ins.padrino),
+    notas: comoTexto(ins.notas),
+    consentimiento_datos: Boolean(ins.consentimiento_datos),
+    ...Object.fromEntries(SALUD.map((c) => [c, comoTexto(salud[c])])),
+    ...Object.fromEntries(
+      CONTACTO.map(([campo, clave]) => [
+        campo,
+        campo === "contacto_celular"
+          ? normalizarCelular(contacto[clave])
+          : comoTexto(contacto[clave]),
+      ]),
+    ),
+  };
 }
 
 export function cuerpoPersona(
@@ -348,15 +394,7 @@ export function cuerpoPersona(
   conSensibles: boolean,
   anterior: Registro | null,
 ) {
-  return cuerpoDeLaPersona(
-    v,
-    conSensibles,
-    anterior,
-    FAMILIA.map((c) => [
-      c,
-      c === "hijos" && v.hijos !== "" ? Number(v.hijos) : v[c],
-    ]),
-  );
+  return cuerpoDeLaPersona(v, conSensibles, anterior, paresFamilia(v));
 }
 
 export function cuerpoInscripcion(

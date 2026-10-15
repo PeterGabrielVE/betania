@@ -8,7 +8,17 @@ import {
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
 import { celda } from "@/components/modulos/celda";
-import { claseControl, claseEnlace } from "@/components/modulos/estilos";
+import { DialogoCancelar } from "@/components/retiros/AccionesAsistencia";
+import {
+  ASISTENCIA,
+  cambiarAsistencia,
+  type Quien,
+} from "@/components/retiros/asistencia";
+import {
+  claseBoton,
+  claseControl,
+  claseEnlace,
+} from "@/components/modulos/estilos";
 import FormularioModulo from "@/components/modulos/FormularioModulo";
 import Paginacion from "@/components/modulos/Paginacion";
 import { TAMANOS_PAGINA } from "@/components/modulos/paginas";
@@ -52,7 +62,34 @@ type Acciones = {
   modulo: Modulo;
   onEditar: (fila: Registro) => void;
   onEliminar: (fila: Registro) => void;
+  // Caminantes y servidores: casillas para confirmar o cancelar varios.
+  seleccion?: {
+    ids: Set<string>;
+    alternar: (id: string) => void;
+    todas: (ids: string[], marcar: boolean) => void;
+  };
 };
+
+// Casilla de selección de una fila (o de todas, en el encabezado).
+function Casilla({
+  marcada,
+  onCambio,
+  etiqueta,
+}: {
+  marcada: boolean;
+  onCambio: () => void;
+  etiqueta: string;
+}) {
+  return (
+    <input
+      type="checkbox"
+      className="size-4 rounded border-gray-300 text-brand-500"
+      checked={marcada}
+      onChange={onCambio}
+      aria-label={etiqueta}
+    />
+  );
+}
 
 // Editar / eliminar como iconos, con su nombre para lectores de pantalla.
 function BotonesFila({
@@ -88,6 +125,25 @@ function BotonesFila({
     </div>
   );
 }
+
+// Personas, caminantes y servidores se editan con su formulario por pasos
+// (no con el formulario genérico).
+const EDICION_POR_PASOS: Record<string, (id: string) => string> = {
+  personas: (id) => `/personas/${id}/editar`,
+  inscripciones: (id) => `/inscribir?inscripcion=${id}`,
+  participaciones: (id) => `/registrar-servidor?participacion=${id}`,
+};
+
+function rutaDeEdicion(slug: string, id: string, volver: string) {
+  const ruta = EDICION_POR_PASOS[slug](id);
+  return `${ruta}${ruta.includes("?") ? "&" : "?"}volver=${encodeURIComponent(volver)}`;
+}
+
+// Módulos donde se confirma o cancela la asistencia de varios a la vez.
+const ASISTENCIA_MASIVA: Record<string, Quien | undefined> = {
+  inscripciones: "caminante",
+  participaciones: "servidor",
+};
 
 const ALTA_POR_PASOS: Record<string, string> = {
   inscripciones: "/inscribir",
@@ -134,14 +190,30 @@ function TablaRegistros({
   cargando,
   ...acciones
 }: Acciones & { columnas: Campo[]; filas: Registro[]; cargando: boolean }) {
-  const { modulo } = acciones;
+  const { modulo, seleccion } = acciones;
   const conAcciones = modulo.puede_cambiar || modulo.puede_eliminar;
+  const todas =
+    filas.length > 0 && filas.every((f) => seleccion?.ids.has(f.id));
   return (
     // relative: el texto sr-only (posición absoluta) no se sale de la caja.
     <div className="relative hidden max-w-full overflow-x-auto md:block">
       <Table>
         <TableHeader className="border-y border-gray-100 bg-gray-50 dark:border-white/5 dark:bg-white/2">
           <TableRow>
+            {seleccion && (
+              <TableCell isHeader className="w-10 ps-4">
+                <Casilla
+                  marcada={todas}
+                  etiqueta="Elegir todos los de esta página"
+                  onCambio={() =>
+                    seleccion.todas(
+                      filas.map((f) => f.id),
+                      !todas,
+                    )
+                  }
+                />
+              </TableCell>
+            )}
             {columnas.map((columna) => (
               <TableCell
                 key={columna.nombre}
@@ -169,6 +241,15 @@ function TablaRegistros({
               key={fila.id}
               className="group transition-colors hover:bg-gray-50 dark:hover:bg-white/2"
             >
+              {seleccion && (
+                <TableCell className="w-10 ps-4">
+                  <Casilla
+                    marcada={seleccion.ids.has(fila.id)}
+                    etiqueta={`Elegir ${fila.etiqueta}`}
+                    onCambio={() => seleccion.alternar(fila.id)}
+                  />
+                </TableCell>
+              )}
               {columnas.map((columna, i) => (
                 <TableCell
                   key={columna.nombre}
@@ -203,7 +284,7 @@ function TarjetasRegistros({
   cargando,
   ...acciones
 }: Acciones & { columnas: Campo[]; filas: Registro[]; cargando: boolean }) {
-  const { modulo } = acciones;
+  const { modulo, seleccion } = acciones;
   const [primera, ...resto] = columnas;
   return (
     <ul
@@ -212,7 +293,14 @@ function TarjetasRegistros({
       {filas.map((fila) => (
         <li key={fila.id} className="px-4 py-4">
           <div className="flex items-start justify-between gap-3">
-            <span className="min-w-0 text-theme-sm font-semibold break-words text-gray-800 dark:text-white/90">
+            <span className="flex min-w-0 items-start gap-3 text-theme-sm font-semibold break-words text-gray-800 dark:text-white/90">
+              {seleccion && (
+                <Casilla
+                  marcada={seleccion.ids.has(fila.id)}
+                  etiqueta={`Elegir ${fila.etiqueta}`}
+                  onCambio={() => seleccion.alternar(fila.id)}
+                />
+              )}
               <Titulo modulo={modulo} columna={primera} fila={fila} />
             </span>
             <BotonesFila fila={fila} {...acciones} />
@@ -281,11 +369,23 @@ function Listado({ modulo }: { modulo: Modulo }) {
     busqueda.has("nuevo") && modulo.puede_agregar ? null : undefined,
   );
   const [aviso, setAviso] = useState("");
+  // Filas elegidas para confirmar o cancelar varias (caminantes, servidores).
+  const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
+  const [cancelandoVarios, setCancelandoVarios] = useState(false);
   const editar = busqueda.get("editar");
   const volver = busqueda.get("volver");
 
   useEffect(() => {
     if (!editar) return;
+    if (EDICION_POR_PASOS[modulo.slug]) {
+      navigate(
+        rutaDeEdicion(modulo.slug, editar, volver ?? `/${modulo.slug}`),
+        {
+          replace: true,
+        },
+      );
+      return;
+    }
     let vigente = true;
     api<Registro>(`/${modulo.slug}/${editar}/`)
       .then((registro) => vigente && setEditando(registro))
@@ -293,6 +393,8 @@ function Listado({ modulo }: { modulo: Modulo }) {
     return () => {
       vigente = false;
     };
+    // volver y navigate no cambian mientras se abre.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modulo.slug, editar]);
 
   const cerrar = () => {
@@ -386,7 +488,57 @@ function Listado({ modulo }: { modulo: Modulo }) {
     }
   };
 
-  const acciones = { modulo, onEditar: setEditando, onEliminar: eliminar };
+  // Caminantes y servidores: confirmar o cancelar a varios a la vez.
+  const quien = ASISTENCIA_MASIVA[modulo.slug];
+  const elegidos = filas.filter((f) => seleccion.has(f.id));
+  const marcarAsistencia = async (estado: string, motivo = "") => {
+    if (!quien) return;
+    setAviso("");
+    const fallidos = await cambiarAsistencia(
+      quien,
+      elegidos.map((f) => f.id),
+      estado,
+      motivo,
+    );
+    if (fallidos.length) {
+      setAviso(
+        `${fallidos.length} no se pudieron cambiar: ${[...new Set(fallidos)].join(" ")}`,
+      );
+    }
+    setSeleccion(new Set());
+    setVersion((v) => v + 1);
+  };
+
+  const acciones = {
+    modulo,
+    onEditar: (fila: Registro) =>
+      EDICION_POR_PASOS[modulo.slug]
+        ? navigate(rutaDeEdicion(modulo.slug, fila.id, `/${modulo.slug}`))
+        : setEditando(fila),
+    onEliminar: eliminar,
+    seleccion:
+      quien && modulo.puede_cambiar
+        ? {
+            ids: seleccion,
+            alternar: (id: string) =>
+              setSeleccion((actual) => {
+                const nueva = new Set(actual);
+                if (nueva.has(id)) nueva.delete(id);
+                else nueva.add(id);
+                return nueva;
+              }),
+            todas: (ids: string[], marcar: boolean) =>
+              setSeleccion((actual) => {
+                const nueva = new Set(actual);
+                for (const id of ids) {
+                  if (marcar) nueva.add(id);
+                  else nueva.delete(id);
+                }
+                return nueva;
+              }),
+          }
+        : undefined,
+  };
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/3">
@@ -491,6 +643,45 @@ function Listado({ modulo }: { modulo: Modulo }) {
         <p className="px-5 pb-4 text-sm text-error-500" role="alert">
           {aviso}
         </p>
+      )}
+
+      {quien && elegidos.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 border-t border-brand-100 bg-brand-25 px-5 py-3 text-sm dark:border-brand-500/20 dark:bg-brand-500/10">
+          <span className="font-medium text-gray-800 dark:text-white/90">
+            {elegidos.length} {elegidos.length === 1 ? "elegido" : "elegidos"}
+          </span>
+          <Button
+            size="sm"
+            onClick={() => marcarAsistencia(ASISTENCIA[quien].confirmado)}
+          >
+            Confirmar asistencia
+          </Button>
+          <button
+            type="button"
+            className={`${claseBoton} text-error-600 dark:text-error-400`}
+            onClick={() => setCancelandoVarios(true)}
+          >
+            Cancelar asistencia…
+          </button>
+          <button
+            type="button"
+            className={`text-sm ${claseEnlace}`}
+            onClick={() => setSeleccion(new Set())}
+          >
+            Quitar selección
+          </button>
+          <DialogoCancelar
+            abierto={cancelandoVarios}
+            titulo={`Cancelar la asistencia de ${elegidos.length} ${
+              quien === "caminante" ? "caminantes" : "servidores"
+            }`}
+            onCerrar={() => setCancelandoVarios(false)}
+            onConfirmar={async (motivo) => {
+              await marcarAsistencia(ASISTENCIA[quien].cancelado, motivo);
+              setCancelandoVarios(false);
+            }}
+          />
+        </div>
       )}
 
       {/* Registros */}

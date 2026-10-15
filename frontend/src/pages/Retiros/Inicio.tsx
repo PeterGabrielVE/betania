@@ -7,13 +7,17 @@ import {
 } from "@/components/modulos/estilos";
 import Actualizacion from "@/components/retiros/Actualizacion";
 import {
-  BarraApilada,
   BarrasHorizontales,
   GraficaRecaudacion,
   Medidor,
-  type Segmento,
 } from "@/components/retiros/Graficas";
 import Metrica from "@/components/retiros/Metrica";
+import {
+  AnilloConfirmados,
+  FichasPorEstado,
+  Indicadores,
+  Tesoreria,
+} from "@/components/retiros/ResumenCaminantes";
 import Badge from "@/components/ui/badge/Badge";
 import { useAuth } from "@/context/AuthContext";
 import { useDatosVivos } from "@/hooks/useDatosVivos";
@@ -35,14 +39,6 @@ import { Link, useSearchParams } from "react-router";
 
 const claseTitulo = "text-lg font-semibold text-gray-800 dark:text-white/90";
 const claseVacio = "text-sm text-gray-500 dark:text-gray-400";
-
-// De menos a más comprometido; los colores son la rampa --viz-etapa-*.
-const ETAPAS = ["lista_espera", "solicitada", "aceptada", "confirmada"];
-const COLOR_PAGO: Record<string, string> = {
-  pagado: "var(--viz-bueno)",
-  parcial: "var(--viz-aviso)",
-  pendiente: "var(--viz-critico)",
-};
 
 const diaYMes = new Intl.DateTimeFormat(undefined, {
   day: "numeric",
@@ -96,15 +92,6 @@ function cuentaRegresiva(t: Tablero): { valor: string; detalle: string } {
     valor: "Finalizado",
     detalle: `Hace ${-fin} ${fin === -1 ? "día" : "días"}`,
   };
-}
-
-function segmentosPago(pagos: NonNullable<Tablero["caminantes"]>["pagos"]) {
-  return (pagos ?? []).map((p): Segmento => ({
-    clave: p.valor,
-    etiqueta: p.etiqueta,
-    total: p.total,
-    color: COLOR_PAGO[p.valor],
-  }));
 }
 
 function AccesoRapido({
@@ -302,63 +289,34 @@ function TableroRetiro({ t }: { t: Tablero }) {
         )}
       </div>
 
-      {/* Caminantes y pagos */}
+      {/* Caminantes: confirmados, tesorería, estados y atención especial */}
       {caminantes && (
-        <Tarjeta
-          titulo="Confirmación de asistencia"
-          enlace={{ a: `/retiros/${retiro.id}`, texto: "Ver caminantes" }}
-          className="col-span-12 md:col-span-6 xl:col-span-4"
-        >
-          <BarraApilada
-            descripcion="Caminantes por estado"
-            segmentos={ETAPAS.map((estado, i) => {
-              const e = caminantes.por_estado.find((x) => x.estado === estado);
-              return {
-                clave: estado,
-                etiqueta: e?.etiqueta ?? estado,
-                total: e?.total ?? 0,
-                color: `var(--viz-etapa-${i + 1})`,
-              };
-            }).reverse()}
-          />
-          {caminantes.cancelados > 0 && (
-            <p className="mt-3 text-theme-xs text-gray-500 dark:text-gray-400">
-              Además, {caminantes.cancelados} cancelados (no cuentan).
-            </p>
+        <>
+          <div className="col-span-12 md:col-span-5">
+            <AnilloConfirmados caminantes={caminantes} />
+          </div>
+          {caminantes.pagos && (
+            <div className="col-span-12 md:col-span-7">
+              <Tesoreria
+                retiroId={retiro.id}
+                caminantes={caminantes.pagos}
+                servidores={conCuotaServidor ? servidores?.pagos : undefined}
+              />
+            </div>
           )}
-        </Tarjeta>
-      )}
-      {caminantes?.pagos && (
-        <Tarjeta
-          titulo={`Cuotas de caminantes · ${dinero(retiro.cuota)}`}
-          enlace={{ a: "/pagos", texto: "Ver pagos" }}
-          className="col-span-12 md:col-span-6 xl:col-span-4"
-        >
-          <BarraApilada
-            descripcion="Caminantes por estado de pago"
-            segmentos={segmentosPago(caminantes.pagos)}
-          />
-          <p className="mt-3 text-theme-xs text-gray-500 dark:text-gray-400">
-            Cobrado {dinero(caminantes.recaudado ?? 0)} · falta{" "}
-            {dinero(caminantes.por_cobrar ?? 0)}
-          </p>
-        </Tarjeta>
-      )}
-      {servidores?.pagos && conCuotaServidor && (
-        <Tarjeta
-          titulo={`Cuotas de servidores · ${dinero(retiro.cuota_servidor)}`}
-          enlace={{ a: `/retiros/${retiro.id}`, texto: "Ver quién debe" }}
-          className="col-span-12 md:col-span-6 xl:col-span-4"
-        >
-          <BarraApilada
-            descripcion="Servidores por estado de pago"
-            segmentos={segmentosPago(servidores.pagos)}
-          />
-          <p className="mt-3 text-theme-xs text-gray-500 dark:text-gray-400">
-            Cobrado {dinero(servidores.recaudado ?? 0)} · falta{" "}
-            {dinero(servidores.por_cobrar ?? 0)}
-          </p>
-        </Tarjeta>
+          <div className="col-span-12">
+            <FichasPorEstado
+              caminantes={caminantes}
+              servidores={servidores ?? undefined}
+            />
+          </div>
+          {(caminantes.atencion ||
+            caminantes.confirmados_pagados !== undefined) && (
+            <div className="col-span-12">
+              <Indicadores caminantes={caminantes} />
+            </div>
+          )}
+        </>
       )}
 
       {/* Dinero */}

@@ -3,88 +3,9 @@
 import { useTheme } from "@/context/ThemeContext";
 import { dinero, fecha } from "@/utils/formato";
 import type { ApexOptions } from "apexcharts";
-import { useState } from "react";
 import Chart from "react-apexcharts";
 
 const claseVacio = "text-sm text-gray-500 dark:text-gray-400";
-
-export type Segmento = {
-  clave: string;
-  etiqueta: string;
-  total: number;
-  color: string; // p. ej. "var(--viz-bueno)"
-};
-
-// Partes de un total en una sola barra, con la leyenda siempre visible (cifra y
-// porcentaje), para que el color nunca sea lo único que distingue cada parte.
-// Al pasar el mouse por un tramo se resalta su renglón en la leyenda.
-export function BarraApilada({
-  segmentos,
-  descripcion,
-}: {
-  segmentos: Segmento[];
-  descripcion: string;
-}) {
-  const [activo, setActivo] = useState<string | null>(null);
-  const total = segmentos.reduce((suma, s) => suma + s.total, 0);
-  if (total === 0) return <p className={claseVacio}>Sin datos todavía.</p>;
-  const porcentaje = (n: number) => `${Math.round((n / total) * 100)}%`;
-
-  return (
-    <div>
-      <div
-        className="flex h-3 w-full gap-0.5"
-        role="img"
-        aria-label={`${descripcion}: ${segmentos
-          .map((s) => `${s.etiqueta} ${s.total}`)
-          .join(", ")}`}
-      >
-        {segmentos
-          .filter((s) => s.total > 0)
-          .map((s) => (
-            <div
-              key={s.clave}
-              className="h-full transition-opacity first:rounded-s last:rounded-e"
-              style={{
-                flexGrow: s.total,
-                background: s.color,
-                opacity: activo && activo !== s.clave ? 0.35 : 1,
-              }}
-              title={`${s.etiqueta}: ${s.total} (${porcentaje(s.total)})`}
-              onMouseEnter={() => setActivo(s.clave)}
-              onMouseLeave={() => setActivo(null)}
-            />
-          ))}
-      </div>
-      <ul className="mt-4 space-y-2 text-theme-sm">
-        {segmentos.map((s) => (
-          <li
-            key={s.clave}
-            className={`flex items-center gap-2 rounded px-1 transition-colors ${
-              activo === s.clave ? "bg-gray-100 dark:bg-white/5" : ""
-            }`}
-            onMouseEnter={() => setActivo(s.clave)}
-            onMouseLeave={() => setActivo(null)}
-          >
-            <span
-              className="size-2.5 shrink-0 rounded-sm"
-              style={{ background: s.color }}
-            />
-            <span className="text-gray-700 dark:text-gray-400">
-              {s.etiqueta}
-            </span>
-            <span className="ms-auto font-medium text-gray-800 tabular-nums dark:text-white/90">
-              {s.total}
-            </span>
-            <span className="w-10 text-end text-theme-xs text-gray-500 tabular-nums dark:text-gray-400">
-              {porcentaje(s.total)}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
 
 // Cuánto de un máximo se lleva (cupo, cuotas cobradas).
 export function Medidor({

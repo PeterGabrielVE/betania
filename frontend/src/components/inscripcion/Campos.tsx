@@ -411,6 +411,16 @@ export function Ubicacion({ paises }: { paises: Lugar[] }) {
   }) as string[];
   const estados = useLugares("estados", "pais", pais);
   const ciudades = useLugares("ciudades", "estado", entidad);
+  // Un valor puesto antes de que llegue su lista (al cargar una persona) no
+  // se ve en el <select>: al llegar las opciones se vuelve a poner.
+  const { getValues } = useFormContext();
+  const reponer = (campo: string) => {
+    const valor = getValues(campo);
+    if (valor) setValue(campo, valor);
+  };
+  useEffect(() => reponer("pais"), [paises.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => reponer("entidad"), [estados.filas.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => reponer("ciudad"), [ciudades.filas.length]); // eslint-disable-line react-hooks/exhaustive-deps
   // «Otra ciudad» elegida (la ciudad se escribe en ciudad_texto).
   const escribirCiudad = ciudad === OTRA_CIUDAD;
   const conLista = estados.cargando || estados.filas.length > 0;

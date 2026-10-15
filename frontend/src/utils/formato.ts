@@ -69,6 +69,10 @@ const coloresEstado: Record<string, ColorBadge> = {
   lista_espera: "warning",
   confirmada: "success",
   cancelada: "error",
+  // Servidor
+  por_confirmar: "warning",
+  confirmado: "success",
+  cancelado: "error",
   // Pago de la cuota
   pagado: "success",
   parcial: "warning",

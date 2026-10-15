@@ -149,6 +149,13 @@ def _proximo_cumpleanos(nacimiento, desde):
             return dia
 
 
+def _equipo_activo(retiro):
+    """Los servidores que van al retiro: sin caminantes ni quienes cancelaron
+    (esos quedan como historial)."""
+    return (retiro.participaciones.exclude(tipo=Participacion.Tipo.CAMINANTE)
+            .exclude(estado=Participacion.Estado.CANCELADO))
+
+
 def _cumpleanos(retiro, hoy):
     """Cumpleaños de caminantes y servidores del retiro: los de los próximos días
     y los que caen durante el retiro (para celebrarlos allá)."""
@@ -156,8 +163,7 @@ def _cumpleanos(retiro, hoy):
     inscritas = retiro.inscripciones.exclude(estado=Inscripcion.Estado.CANCELADA)
     for i in inscritas.select_related("persona"):
         personas[i.persona_id] = (i.persona, "Caminante")
-    equipo = retiro.participaciones.exclude(tipo=Participacion.Tipo.CAMINANTE)
-    for p in equipo.select_related("persona"):
+    for p in _equipo_activo(retiro).select_related("persona"):
         personas.setdefault(p.persona_id, (p.persona, "Servidor"))
     filas = []
     for persona, rol in personas.values():
@@ -232,11 +238,23 @@ def _alertas(retiro, caminantes, servidores, equipo, sensibles, ve_charlas):
                     .filter(consentimiento_datos=False).count(),
                     "inscripciones sin consentimiento de datos", "/inscripciones")
     if servidores:
-        agregar("servidores_deben", sum(f["saldo"] > 0 for f in servidores["filas"]),
+        agregar("servidores_deben", sum(f.get("saldo", 0) > 0 for f in servidores["filas"]),
                 "servidores con cuota pendiente")
+        agregar("servidores_por_confirmar",
+                sum(f["estado"] == Participacion.Estado.POR_CONFIRMAR
+                    for f in servidores["filas"]),
+                "servidores por confirmar asistencia", "/participaciones")
     if equipo:
         agregar("sin_area", len(equipo["sin_area"]), "servidores sin área asignada",
                 "/servicios")
+    if caminantes and servidores:
+        # Datos de antes de la regla: caminante y servidor del mismo retiro.
+        inscritos = {f["persona_id"] for f in caminantes["filas"]
+                     if f["estado"] != Inscripcion.Estado.CANCELADA}
+        agregar("caminante_y_servidor",
+                sum(f["persona_id"] in inscritos for f in servidores["filas"]
+                    if f["estado"] != Participacion.Estado.CANCELADO),
+                "personas que son caminante y servidor a la vez (cancela una de las dos)")
     if ve_charlas:
         agregar("charlas_sin_expositor", retiro.charlas.filter(expositor__isnull=True).count(),
                 "charlas sin expositor", "/charlas")
@@ -253,7 +271,7 @@ def _tablero(request, retiro, hoy):
         retiro, con_pagos=finanzas, con_ficha=sensibles
     ) if _ve(user, Inscripcion) else None
     equipo = _equipo(retiro) if ve_equipo else None
-    servidores = _servidores(retiro) if finanzas and ve_equipo else None
+    servidores = _servidores(retiro, con_pagos=finanzas) if ve_equipo else None
 
     datos = {
         "retiro": {
@@ -284,14 +302,28 @@ def _tablero(request, retiro, hoy):
             "por_estado": [e for e in caminantes["por_estado"]
                            if e["estado"] != Inscripcion.Estado.CANCELADA],
         }
+        activas = [f for f in caminantes["filas"]
+                   if f["estado"] != Inscripcion.Estado.CANCELADA]
         if finanzas:
-            activas = [f for f in caminantes["filas"]
-                       if f["estado"] != Inscripcion.Estado.CANCELADA]
+            confirmadas = [f for f in activas if f["estado"] == Inscripcion.Estado.CONFIRMADA]
             datos["caminantes"].update(
                 pagos=_conteo_pagos(activas),
                 por_cobrar=sum(f["saldo"] for f in activas),
                 recaudado=sum(f["pagado"] for f in activas),
+                # De los confirmados, cuántos ya pagaron la cuota completa.
+                confirmados_pagados=sum(f["estado_pago"] == EstadoPago.PAGADO
+                                        for f in confirmadas),
             )
+        if sensibles:
+            # A cuántos de los inscritos hay que atender de forma especial.
+            fichas = [f["ficha"] for f in activas]
+            datos["caminantes"]["atencion"] = {
+                "activos": len(fichas),
+                "salud": sum(bool(f["condicion_medica"] or f["tratamiento"])
+                             for f in fichas),
+                "comida": sum(bool(f["alimentacion"]) for f in fichas),
+                "requerimientos": sum(bool(f["requerimientos"]) for f in fichas),
+            }
     if equipo:
         datos["servidores"] = {
             "total": equipo["total"],
@@ -303,11 +335,20 @@ def _tablero(request, retiro, hoy):
             ),
         }
         if servidores:
+            estados = {e["estado"]: e["total"] for e in servidores["por_estado"]}
             datos["servidores"].update(
-                pagos=_conteo_pagos(servidores["filas"]),
-                por_cobrar=servidores["por_cobrar"],
-                recaudado=sum(f["pagado"] for f in servidores["filas"]),
+                confirmados=estados[Participacion.Estado.CONFIRMADO],
+                por_confirmar=estados[Participacion.Estado.POR_CONFIRMAR],
+                cancelados=estados[Participacion.Estado.CANCELADO],
             )
+            if finanzas:
+                activos = [f for f in servidores["filas"]
+                           if f["estado"] != Participacion.Estado.CANCELADO]
+                datos["servidores"].update(
+                    pagos=_conteo_pagos(activos),
+                    por_cobrar=servidores["por_cobrar"],
+                    recaudado=sum(f["pagado"] for f in activos),
+                )
     if finanzas:
         datos["finanzas"] = {
             **_finanzas(retiro, caminantes),
@@ -384,6 +425,7 @@ def _caminantes(retiro, con_pagos, con_ficha):
             "telefono": i.persona.telefono,
             "padrino": i.padrino.nombre if i.padrino_id else "",
             "estado": i.estado,
+            "motivo_cancelacion": i.motivo_cancelacion,
         }
         if con_ficha:
             fila["ficha"] = _ficha(i, retiro)
@@ -410,9 +452,9 @@ def _caminantes(retiro, con_pagos, con_ficha):
 
 
 def _equipo(retiro):
-    """Servidores del retiro agrupados por área de servicio."""
+    """Servidores del retiro (sin los que cancelaron) agrupados por área."""
     participaciones = (
-        retiro.participaciones.exclude(tipo=Participacion.Tipo.CAMINANTE)
+        _equipo_activo(retiro)
         .select_related("persona").prefetch_related("servicios__area")
         .order_by("persona__nombre")
     )
@@ -439,42 +481,62 @@ def _equipo(retiro):
     }
 
 
-def _servidores(retiro):
-    """Cada servidor con lo que lleva pagado de su cuota (pagos a su nombre que no
-    son la cuota de un caminante)."""
+def _servidores(retiro, con_pagos=True):
+    """Cada servidor con su estado (por confirmar, confirmado, canceló) y, con
+    acceso a finanzas, lo que lleva pagado de su cuota (pagos a su nombre que
+    no son la cuota de un caminante). Quien canceló ya no debe la cuota."""
     pagado = dict(
         retiro.pagos.filter(inscripcion__isnull=True, persona__isnull=False)
         .values_list("persona").annotate(t=Sum("monto_base"))
-    )
+    ) if con_pagos else {}
     participaciones = (
         retiro.participaciones.exclude(tipo=Participacion.Tipo.CAMINANTE)
         .select_related("persona").prefetch_related("servicios__area")
         .order_by("persona__nombre")
     )
     filas = []
+    por_estado = dict.fromkeys(Participacion.Estado.values, 0)
     for p in participaciones:
-        total = pagado.get(p.persona_id, 0)
-        filas.append({
+        por_estado[p.estado] += 1
+        fila = {
             "id": p.pk,
             "persona": p.persona.nombre,
             "persona_id": p.persona_id,
             "telefono": p.persona.telefono,
             "tipo": p.get_tipo_display(),
+            "estado": p.estado,
+            "estado_display": p.get_estado_display(),
+            "motivo_cancelacion": p.motivo_cancelacion,
             "areas": ", ".join(s.area.nombre for s in p.servicios.all()),
             "duerme_en_casa": p.duerme_en_casa,
             "turnos": p.resumen_turnos(),
             "camisa": p.resumen_camisas(),
-            "pagado": total,
-            "saldo": max(retiro.cuota_servidor - total, 0),
-            "estado_pago": EstadoPago.de(total, retiro.cuota_servidor),
-        })
-    return {"filas": filas, "por_cobrar": sum(f["saldo"] for f in filas)}
+        }
+        if con_pagos:
+            total = pagado.get(p.persona_id, 0)
+            cancelo = p.estado == Participacion.Estado.CANCELADO
+            fila.update(
+                pagado=total,
+                saldo=0 if cancelo else max(retiro.cuota_servidor - total, 0),
+                estado_pago=EstadoPago.de(total, retiro.cuota_servidor),
+            )
+        filas.append(fila)
+    datos = {
+        "filas": filas,
+        "por_estado": [
+            {"estado": valor, "etiqueta": etiqueta, "total": por_estado[valor]}
+            for valor, etiqueta in Participacion.Estado.choices
+        ],
+    }
+    if con_pagos:
+        datos["por_cobrar"] = sum(f["saldo"] for f in filas)
+    return datos
 
 
 def _logistica_equipo(retiro):
     """Para organizar al equipo: cuántos duermen en la casa, cuántos sirven en
     cada turno y cuántas camisas hacen falta, por tipo y por talla."""
-    equipo = list(retiro.participaciones.exclude(tipo=Participacion.Tipo.CAMINANTE))
+    equipo = list(_equipo_activo(retiro))
 
     def conteo(opciones, marcadas):
         return [{"valor": c, "etiqueta": e, "total": sum(c in marcadas(p) for p in equipo)}
@@ -536,7 +598,8 @@ def panel_retiro(request, pk):
         "equipo": _equipo(retiro) if _ve(user, Participacion) else None,
         "logistica_equipo": (_logistica_equipo(retiro)
                              if _ve(user, Participacion) else None),
-        "servidores": _servidores(retiro) if finanzas and _ve(user, Participacion) else None,
+        "servidores": (_servidores(retiro, con_pagos=finanzas)
+                       if _ve(user, Participacion) else None),
         "charlas": [
             {"id": c.pk, "orden": c.orden, "tema": c.tema,
              "expositor": c.expositor.nombre if c.expositor_id else ""}
@@ -571,6 +634,7 @@ def _como_caminante(persona, con_pagos, sensibles):
             "retiro": _retiro_corto(i.retiro),
             "estado": i.estado,
             "estado_display": i.get_estado_display(),
+            "motivo_cancelacion": i.motivo_cancelacion,
             "padrino": i.padrino.nombre if i.padrino_id else "",
             "padrino_id": i.padrino_id,
         }
@@ -604,6 +668,9 @@ def _como_servidor(persona, con_pagos):
             "retiro": _retiro_corto(p.retiro),
             "tipo": p.tipo,
             "tipo_display": p.get_tipo_display(),
+            "estado": p.estado,
+            "estado_display": p.get_estado_display(),
+            "motivo_cancelacion": p.motivo_cancelacion,
             "duerme_en_casa": p.duerme_en_casa,
             "turnos": p.resumen_turnos(),
             "camisa": p.resumen_camisas(),

@@ -21,6 +21,7 @@ export function PasoIdentificacionServidor({
   etiquetas,
   onEtiqueta,
   onRetiro,
+  edicion = false,
 }: {
   persona: Registro | null;
   onPersona: (id: string | null) => void;
@@ -29,6 +30,8 @@ export function PasoIdentificacionServidor({
   etiquetas: Record<string, string>;
   onEtiqueta: (nombre: string, etiqueta: string) => void;
   onRetiro: (id: string | null) => void;
+  // Editando: la persona ya está elegida (no se busca otra).
+  edicion?: boolean;
 }) {
   const { register } = useFormContext();
   return (
@@ -64,7 +67,11 @@ export function PasoIdentificacionServidor({
           etiqueta={E.documento}
           obligatorio
           placeholder="Ej.: 12345678"
-          ayuda="Si ya está registrada, sus datos se cargan solos."
+          ayuda={
+            edicion
+              ? undefined
+              : "Si ya está registrada, sus datos se cargan solos."
+          }
           registro={register("documento", { onBlur: onDocumento })}
         />
         {avisoDocumento && (
@@ -76,23 +83,25 @@ export function PasoIdentificacionServidor({
           </p>
         )}
       </Grupo>
-      <div className="rounded-xl border border-dashed border-gray-300 p-4 dark:border-gray-700">
-        <p className="mb-1 text-theme-sm font-medium text-gray-800 dark:text-white/90">
-          ¿No recuerdas el documento?
-        </p>
-        <p className="mb-3 text-theme-xs text-gray-500 dark:text-gray-400">
-          Muchos servidores ya fueron caminantes: búscalos por nombre o teléfono
-          para no duplicarlos.
-        </p>
-        <SelectorRemoto
-          recurso="personas"
-          valor={persona?.id ?? null}
-          etiqueta={persona?.etiqueta ?? ""}
-          onChange={onPersona}
-          placeholder="Buscar por nombre, documento o teléfono…"
-          className="w-full sm:w-96"
-        />
-      </div>
+      {!edicion && (
+        <div className="rounded-xl border border-dashed border-gray-300 p-4 dark:border-gray-700">
+          <p className="mb-1 text-theme-sm font-medium text-gray-800 dark:text-white/90">
+            ¿No recuerdas el documento?
+          </p>
+          <p className="mb-3 text-theme-xs text-gray-500 dark:text-gray-400">
+            Muchos servidores ya fueron caminantes: búscalos por nombre o
+            teléfono para no duplicarlos.
+          </p>
+          <SelectorRemoto
+            recurso="personas"
+            valor={persona?.id ?? null}
+            etiqueta={persona?.etiqueta ?? ""}
+            onChange={onPersona}
+            placeholder="Buscar por nombre, documento o teléfono…"
+            className="w-full sm:w-96"
+          />
+        </div>
+      )}
     </div>
   );
 }

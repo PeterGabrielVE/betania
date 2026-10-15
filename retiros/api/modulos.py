@@ -129,8 +129,8 @@ MODULOS = [
     ),
     Modulo(
         "inscripciones", Inscripcion, "Caminantes", "inscripción", PERSONAS,
-        campos=["retiro", "persona", "padrino", "estado", "salud_alimentacion",
-                "contacto_emergencia", "notas", "consentimiento_datos"],
+        campos=["retiro", "persona", "padrino", "estado", "motivo_cancelacion",
+                "salud_alimentacion", "contacto_emergencia", "notas", "consentimiento_datos"],
         lista=["persona", "retiro", "padrino", "estado", "estado_pago", "total_pagado",
                "consentimiento_datos", "creado"],
         buscar=["persona__nombre", "padrino__nombre", "retiro__tipo__nombre"],
@@ -151,7 +151,7 @@ MODULOS = [
         },
         etiquetas={"padrino": "Quién lo invitó al retiro", "notas": "Comentario"},
         secciones={
-            _INSCRIPCION: ["retiro", "persona", "padrino", "estado"],
+            _INSCRIPCION: ["retiro", "persona", "padrino", "estado", "motivo_cancelacion"],
             _COMENTARIOS: ["notas", "consentimiento_datos"],
         },
         subcampos={
@@ -181,10 +181,10 @@ MODULOS = [
         # participaciones de caminante no van aquí: los caminantes son las
         # inscripciones.
         "participaciones", Participacion, "Servidores", "servidor", PERSONAS,
-        campos=["retiro", "persona", "tipo", "duerme_en_casa", "disponibilidad", "camisas",
-                "tallas_camisa"],
-        lista=["persona", "documento", "telefono", "areas", "tipo", "duerme", "turnos",
-               "camisa", "retiro"],
+        campos=["retiro", "persona", "tipo", "estado", "motivo_cancelacion", "duerme_en_casa",
+                "disponibilidad", "camisas", "tallas_camisa"],
+        lista=["persona", "documento", "telefono", "areas", "tipo", "estado", "duerme",
+               "turnos", "camisa", "retiro"],
         buscar=["persona__nombre", "persona__documento", "servicios__area__nombre",
                 "retiro__tipo__nombre"],
         excluir={"tipo": Participacion.Tipo.CAMINANTE},
@@ -202,7 +202,7 @@ MODULOS = [
                 for s in sorted(o.servicios.all(), key=lambda s: s.area.nombre)
             )),
         },
-        filtros=["tipo", "retiro"],
+        filtros=["estado", "tipo", "retiro"],
         etiquetas={"persona": "Servidor", "tipo": "Participa como",
                    "duerme_en_casa": "Dormirá en la casa de retiro"},
         subcampos={
@@ -222,7 +222,7 @@ MODULOS = [
         campos=["participacion", "area", "es_coordinador"],
         lista=["participacion", "area", "es_coordinador"],
         buscar=["participacion__persona__nombre", "area__nombre"],
-        filtros=["area"],
+        filtros=["area", "participacion"],
         orden=["area__nombre", "participacion__persona__nombre"],
         relacionados=["participacion__persona", "participacion__retiro__tipo", "area"],
     ),

@@ -1,6 +1,7 @@
 // Formulario para registrar un servidor en el equipo de un retiro: la persona
 // (esquemaPersona.ts), cómo participa (servidor o coordinador general) y en
 // qué áreas sirve (y cuáles coordina).
+import type { Registro } from "@/api/client";
 import { z } from "zod";
 import type { Paso } from "./esquema";
 import {
@@ -198,6 +199,30 @@ export function resumenTurnos(turnos: string[]): string {
   })
     .filter(Boolean)
     .join(" · ");
+}
+
+// Un servidor ya registrado (su participación y sus áreas), para editarlo.
+export function datosDeParticipacion(
+  p: Registro,
+  servicios: Registro[],
+): Partial<ValoresServidor> {
+  const marcadas = (valor: unknown) =>
+    Object.entries((valor ?? {}) as Record<string, unknown>)
+      .filter(([, v]) => v)
+      .map(([clave]) => clave);
+  return {
+    retiro: String(p.retiro),
+    tipo: String(p.tipo),
+    duerme:
+      p.duerme_en_casa === true ? "si" : p.duerme_en_casa === false ? "no" : "",
+    turnos: marcadas(p.disponibilidad),
+    camisas: marcadas(p.camisas),
+    tallas: marcadas(p.tallas_camisa),
+    areas: servicios.map((s) => String(s.area)),
+    coordina: servicios
+      .filter((s) => s.es_coordinador)
+      .map((s) => String(s.area)),
+  };
 }
 
 // Errores de /participaciones/ -> campo del formulario.

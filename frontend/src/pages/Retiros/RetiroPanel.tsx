@@ -7,6 +7,7 @@ import {
   claseEnlace,
   claseTarjeta,
 } from "@/components/modulos/estilos";
+import AccionesAsistencia from "@/components/retiros/AccionesAsistencia";
 import Actualizacion from "@/components/retiros/Actualizacion";
 import LogisticaEquipo from "@/components/retiros/LogisticaEquipo";
 import Metrica from "@/components/retiros/Metrica";
@@ -206,7 +207,7 @@ function Ficha({
       <div className="mt-4 flex flex-wrap gap-4 text-sm">
         {puedeEditar("inscripciones") && (
           <Link
-            to={`/inscripciones?editar=${fila.id}&volver=${volver}`}
+            to={`/inscribir?inscripcion=${fila.id}&volver=${volver}`}
             className={claseEnlace}
           >
             Editar salud y contactos
@@ -214,7 +215,7 @@ function Ficha({
         )}
         {puedeEditar("personas") && (
           <Link
-            to={`/personas?editar=${fila.persona_id}&volver=${volver}`}
+            to={`/personas/${fila.persona_id}/editar?volver=${volver}`}
             className={claseEnlace}
           >
             Editar datos personales
@@ -230,11 +231,13 @@ function Caminantes({
   opcionesPago,
   retiroId,
   puedeEditar,
+  onCambio,
 }: {
   caminantes: NonNullable<PanelRetiro["caminantes"]>;
   opcionesPago: PanelRetiro["opciones_pago"];
   retiroId: string;
   puedeEditar: (slug: string) => boolean;
+  onCambio: () => void; // tras confirmar o cancelar: recargar
 }) {
   const { filas, por_estado } = caminantes;
   const [filtro, setFiltro] = useState("");
@@ -369,9 +372,23 @@ function Caminantes({
                       </TableCell>
                     )}
                     <TableCell className={claseCelda}>
-                      <Badge size="sm" color={colorEstado(f.estado)}>
-                        {estados.get(f.estado)}
-                      </Badge>
+                      <span className="flex items-center gap-1">
+                        <Badge size="sm" color={colorEstado(f.estado)}>
+                          {estados.get(f.estado)}
+                        </Badge>
+                        <AccionesAsistencia
+                          quien="caminante"
+                          id={f.id}
+                          nombre={f.persona}
+                          estado={f.estado}
+                          onCambio={onCambio}
+                        />
+                      </span>
+                      {f.motivo_cancelacion && (
+                        <span className="mt-0.5 block text-theme-xs text-gray-400">
+                          {f.motivo_cancelacion}
+                        </span>
+                      )}
                     </TableCell>
                     {conPagos && (
                       <>
@@ -422,35 +439,70 @@ function Caminantes({
   );
 }
 
-// Lo que lleva pagado y lo que debe cada servidor de su cuota.
+// Los servidores del retiro: su estado (con Confirmar / Cancelar), áreas,
+// disponibilidad y, con acceso a finanzas, lo que pagaron de su cuota.
 function Servidores({
   servidores,
   cuota,
   opcionesPago,
+  onCambio,
 }: {
   servidores: NonNullable<PanelRetiro["servidores"]>;
   cuota: number;
   opcionesPago: PanelRetiro["opciones_pago"];
+  onCambio: () => void;
 }) {
+  const [estado, setEstado] = useState("");
   const [soloDeben, setSoloDeben] = useState(false);
   const pagos = new Map(opcionesPago.map((o) => [o.valor, o.etiqueta]));
   if (servidores.filas.length === 0) {
-    return <p className={claseVacio}>Todavía no hay servidores asignados.</p>;
+    return <p className={claseVacio}>Todavía no hay servidores registrados.</p>;
   }
-  const conCuota = cuota > 0;
-  const visibles = soloDeben
-    ? servidores.filas.filter((f) => f.saldo > 0)
-    : servidores.filas;
+  const conPagos = servidores.filas.some((f) => f.estado_pago !== undefined);
+  const conCuota = conPagos && cuota > 0;
+  const visibles = servidores.filas.filter(
+    (f) =>
+      (!estado || f.estado === estado) && (!soloDeben || (f.saldo ?? 0) > 0),
+  );
+  const titulos = [
+    "Servidor",
+    "Asistencia",
+    "Área",
+    "Teléfono",
+    "Duerme",
+    "Turnos",
+    "Camisa",
+    ...(conCuota ? ["Pago"] : []),
+    ...(conPagos ? ["Pagado"] : []),
+    ...(conCuota ? ["Debe"] : []),
+  ];
   return (
     <>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-sm text-gray-500 dark:text-gray-400">
-        <span>
-          {conCuota
-            ? `Cuota por servidor: ${dinero(cuota)}`
-            : "Este retiro no tiene cuota de servidor: se muestra lo aportado."}
-        </span>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap gap-2">
+          {servidores.por_estado
+            .filter((e) => e.total)
+            .map((e) => (
+              <Badge key={e.estado} size="sm" color={colorEstado(e.estado)}>
+                {e.etiqueta}: {e.total}
+              </Badge>
+            ))}
+        </div>
+        <select
+          value={estado}
+          onChange={(e) => setEstado(e.target.value)}
+          className={`${claseControl} ms-auto`}
+          aria-label="Filtrar servidores por asistencia"
+        >
+          <option value="">Todos</option>
+          {servidores.por_estado.map((e) => (
+            <option key={e.estado} value={e.estado}>
+              {e.etiqueta} ({e.total})
+            </option>
+          ))}
+        </select>
         {conCuota && (
-          <label className="flex items-center gap-2">
+          <label className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
             <input
               type="checkbox"
               checked={soloDeben}
@@ -460,73 +512,97 @@ function Servidores({
           </label>
         )}
       </div>
-      <div className="max-w-full overflow-x-auto">
-        <Table>
-          <TableHeader className="border-b border-gray-100 dark:border-white/5">
-            <TableRow>
-              {[
-                "Servidor",
-                "Área",
-                "Teléfono",
-                "Duerme",
-                "Turnos",
-                "Camisa",
-                ...(conCuota ? ["Pago"] : []),
-                "Pagado",
-                ...(conCuota ? ["Debe"] : []),
-              ].map((titulo) => (
-                <TableCell key={titulo} isHeader className={claseEncabezado}>
-                  {titulo}
-                </TableCell>
-              ))}
-            </TableRow>
-          </TableHeader>
-          <TableBody className="divide-y divide-gray-100 dark:divide-white/5">
-            {visibles.map((f) => (
-              <TableRow key={f.id}>
-                <TableCell
-                  className={`${claseCelda} font-medium text-gray-800 dark:text-white/90`}
-                >
-                  <Link
-                    to={`/personas/${f.persona_id}`}
-                    className="hover:text-brand-500"
-                  >
-                    {f.persona}
-                  </Link>
-                </TableCell>
-                <TableCell className={claseCelda}>
-                  {f.areas || f.tipo}
-                </TableCell>
-                <TableCell className={claseCelda}>
-                  {f.telefono || "—"}
-                </TableCell>
-                <TableCell className={claseCelda}>
-                  {f.duerme_en_casa === null
-                    ? "—"
-                    : f.duerme_en_casa
-                      ? "Sí"
-                      : "No"}
-                </TableCell>
-                <TableCell className={claseCelda}>{f.turnos || "—"}</TableCell>
-                <TableCell className={claseCelda}>{f.camisa || "—"}</TableCell>
-                {conCuota && (
-                  <TableCell className={claseCelda}>
-                    <Badge size="sm" color={colorEstado(f.estado_pago)}>
-                      {pagos.get(f.estado_pago)}
-                    </Badge>
+      {visibles.length === 0 ? (
+        <p className={claseVacio}>Ningún servidor coincide.</p>
+      ) : (
+        <div className="max-w-full overflow-x-auto">
+          <Table>
+            <TableHeader className="border-b border-gray-100 dark:border-white/5">
+              <TableRow>
+                {titulos.map((titulo) => (
+                  <TableCell key={titulo} isHeader className={claseEncabezado}>
+                    {titulo}
                   </TableCell>
-                )}
-                <TableCell className={claseCelda}>{dinero(f.pagado)}</TableCell>
-                {conCuota && (
-                  <TableCell className={claseCelda}>
-                    {dinero(f.saldo)}
-                  </TableCell>
-                )}
+                ))}
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+            </TableHeader>
+            <TableBody className="divide-y divide-gray-100 dark:divide-white/5">
+              {visibles.map((f) => (
+                <TableRow
+                  key={f.id}
+                  className={f.estado === "cancelado" ? "opacity-60" : ""}
+                >
+                  <TableCell
+                    className={`${claseCelda} font-medium text-gray-800 dark:text-white/90`}
+                  >
+                    <Link
+                      to={`/personas/${f.persona_id}`}
+                      className="hover:text-brand-500"
+                    >
+                      {f.persona}
+                    </Link>
+                  </TableCell>
+                  <TableCell className={claseCelda}>
+                    <span className="flex items-center gap-1">
+                      <Badge size="sm" color={colorEstado(f.estado)}>
+                        {f.estado_display}
+                      </Badge>
+                      <AccionesAsistencia
+                        quien="servidor"
+                        id={f.id}
+                        nombre={f.persona}
+                        estado={f.estado}
+                        onCambio={onCambio}
+                      />
+                    </span>
+                    {f.motivo_cancelacion && (
+                      <span className="mt-0.5 block text-theme-xs text-gray-400">
+                        {f.motivo_cancelacion}
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell className={claseCelda}>
+                    {f.areas || f.tipo}
+                  </TableCell>
+                  <TableCell className={claseCelda}>
+                    {f.telefono || "—"}
+                  </TableCell>
+                  <TableCell className={claseCelda}>
+                    {f.duerme_en_casa === null
+                      ? "—"
+                      : f.duerme_en_casa
+                        ? "Sí"
+                        : "No"}
+                  </TableCell>
+                  <TableCell className={claseCelda}>
+                    {f.turnos || "—"}
+                  </TableCell>
+                  <TableCell className={claseCelda}>
+                    {f.camisa || "—"}
+                  </TableCell>
+                  {conCuota && (
+                    <TableCell className={claseCelda}>
+                      <Badge size="sm" color={colorEstado(f.estado_pago!)}>
+                        {pagos.get(f.estado_pago!)}
+                      </Badge>
+                    </TableCell>
+                  )}
+                  {conPagos && (
+                    <TableCell className={claseCelda}>
+                      {dinero(f.pagado ?? 0)}
+                    </TableCell>
+                  )}
+                  {conCuota && (
+                    <TableCell className={claseCelda}>
+                      {dinero(f.saldo ?? 0)}
+                    </TableCell>
+                  )}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
     </>
   );
 }
@@ -720,6 +796,7 @@ export default function RetiroPanel() {
               opcionesPago={panel.opciones_pago}
               retiroId={retiro.id}
               puedeEditar={puedeEditar}
+              onCambio={actualizar}
             />
           </Seccion>
         )}
@@ -727,14 +804,14 @@ export default function RetiroPanel() {
         {servidores && (
           <Seccion
             titulo={
-              retiro.cuota_servidor > 0
-                ? `Pagos de servidores · ${dinero(servidores.por_cobrar)} por cobrar`
-                : "Aportes de servidores"
+              servidores.por_cobrar !== undefined && retiro.cuota_servidor > 0
+                ? `Servidores · ${dinero(servidores.por_cobrar)} por cobrar`
+                : "Servidores"
             }
             className="col-span-12"
             enlace={
-              <Link to="/pagos" className={`text-sm ${claseEnlace}`}>
-                Ver pagos
+              <Link to="/participaciones" className={`text-sm ${claseEnlace}`}>
+                Ver todos
               </Link>
             }
           >
@@ -742,6 +819,7 @@ export default function RetiroPanel() {
               servidores={servidores}
               cuota={retiro.cuota_servidor}
               opcionesPago={panel.opciones_pago}
+              onCambio={actualizar}
             />
           </Seccion>
         )}

@@ -1,4 +1,4 @@
-import { api, ApiError, type Registro } from "@/api/client";
+import { api, ApiError, type Pagina, type Registro } from "@/api/client";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
 import Asistente from "@/components/inscripcion/Asistente";
@@ -11,6 +11,7 @@ import {
   CAMISAS,
   crearEsquemaServidor,
   cuerpoDisponibilidad,
+  datosDeParticipacion,
   ETIQUETAS_SERVIDOR,
   resumenTurnos,
   TALLAS_CAMISA,
@@ -36,22 +37,30 @@ import { useAuth } from "@/context/AuthContext";
 import { CheckCircleIcon } from "@/icons";
 import NotFound from "@/pages/OtherPage/NotFound";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FormProvider, useForm, type FieldErrors } from "react-hook-form";
-import { Link, useLocation } from "react-router";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 
 type RetiroElegido = { id: string; etiqueta: string };
 
 // Registrar a una persona en el equipo de un retiro, paso a paso: quién es,
 // cómo participa y en qué áreas sirve. Guarda la persona, su participación y
-// una asignación por área.
+// una asignación por área. Con ?participacion=<id> edita ese servidor (sus
+// datos, cómo participa, sus áreas y su disponibilidad); al guardar vuelve a
+// ?volver=.
 export default function RegistrarServidor() {
   const { modulos } = useAuth();
-  const puede = (slug: string) =>
-    !!modulos.find((m) => m.slug === slug)?.puede_agregar;
+  const navigate = useNavigate();
+  const [parametros] = useSearchParams();
+  const editando = parametros.get("participacion");
+  const volver = parametros.get("volver");
+  const puede = (slug: string) => {
+    const m = modulos.find((x) => x.slug === slug);
+    return !!(editando ? m?.puede_cambiar : m?.puede_agregar);
+  };
   const personas = modulos.find((m) => m.slug === "personas");
-  // Desde el panel de un retiro viene ese; si no, la edición preferida.
   // Desde el panel de un retiro llega el retiro; desde la ficha, la persona.
+  // Si no, la edición preferida.
   const estado = useLocation().state as {
     retiro?: RetiroElegido;
     persona?: string;
@@ -96,17 +105,62 @@ export default function RegistrarServidor() {
     detalle: string;
     retiro: string;
   } | null>(null);
+  // Editando: la participación y sus asignaciones de área tal como están.
+  const [original, setOriginal] = useState<{
+    participacion: Registro;
+    servicios: Registro[];
+  } | null>(null);
+
+  useEffect(() => {
+    if (!editando) return;
+    Promise.all([
+      api<Registro>(`/participaciones/${editando}/`),
+      api<Pagina<Registro>>(
+        `/servicios/?participacion=${editando}&page_size=100`,
+      ),
+    ])
+      .then(async ([participacion, { results: servicios }]) => {
+        await registro.elegirPersona(participacion.persona as string);
+        const valores = datosDeParticipacion(participacion, servicios);
+        for (const [campo, valor] of Object.entries(valores)) {
+          formulario.setValue(campo as keyof ValoresServidor, valor as never);
+        }
+        setEtiquetas({ retiro: participacion.retiro_etiqueta as string });
+        registro.setAviso("");
+        setOriginal({ participacion, servicios });
+      })
+      .catch((e: Error) => registro.setError(e.message));
+    // Solo al abrir la pantalla.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editando]);
 
   if (!puede("personas") || !puede("participaciones") || !puede("servicios")) {
     return <NotFound />;
   }
+  if (editando && !original) {
+    return (
+      <p className="text-sm text-gray-500 dark:text-gray-400">
+        {registro.error || "Cargando…"}
+      </p>
+    );
+  }
+
+  // Al terminar de editar, de vuelta a donde se vino (o a la ficha).
+  const salir = (persona?: string) =>
+    navigate(
+      volver?.startsWith("/")
+        ? volver
+        : persona
+          ? `/personas/${persona}`
+          : "/participaciones",
+    );
 
   const { persona } = registro;
   const nombreArea = (id: string) => areas.find((a) => a.id === id)?.nombre;
 
   const siguiente = async () => {
     if (!(await asistente.validarActual())) return;
-    if (asistente.actual === 0) {
+    if (asistente.actual === 0 && !editando) {
       const encontrada = await registro.buscarPorDocumento(pasos[0].campos);
       if (encontrada) {
         const conflicto = await conflictoEnRetiro(
@@ -163,16 +217,19 @@ export default function RegistrarServidor() {
     }
     let participacion: Registro;
     try {
-      // 2. Su lugar en el equipo del retiro.
-      participacion = await api<Registro>("/participaciones/", {
-        method: "POST",
-        body: {
-          retiro: v.retiro,
-          persona: guardada.id,
-          tipo: v.tipo,
-          ...cuerpoDisponibilidad(v),
+      // 2. Su lugar en el equipo del retiro (o los cambios, si se edita).
+      participacion = await api<Registro>(
+        editando ? `/participaciones/${editando}/` : "/participaciones/",
+        {
+          method: editando ? "PATCH" : "POST",
+          body: {
+            retiro: v.retiro,
+            persona: guardada.id,
+            tipo: v.tipo,
+            ...cuerpoDisponibilidad(v),
+          },
         },
-      });
+      );
     } catch (err) {
       errorDeApi(
         err,
@@ -181,9 +238,27 @@ export default function RegistrarServidor() {
       );
       return;
     }
-    // 3. Una asignación por área.
+    // 3. Una asignación por área. Editando: se borran las que dejó, se
+    // actualiza si coordina y se crean las nuevas.
     const fallidas: string[] = [];
-    for (const area of v.areas) {
+    const antes = new Map(
+      (original?.servicios ?? []).map((s) => [String(s.area), s]),
+    );
+    for (const [area, asignacion] of antes) {
+      try {
+        if (!v.areas.includes(area)) {
+          await api(`/servicios/${asignacion.id}/`, { method: "DELETE" });
+        } else if (v.coordina.includes(area) !== asignacion.es_coordinador) {
+          await api(`/servicios/${asignacion.id}/`, {
+            method: "PATCH",
+            body: { es_coordinador: v.coordina.includes(area) },
+          });
+        }
+      } catch {
+        fallidas.push(nombreArea(area) ?? area);
+      }
+    }
+    for (const area of v.areas.filter((a) => !antes.has(a))) {
       try {
         await api("/servicios/", {
           method: "POST",
@@ -196,6 +271,16 @@ export default function RegistrarServidor() {
       } catch {
         fallidas.push(nombreArea(area) ?? area);
       }
+    }
+    if (editando) {
+      if (fallidas.length) {
+        registro.setError(
+          `Se guardaron los cambios, salvo en las áreas: ${fallidas.join(", ")}.`,
+        );
+        return;
+      }
+      salir(guardada.id);
+      return;
     }
     const tipo = TIPOS_PARTICIPACION.find((t) => t.valor === v.tipo)?.etiqueta;
     setHecho({
@@ -244,7 +329,11 @@ export default function RegistrarServidor() {
       <PasoIdentificacionServidor
         persona={persona}
         onPersona={registro.elegirPersona}
-        onDocumento={() => registro.buscarPorDocumento(pasos[0].campos)}
+        onDocumento={() =>
+          // Editando no se busca a otra persona: se corrige el documento.
+          !editando && registro.buscarPorDocumento(pasos[0].campos)
+        }
+        edicion={!!editando}
         avisoDocumento={registro.aviso}
         etiquetas={etiquetas}
         onEtiqueta={(nombre, etiqueta) =>
@@ -290,10 +379,16 @@ export default function RegistrarServidor() {
   return (
     <>
       <PageMeta
-        title="Registrar servidor | Betania"
+        title={`${editando ? "Editar servidor" : "Registrar servidor"} | Betania`}
         description="Registrar a un servidor en el equipo de un retiro, paso a paso"
       />
-      <PageBreadcrumb pageTitle="Registrar servidor" />
+      <PageBreadcrumb
+        pageTitle={
+          editando
+            ? `Editar servidor · ${registro.persona?.nombre ?? ""}`
+            : "Registrar servidor"
+        }
+      />
 
       {hecho && (
         <div className="mb-6 flex flex-wrap items-center gap-4 rounded-2xl border border-success-500/30 bg-success-50 px-5 py-4 dark:bg-success-500/15">
@@ -329,8 +424,12 @@ export default function RegistrarServidor() {
             asistente={asistente}
             general={registro.error}
             guardando={formState.isSubmitting}
-            textoGuardar="Registrar servidor"
+            textoGuardar={editando ? "Guardar cambios" : "Registrar servidor"}
+            textoReiniciar={editando ? "Cancelar" : undefined}
             onEmpezarDeNuevo={() => {
+              if (editando) {
+                return salir(original?.participacion.persona as string);
+              }
               setHecho(null);
               empezarDeNuevo();
             }}
