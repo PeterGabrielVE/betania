@@ -44,7 +44,7 @@ export function BarraApilada({
           .map((s) => (
             <div
               key={s.clave}
-              className="h-full transition-opacity first:rounded-l last:rounded-r"
+              className="h-full transition-opacity first:rounded-s last:rounded-e"
               style={{
                 flexGrow: s.total,
                 background: s.color,
@@ -156,7 +156,7 @@ export function BarrasHorizontales({
           </span>
           <span className="h-2.5">
             <span
-              className="block h-full rounded-r bg-(--viz-serie)"
+              className="block h-full rounded-e bg-(--viz-serie)"
               style={{ width: `${(f.total / mayor) * 100}%` }}
             />
           </span>

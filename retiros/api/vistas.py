@@ -14,6 +14,7 @@ from rest_framework import filters, routers, serializers, status, viewsets
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
+from ..acceso import ambito_fijo
 from .modulos import AYUDAS, ETIQUETAS, MODULOS, POR_MODELO
 from .permisos import PermisosModelo, ve_sensibles
 
@@ -37,6 +38,12 @@ def _tipo(f):
     if f.name == "tasa":
         return "cifra"  # un decimal que no es dinero
     return next((t for clase, t in _TIPOS if isinstance(f, clase)), "texto")
+
+
+def filtros_fijos(modulo, user):
+    """Campo -> objeto que el rol del usuario fija en este módulo (ver Modulo.por_ambito)."""
+    ambito = ambito_fijo(user)
+    return {n: ambito[n] for n in modulo.por_ambito if n in ambito}
 
 
 def _describir(modulo, nombre):
@@ -127,7 +134,13 @@ class ModuloViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
+        # Lo que fija el rol se aplica siempre, aunque la URL pida otra cosa.
+        fijos = filtros_fijos(self.modulo, self.request.user)
+        for nombre, obj in fijos.items():
+            qs = qs.filter(**{nombre: obj.pk})
         for nombre in self.modulo.filtros:
+            if nombre in fijos:
+                continue
             valor = self.request.query_params.get(nombre)
             if valor:
                 try:
@@ -207,14 +220,23 @@ def esquema(request):
             continue
         campos = [n for n in m.campos if sensibles or n not in m.sensibles]
         lista = [n for n in m.lista if n not in m.extras or m.extras[n].visible(user)]
+        fijos = {n: {"valor": obj.pk, "etiqueta": str(obj)}
+                 for n, obj in filtros_fijos(m, user).items()}
+
+        def con_fijo(info):
+            if info["nombre"] in fijos:
+                info["fijo"] = fijos[info["nombre"]]
+            return info
+
         modulos.append({
             "slug": m.slug,
             "titulo": m.titulo,
             "singular": m.singular,
             "grupo": m.grupo,
-            "campos": [_describir(m, n) for n in campos],
+            "emoji": m.emoji,
+            "campos": [con_fijo(_describir(m, n)) for n in campos],
             "lista": [_describir(m, n) for n in lista],
-            "filtros": [_filtro(m, n) for n in m.filtros],
+            "filtros": [con_fijo(_filtro(m, n)) for n in m.filtros],
             "buscable": bool(m.buscar),
             "puede_agregar": user.has_perm(m.permiso("add")),
             "puede_cambiar": user.has_perm(m.permiso("change")),

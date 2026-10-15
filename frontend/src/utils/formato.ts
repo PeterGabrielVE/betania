@@ -59,6 +59,59 @@ const coloresEstado: Record<string, ColorBadge> = {
   pendiente: "light",
 };
 
+// Emoji de cada opción (estados, conceptos, categorías...), para reconocerla
+// de un vistazo en listados y tablas. Siempre va junto a su texto.
+const emojis: Record<string, string> = {
+  // Retiro
+  planeacion: "🗓️",
+  inscripciones: "📣",
+  en_curso: "🔥",
+  finalizado: "🏁",
+  // Inscripción
+  solicitada: "📨",
+  aceptada: "👍",
+  lista_espera: "⏳",
+  confirmada: "✅",
+  cancelada: "❌",
+  // Pago de la cuota
+  pagado: "💰",
+  parcial: "🌓",
+  pendiente: "⏳",
+  // Concepto y método de pago
+  cuota: "🎟️",
+  donativo: "🎁",
+  aportacion: "🤝",
+  recaudacion: "🎉",
+  efectivo: "💵",
+  transferencia: "🏦",
+  // Categoría de gasto
+  comida: "🍽️",
+  hospedaje: "🏠",
+  materiales: "📦",
+  transporte: "🚌",
+  otro: "🔹",
+  // Participación
+  caminante: "🚶",
+  servidor: "🙌",
+  coordinador: "⭐",
+  // Rol
+  super_admin: "👑",
+  admin_diocesano: "🏛️",
+  coord_parroquia: "⛪",
+  coord_retiro: "⭐",
+  logistica: "📦",
+  tesoreria: "💰",
+  secretaria: "🗂️",
+  // Moneda
+  VES: "🇻🇪",
+  USD: "💵",
+  EUR: "💶",
+};
+
+export function emojiOpcion(valor: string): string {
+  return emojis[valor] ?? "";
+}
+
 export function colorEstado(estado: string): ColorBadge {
   return coloresEstado[estado] ?? "light";
 }

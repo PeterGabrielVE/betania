@@ -19,12 +19,20 @@ from ..models import (
     Charla, EstadoPago, Gasto, Inscripcion, Pago, Participacion, Persona, Retiro, Tarea,
 )
 from ..tasas import TasaNoDisponible, tasas_bcv
-from .modulos import INSCRITAS
+from .modulos import INSCRITAS, POR_MODELO
 from .permisos import permiso, ve_sensibles
+from .vistas import filtros_fijos
 
 
 def _ve(user, modelo):
     return user.has_perm(permiso(modelo, "view"))
+
+
+def _retiros(user):
+    """Los retiros que el usuario ve: los de la parroquia y el tipo que fija su
+    rol, igual que en el listado de retiros (ver Modulo.por_ambito)."""
+    fijos = filtros_fijos(POR_MODELO[Retiro], user)
+    return Retiro.objects.filter(**{n: obj.pk for n, obj in fijos.items()})
 
 
 # Todos los totales van en la moneda base (ver Movimiento.monto_base).
@@ -68,7 +76,7 @@ def resumen(request):
         Inscripcion.objects.values_list("estado").annotate(total=Count("id"))
     )
     proximos = (
-        Retiro.objects.select_related("tipo")
+        _retiros(request.user).select_related("tipo")
         .annotate(inscritos=Count("inscripciones", filter=INSCRITAS))
         .filter(fecha_fin__gte=hoy).order_by("fecha_inicio")[:5]
     )
@@ -77,8 +85,8 @@ def resumen(request):
     egresos = _total(Gasto.objects)
     return Response({
         "personas": Persona.objects.count(),
-        "retiros": Retiro.objects.count(),
-        "retiros_activos": Retiro.objects.exclude(estado=Retiro.Estado.FINALIZADO).count(),
+        "retiros": _retiros(request.user).count(),
+        "retiros_activos": _retiros(request.user).exclude(estado=Retiro.Estado.FINALIZADO).count(),
         "inscripciones": sum(por_estado.values()),
         "inscripciones_por_estado": [
             {"estado": valor, "etiqueta": etiqueta, "total": por_estado.get(valor, 0)}
@@ -105,7 +113,8 @@ DIAS_CUMPLEANOS = 30
 def _tablero_de(request, hoy):
     if not _ve(request.user, Retiro):
         return {"retiros_tablero": [], "tablero": None}
-    retiros = list(Retiro.objects.select_related("tipo").order_by("-fecha_inicio")[:30])
+    retiros = list(
+        _retiros(request.user).select_related("tipo").order_by("-fecha_inicio")[:30])
     elegido = request.query_params.get("retiro")
     retiro = next((r for r in retiros if str(r.pk) == elegido), None)
     if retiro is None:
@@ -470,7 +479,7 @@ def panel_retiro(request, pk):
     user = request.user
     if not _ve(user, Retiro):
         raise PermissionDenied()
-    retiro = get_object_or_404(Retiro.objects.select_related("tipo", "parroquia"), pk=pk)
+    retiro = get_object_or_404(_retiros(user).select_related("tipo", "parroquia"), pk=pk)
     finanzas = _ve(user, Pago) and _ve(user, Gasto)
 
     caminantes = _caminantes(

@@ -29,13 +29,14 @@ CONFIRMADAS = Q(inscripciones__estado=Inscripcion.Estado.CONFIRMADA)
 MODULOS = [
     # ---- Retiros ----
     Modulo(
-        "retiros", Retiro, "Retiros", "retiro", RETIROS,
+        "retiros", Retiro, "Retiros", "retiro", RETIROS, "⛪",
         campos=["parroquia", "tipo", "edicion", "fecha_inicio", "fecha_fin", "sede", "cupo",
                 "cuota", "cuota_servidor", "estado"],
-        lista=["tipo", "edicion", "parroquia", "fecha_inicio", "fecha_fin", "sede",
+        lista=["nombre", "parroquia", "fecha_inicio", "fecha_fin", "sede",
                "inscritos", "cupo", "estado", "lista_pdf"],
         buscar=["tipo__nombre", "sede", "parroquia__nombre"],
         filtros=["estado", "parroquia", "tipo"],
+        por_ambito=["parroquia", "tipo"],
         orden=["-fecha_inicio"],
         relacionados=["tipo", "parroquia"],
         anotaciones={
@@ -43,6 +44,8 @@ MODULOS = [
             "confirmados": Count("inscripciones", filter=CONFIRMADAS),
         },
         extras={
+            # "Emaús hombres #12": tipo y edición juntos, con lo que se reconoce.
+            "nombre": Extra("Retiro", "texto", str),
             "inscritos": Extra("Inscritos", "numero", anotado("inscritos")),
             "confirmados": Extra("Confirmados", "numero", anotado("confirmados")),
             "lista_pdf": Extra("Lista", "enlace", lambda o: f"/retiros/{o.pk}/lista.pdf",
@@ -50,7 +53,7 @@ MODULOS = [
         },
     ),
     Modulo(
-        "inscripciones", Inscripcion, "Inscripciones", "inscripción", RETIROS,
+        "inscripciones", Inscripcion, "Inscripciones", "inscripción", RETIROS, "📝",
         campos=["retiro", "persona", "padrino", "estado", "salud_alimentacion",
                 "contacto_emergencia", "notas", "consentimiento_datos"],
         lista=["persona", "retiro", "padrino", "estado", "estado_pago", "total_pagado",
@@ -100,7 +103,7 @@ MODULOS = [
         },
     ),
     Modulo(
-        "participaciones", Participacion, "Participaciones", "participación", RETIROS,
+        "participaciones", Participacion, "Participaciones", "participación", RETIROS, "🙋",
         campos=["retiro", "persona", "tipo"],
         lista=["persona", "tipo", "retiro"],
         buscar=["persona__nombre", "retiro__tipo__nombre"],
@@ -110,7 +113,7 @@ MODULOS = [
     ),
     Modulo(
         "servicios", AsignacionServicio, "Servidores por área", "asignación de servicio",
-        RETIROS,
+        RETIROS, "🧩",
         campos=["participacion", "area", "es_coordinador"],
         lista=["participacion", "area", "es_coordinador"],
         buscar=["participacion__persona__nombre", "area__nombre"],
@@ -119,7 +122,7 @@ MODULOS = [
         relacionados=["participacion__persona", "participacion__retiro__tipo", "area"],
     ),
     Modulo(
-        "charlas", Charla, "Charlas", "charla", RETIROS,
+        "charlas", Charla, "Charlas", "charla", RETIROS, "🎤",
         campos=["retiro", "tema", "expositor", "orden", "materiales"],
         lista=["orden", "tema", "expositor", "retiro"],
         buscar=["tema", "expositor__nombre"],
@@ -128,7 +131,7 @@ MODULOS = [
         relacionados=["retiro__tipo", "expositor"],
     ),
     Modulo(
-        "tareas", Tarea, "Tareas", "tarea", RETIROS,
+        "tareas", Tarea, "Tareas", "tarea", RETIROS, "✅",
         campos=["retiro", "titulo", "descripcion", "area", "responsable", "fecha_limite",
                 "hecha"],
         lista=["titulo", "fecha_limite", "responsable", "area", "retiro", "hecha"],
@@ -140,7 +143,7 @@ MODULOS = [
     ),
     # ---- Personas y acceso ----
     Modulo(
-        "personas", Persona, "Personas", "persona", PERSONAS,
+        "personas", Persona, "Personas", "persona", PERSONAS, "👤",
         campos=["nombre", "parroquia", "telefono", "email", "fecha_nacimiento",
                 "datos_sensibles"],
         lista=["nombre", "telefono", "email", "fecha_nacimiento", "parroquia", "creado"],
@@ -178,7 +181,7 @@ MODULOS = [
         },
     ),
     Modulo(
-        "usuarios", Usuario, "Usuarios", "usuario", PERSONAS,
+        "usuarios", Usuario, "Usuarios", "usuario", PERSONAS, "🔑",
         campos=["persona", "activo"],
         lista=["persona", "activo"],
         buscar=["persona__nombre"],
@@ -186,7 +189,7 @@ MODULOS = [
         relacionados=["persona"],
     ),
     Modulo(
-        "roles", AsignacionRol, "Asignaciones de rol", "asignación de rol", PERSONAS,
+        "roles", AsignacionRol, "Asignaciones de rol", "asignación de rol", PERSONAS, "🛡️",
         campos=["usuario", "rol", "diocesis", "parroquia", "retiro"],
         lista=["usuario", "rol", "diocesis", "parroquia", "retiro"],
         buscar=["usuario__persona__nombre"],
@@ -196,7 +199,7 @@ MODULOS = [
     ),
     # ---- Finanzas ----
     Modulo(
-        "pagos", Pago, "Pagos", "pago", FINANZAS,
+        "pagos", Pago, "Pagos", "pago", FINANZAS, "💵",
         campos=["retiro", "concepto", "monto", "moneda", "tasa", "metodo", "fecha",
                 "persona", "inscripcion", "referencia"],
         lista=["fecha", "concepto", "monto", "moneda", "monto_base", "metodo", "retiro",
@@ -208,7 +211,7 @@ MODULOS = [
                       "inscripcion__retiro__tipo"],
     ),
     Modulo(
-        "gastos", Gasto, "Gastos", "gasto", FINANZAS,
+        "gastos", Gasto, "Gastos", "gasto", FINANZAS, "🧾",
         campos=["retiro", "categoria", "descripcion", "monto", "moneda", "tasa", "fecha",
                 "comprobante"],
         lista=["fecha", "categoria", "descripcion", "monto", "moneda", "monto_base",
@@ -220,23 +223,23 @@ MODULOS = [
     ),
     # ---- Catálogos ----
     Modulo(
-        "diocesis", Diocesis, "Diócesis", "diócesis", CATALOGOS,
+        "diocesis", Diocesis, "Diócesis", "diócesis", CATALOGOS, "🏛️",
         campos=["nombre"], lista=["nombre"], buscar=["nombre"], orden=["nombre"],
     ),
     Modulo(
-        "parroquias", Parroquia, "Parroquias", "parroquia", CATALOGOS,
+        "parroquias", Parroquia, "Parroquias", "parroquia", CATALOGOS, "🏘️",
         campos=["nombre", "diocesis"], lista=["nombre", "diocesis"],
         buscar=["nombre"], filtros=["diocesis"], orden=["nombre"],
         relacionados=["diocesis"],
     ),
     Modulo(
-        "tipos-retiro", TipoRetiro, "Tipos de retiro", "tipo de retiro", CATALOGOS,
+        "tipos-retiro", TipoRetiro, "Tipos de retiro", "tipo de retiro", CATALOGOS, "🏷️",
         campos=["nombre", "parroquia"], lista=["nombre", "parroquia"],
         buscar=["nombre"], filtros=["parroquia"], orden=["nombre"],
         relacionados=["parroquia"],
     ),
     Modulo(
-        "areas-servicio", AreaServicio, "Áreas de servicio", "área de servicio", CATALOGOS,
+        "areas-servicio", AreaServicio, "Áreas de servicio", "área de servicio", CATALOGOS, "🛠️",
         campos=["nombre", "parroquia", "descripcion"],
         lista=["nombre", "parroquia", "descripcion"],
         buscar=["nombre"], filtros=["parroquia"], orden=["nombre"],

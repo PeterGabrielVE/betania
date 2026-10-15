@@ -29,6 +29,7 @@ class Modulo:
     titulo: str
     singular: str
     grupo: str                # sección del menú
+    emoji: str                # junto al título, en el menú y el listado
     campos: list              # campos editables, en el orden del formulario
     lista: list               # columnas de la tabla (campos o extras)
     buscar: list = field(default_factory=list)
@@ -43,6 +44,10 @@ class Modulo:
     # Campo JSON -> lista de sub(): el formulario pide cada dato por separado
     # en vez de JSON a mano.
     subcampos: dict = field(default_factory=dict)
+    # Campos que el rol del usuario fija ("parroquia", "tipo"; ver
+    # acceso.ambito_fijo): el listado solo muestra ese valor y el formulario lo
+    # trae puesto.
+    por_ambito: list = field(default_factory=list)
 
     def campo(self, nombre):
         return self.modelo._meta.get_field(nombre)

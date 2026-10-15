@@ -14,7 +14,7 @@ Los demás roles siguen usando los permisos normales de Django (usuario o grupo)
 
 from django.contrib.auth.backends import BaseBackend
 
-from .models import Rol
+from .models import Retiro, Rol
 
 # De mayor a menor alcance: con varias asignaciones, la primera fija el contexto RLS.
 PRIORIDAD = [
@@ -58,6 +58,41 @@ def asignaciones(user):
         return []
     roles = list(usuario.roles.all())
     return sorted(roles, key=lambda a: PRIORIDAD.index(a.rol))
+
+
+def ambito_fijo(user):
+    """La parroquia y el tipo de retiro a los que el rol limita al usuario:
+    {"parroquia": Parroquia, "tipo": TipoRetiro} (cada uno solo si está fijo).
+
+    Un coordinador de parroquia tiene fija su parroquia; uno de retiro o de
+    logística, además, el tipo de ese retiro. Con varios roles solo se fija lo
+    que todos comparten; los roles globales o diocesanos no tienen nada fijo."""
+    if not hasattr(user, "_ambito_fijo"):
+        user._ambito_fijo = _calcular_ambito(user)
+    return user._ambito_fijo
+
+
+def _calcular_ambito(user):
+    asigs = asignaciones(user)
+    if (not asigs or user.is_superuser
+            or any(a.rol in (Rol.SUPER_ADMIN, Rol.ADMIN_DIOCESANO) for a in asigs)):
+        return {}
+    retiros = {
+        r.pk: r for r in Retiro.objects.select_related("parroquia", "tipo")
+        .filter(pk__in=[a.retiro_id for a in asigs if a.retiro_id])
+    }
+    parroquias, tipos = {}, {}
+    for a in asigs:
+        retiro = retiros.get(a.retiro_id)
+        parroquia = a.parroquia if a.parroquia_id else retiro and retiro.parroquia
+        parroquias[parroquia and parroquia.pk] = parroquia
+        tipos[retiro and retiro.tipo_id] = retiro and retiro.tipo
+    ambito = {}
+    if len(parroquias) == 1 and None not in parroquias:
+        ambito["parroquia"] = next(iter(parroquias.values()))
+    if len(tipos) == 1 and None not in tipos:
+        ambito["tipo"] = next(iter(tipos.values()))
+    return ambito
 
 
 class RolBackend(BaseBackend):

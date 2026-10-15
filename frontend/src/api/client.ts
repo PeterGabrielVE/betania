@@ -116,6 +116,9 @@ export type Campo = {
   ayuda?: string; // texto bajo el control
   // tipo "json": datos que el formulario pide por separado y guarda en ese JSON
   subcampos?: Campo[];
+  // Valor que fija el rol del usuario (p. ej. su parroquia): el filtro no se
+  // puede cambiar y el formulario de alta lo trae puesto.
+  fijo?: { valor: string; etiqueta: string };
 };
 
 export type Modulo = {
@@ -123,6 +126,7 @@ export type Modulo = {
   titulo: string;
   singular: string;
   grupo: string;
+  emoji: string;
   campos: Campo[]; // formulario
   lista: Campo[]; // columnas de la tabla
   filtros: Campo[];

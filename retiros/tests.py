@@ -424,6 +424,46 @@ class AccesoPorRolTests(Base):
         (fila,) = self.client.get(self.ruta).json()["caminantes"]["filas"]
         self.assertEqual((fila["estado_pago"], fila["saldo"]), ("pagado", 0))
 
+    def test_el_rol_fija_parroquia_y_tipo_del_listado_de_retiros(self):
+        samuel = TipoRetiro.objects.create(nombre="Samuel")
+        otro = Retiro.objects.create(
+            parroquia=self.parroquia, tipo=samuel, edicion=1,
+            fecha_inicio=date(2027, 5, 1), fecha_fin=date(2027, 5, 3),
+        )
+        self.entrar_como(Rol.COORD_RETIRO)
+
+        retiros = self.client.get("/api/retiros/").json()["results"]
+        self.assertEqual([r["id"] for r in retiros], [str(self.retiro.pk)])
+        # Pedir el otro tipo por la URL no lo muestra.
+        r = self.client.get(f"/api/retiros/?tipo={samuel.pk}").json()
+        self.assertEqual([x["id"] for x in r["results"]], [str(self.retiro.pk)])
+        self.assertNotEqual(otro.pk, self.retiro.pk)
+
+        (modulo,) = [m for m in self.client.get("/api/esquema/").json()
+                     if m["slug"] == "retiros"]
+        fijos = {f["nombre"]: f.get("fijo") for f in modulo["filtros"]}
+        self.assertEqual(fijos["parroquia"],
+                         {"valor": str(self.parroquia.pk), "etiqueta": "San José"})
+        self.assertEqual(fijos["tipo"]["etiqueta"], "Emaús hombres")
+        self.assertIsNone(fijos["estado"])
+        self.assertEqual(modulo["emoji"], "⛪")
+
+        # El inicio y el panel tampoco muestran el retiro del otro tipo.
+        resumen = self.client.get("/api/resumen/").json()
+        self.assertEqual([r["id"] for r in resumen["retiros_tablero"]], [str(self.retiro.pk)])
+        self.assertEqual(self.client.get(f"/api/retiros/{otro.pk}/panel/").status_code, 404)
+
+    def test_superusuario_no_tiene_filtros_fijos(self):
+        (modulo,) = [m for m in self.client.get("/api/esquema/").json()
+                     if m["slug"] == "retiros"]
+        self.assertFalse(any("fijo" in f for f in modulo["filtros"]))
+
+    def test_tamano_de_pagina(self):
+        for n in range(3):
+            self.persona(f"Persona {n}")
+        r = self.client.get("/api/personas/?page_size=2").json()
+        self.assertEqual((len(r["results"]), r["count"]), (2, 4))
+
     def test_usuario_inactivo_pierde_el_acceso(self):
         usuario = self.entrar_como(Rol.COORD_RETIRO)
         usuario.activo = False

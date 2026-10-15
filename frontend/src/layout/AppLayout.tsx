@@ -15,7 +15,9 @@ const LayoutContent: React.FC = () => {
 
       <div
         className={cn(
-          "flex-1 transition-[margin] duration-300 ease-in-out",
+          // min-w-0: una tabla ancha se desplaza dentro de su caja en vez de
+          // ensanchar toda la página.
+          "min-w-0 flex-1 transition-[margin] duration-300 ease-in-out",
           isExpanded || isHovered ? "xl:ms-72.5" : "xl:ms-22.5",
           isMobileOpen ? "ms-0" : "",
         )}
