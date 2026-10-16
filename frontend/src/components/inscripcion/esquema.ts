@@ -38,6 +38,68 @@ export const ESTADOS_CIVILES = [
   "Unión libre",
 ];
 export const TALLAS = ["S", "M", "L", "XL"];
+
+// Relación del familiar de contacto con el caminante. La pareja depende de
+// si el retiro es de hombres (su esposa) o de mujeres (su esposo); el resto
+// va en masculino y femenino porque el familiar puede ser cualquiera.
+export type Sexo = "hombre" | "mujer";
+export function sexoDelRetiro(etiqueta = ""): Sexo | undefined {
+  if (/mujer/i.test(etiqueta)) return "mujer";
+  if (/hombre/i.test(etiqueta)) return "hombre";
+  return undefined;
+}
+export function relacionesFamiliar(sexo?: Sexo) {
+  const pareja =
+    sexo === "hombre"
+      ? ["Esposa", "Novia", "Pareja"]
+      : sexo === "mujer"
+        ? ["Esposo", "Novio", "Pareja"]
+        : ["Esposa", "Esposo", "Novia", "Novio", "Pareja"];
+  return [
+    { grupo: "Pareja", opciones: pareja },
+    {
+      grupo: "Familia cercana",
+      opciones: ["Madre", "Padre", "Hija", "Hijo", "Hermana", "Hermano"],
+    },
+    {
+      grupo: "Otros familiares",
+      opciones: [
+        "Abuela",
+        "Abuelo",
+        "Nieta",
+        "Nieto",
+        "Tía",
+        "Tío",
+        "Prima",
+        "Primo",
+        "Sobrina",
+        "Sobrino",
+        "Cuñada",
+        "Cuñado",
+        "Suegra",
+        "Suegro",
+        "Nuera",
+        "Yerno",
+        "Madrastra",
+        "Padrastro",
+      ],
+    },
+    {
+      grupo: "Fuera de la familia",
+      opciones: [
+        "Amiga",
+        "Amigo",
+        "Vecina",
+        "Vecino",
+        "Compañera de trabajo",
+        "Compañero de trabajo",
+        "Madrina",
+        "Padrino",
+      ],
+    },
+  ];
+}
+
 // Con estos estados civiles se pide el nombre de la pareja.
 export const CON_PAREJA = ["Casado", "Unión libre"];
 
@@ -86,7 +148,7 @@ const sensibles = {
   talla_camiseta: obligatorio("Elige la talla de camiseta."),
   // Contactos de emergencia
   contacto_nombre: obligatorio("Escribe a quién llamar en una emergencia."),
-  contacto_relacion: obligatorio("Indica la relación (madre, esposa…)."),
+  contacto_relacion: obligatorio("Elige la relación (madre, esposa…)."),
   contacto_telefono: fijo,
   contacto_celular: celular,
   contacto_correo: correo,

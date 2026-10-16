@@ -21,9 +21,8 @@ services:
         condition: service_healthy
     ports:
       - "8000:8000"
-    # --- Modo desarrollo (recarga en caliente): descomenta estas dos líneas ---
-    # volumes: [ ".:/app" ]
-    # command: python manage.py runserver 0.0.0.0:8000
+    # En desarrollo, docker-compose.override.yml monta el código y agrega
+    # Vite (recarga en caliente): ver README.
 
 volumes:
   pgdata:

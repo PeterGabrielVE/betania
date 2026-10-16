@@ -1,0 +1,46 @@
+# Desarrollo: `docker compose up` carga este archivo solo (además de
+# docker-compose.yml). Con él no hace falta `--build` al cambiar código:
+#
+#  - web: monta el código y usa el servidor de desarrollo de Django, que se
+#    reinicia solo al guardar un .py. Al arrancar instala lo que falte de
+#    requirements.txt y aplica las migraciones (entrypoint.sh).
+#  - frontend: Vite con recarga en caliente en http://localhost:5173 (la
+#    pantalla se actualiza al guardar). La API la atiende web.
+#
+# En producción no se usa: `docker compose -f docker-compose.yml up -d --build`.
+services:
+  web:
+    volumes:
+      - .:/app
+    environment:
+      # Las páginas las sirve Vite; quien entre por :8000 va a :5173.
+      FRONTEND_DEV_URL: http://localhost:5173
+    command: >
+      sh -c "pip install -q --root-user-action=ignore -r requirements.txt &&
+             python manage.py runserver 0.0.0.0:8000"
+
+  frontend:
+    image: node:24-slim
+    working_dir: /frontend
+    volumes:
+      - ./frontend:/frontend
+      # Los paquetes de Node van aparte: los de Windows no sirven en Linux.
+      - frontend_node_modules:/frontend/node_modules
+    environment:
+      VITE_BACKEND_URL: http://web:8000
+      # En Windows los cambios de archivos montados solo se notan sondeando.
+      CHOKIDAR_USEPOLLING: "true"
+      VITE_POLLING: "1"
+    # Instala los paquetes solo si cambió package-lock.json.
+    command: >
+      sh -c 'h=$$(md5sum package-lock.json);
+             [ "$$(cat node_modules/.lock-hash 2>/dev/null)" = "$$h" ] ||
+             { npm install --no-audit --no-fund && echo "$$h" > node_modules/.lock-hash; };
+             exec npm run dev -- --host 0.0.0.0'
+    ports:
+      - "5173:5173"
+    depends_on:
+      - web
+
+volumes:
+  frontend_node_modules:

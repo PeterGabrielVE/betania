@@ -66,6 +66,10 @@ const AppSidebar: React.FC = () => {
         subItems: modulos
           .filter((m) => m.grupo === grupo && m.en_menu)
           .flatMap((m) => [
+            // La hoja de control de pagos va antes del listado de pagos.
+            ...(m.slug === "pagos"
+              ? [{ name: "Control de pagos", path: "/control-pagos" }]
+              : []),
             { name: m.titulo, path: `/${m.slug}` },
             // El formulario de caminantes (el de papel) va junto a su listado.
             ...(m.slug === "inscripciones" && puedeInscribir

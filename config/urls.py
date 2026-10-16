@@ -1,6 +1,6 @@
 from django.conf import settings
 from django.contrib import admin
-from django.http import FileResponse, HttpResponse
+from django.http import FileResponse, HttpResponse, HttpResponseRedirect
 from django.urls import include, path, re_path
 from django.views.decorators.csrf import ensure_csrf_cookie
 
@@ -10,6 +10,8 @@ from retiros.reportes import lista_retiro_pdf
 @ensure_csrf_cookie
 def frontend(request):
     """Sirve el index.html del frontend React; las rutas las resuelve React Router."""
+    if settings.FRONTEND_DEV_URL:
+        return HttpResponseRedirect(settings.FRONTEND_DEV_URL + request.get_full_path())
     index = settings.FRONTEND_DIST / "index.html"
     if not index.exists():
         return HttpResponse(

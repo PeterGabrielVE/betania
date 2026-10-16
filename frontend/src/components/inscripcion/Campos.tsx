@@ -155,6 +155,64 @@ export function Opciones({
   );
 }
 
+// Combo de relación con el familiar (por grupos). "Otra…" deja escribirla, y
+// una ya guardada que no está en la lista se conserva como opción.
+const OTRA = "__otra";
+export function RelacionFamiliar({
+  grupos,
+  ...base
+}: Base & { grupos: { grupo: string; opciones: string[] }[] }) {
+  const { setValue } = useFormContext();
+  const valor = (useWatch({ name: base.nombre }) as string) ?? "";
+  const { error, props } = useCampo(base.nombre);
+  const enLista = grupos.some((g) => g.opciones.includes(valor));
+  const [escribiendo, setEscribiendo] = useState(false);
+  const otra = escribiendo || (valor !== "" && !enLista);
+  const elegir = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const elegido = e.target.value;
+    setEscribiendo(elegido === OTRA);
+    setValue(base.nombre, elegido === OTRA ? "" : elegido, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+  };
+  return (
+    <Envoltura {...base}>
+      <select
+        className={claseDe(error && !otra)}
+        id={props.id}
+        aria-invalid={props["aria-invalid"]}
+        aria-describedby={props["aria-describedby"]}
+        value={otra ? OTRA : valor}
+        onChange={elegir}
+      >
+        <option value="">Elegir…</option>
+        {grupos.map((g) => (
+          <optgroup key={g.grupo} label={g.grupo}>
+            {g.opciones.map((o) => (
+              <option key={o} value={o}>
+                {o}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+        <option value={OTRA}>Otra…</option>
+      </select>
+      {otra && (
+        <input
+          type="text"
+          placeholder="Escribe la relación (ej.: ahijado, catequista…)"
+          className={claseDe(error, "mt-2")}
+          aria-label={`${base.etiqueta}: otra`}
+          autoFocus={escribiendo}
+          {...props}
+          id={`${props.id}-otra`}
+        />
+      )}
+    </Envoltura>
+  );
+}
+
 export function Casilla({
   nombre,
   etiqueta,

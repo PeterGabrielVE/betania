@@ -34,16 +34,15 @@ export function fecha(valor: string | null): string {
   return valor ? formatoFecha.format(new Date(valor.slice(0, 10))) : "—";
 }
 
-// Sin `moneda`, el monto está en la moneda base (cuotas, totales, equivalentes).
-// Sin `moneda`, el monto está en la moneda base (cuotas, totales,
-// equivalentes) y se muestra en la que eligió el usuario. Con `moneda`, se
-// muestra tal cual (el monto de un pago en la moneda en que se hizo).
 // Un monto en la moneda base, en la moneda que el usuario está viendo, para
 // una descarga (ver CeldaDescarga).
 export function montoVista(valor: number | null | undefined) {
   return { monto: (valor ?? 0) * factorVista, moneda: monedaVista };
 }
 
+// Sin `moneda`, el monto está en la moneda base (cuotas, totales,
+// equivalentes) y se muestra en la que eligió el usuario. Con `moneda`, se
+// muestra tal cual (el monto de un pago en la moneda en que se hizo).
 export function dinero(valor: number | null, moneda?: string): string {
   if (moneda === undefined) {
     moneda = monedaVista;

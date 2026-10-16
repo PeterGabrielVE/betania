@@ -9,15 +9,18 @@ import {
   Grupo,
   Opciones,
   Relacion,
+  RelacionFamiliar,
   Texto,
 } from "./Campos";
 import {
   CON_PAREJA,
   ESTADOS_CIVILES,
   ETIQUETAS as E,
+  relacionesFamiliar,
   TALLAS,
   TIPOS_DOCUMENTO,
   type Paso,
+  type Sexo,
   type Valores,
 } from "./esquema";
 import Resumen from "./Resumen";
@@ -225,7 +228,10 @@ export function PasoSalud() {
   );
 }
 
-export function PasoContactos() {
+// `sexo`: el del caminante (por el tipo de retiro), para ofrecer "Esposa" o
+// "Esposo"; sin saberlo, ambos.
+export function PasoContactos({ sexo }: { sexo?: Sexo }) {
+  const grupos = relacionesFamiliar(sexo);
   return (
     <div className="space-y-6">
       <Grupo titulo="Persona a quien llamar">
@@ -234,11 +240,11 @@ export function PasoContactos() {
           etiqueta={E.contacto_nombre}
           obligatorio
         />
-        <Texto
+        <RelacionFamiliar
           nombre="contacto_relacion"
           etiqueta={E.contacto_relacion}
           obligatorio
-          placeholder="Ej.: madre, esposa, hermano"
+          grupos={grupos}
         />
         <Celular
           nombre="contacto_celular"
@@ -261,7 +267,11 @@ export function PasoContactos() {
       </Grupo>
       <Grupo titulo="Otro familiar (opcional)">
         <Texto nombre="contacto2_nombre" etiqueta={E.contacto2_nombre} />
-        <Texto nombre="contacto2_relacion" etiqueta={E.contacto2_relacion} />
+        <RelacionFamiliar
+          nombre="contacto2_relacion"
+          etiqueta={E.contacto2_relacion}
+          grupos={grupos}
+        />
         <Texto
           nombre="contacto2_telefono"
           etiqueta={E.contacto2_telefono}

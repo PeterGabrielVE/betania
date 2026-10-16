@@ -1131,12 +1131,18 @@ pre[class*="language-"].line-numbers {
 /* Gráficas del tablero (validadas con el validador de paleta de dataviz):
    - serie: un solo tono para magnitudes (barras por área, recaudación,
      anillo de confirmados).
-   - pista: el fondo de medidores y anillos. */
+   - pista: el fondo de medidores y anillos.
+   - pagado / parcial: estados del pago en los anillos de tesorería (con su
+     nombre siempre escrito; "sin abono" es la pista). */
 :root {
   --viz-serie: #2a78d6;
   --viz-pista: #eef0f3;
+  --viz-pagado: #039855;
+  --viz-parcial: #f79009;
 }
 .dark {
   --viz-serie: #3987e5;
   --viz-pista: #262f42;
+  --viz-pagado: #039855;
+  --viz-parcial: #dc6803;
 }

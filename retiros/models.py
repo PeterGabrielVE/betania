@@ -532,6 +532,9 @@ class Inscripcion(models.Model):
     salud_alimentacion = models.JSONField(default=dict, blank=True)
     contacto_emergencia = models.JSONField(default=dict, blank=True)
     consentimiento_datos = models.BooleanField(default=False)
+    # Lo que paga esta persona si no es la cuota del retiro (beca, descuento).
+    cuota = models.DecimalField("monto a pagar", max_digits=10, decimal_places=2,
+                                null=True, blank=True)
     notas = models.TextField(blank=True)
     registrado_por = models.ForeignKey(
         Usuario, on_delete=models.SET_NULL, null=True, blank=True,
@@ -547,6 +550,8 @@ class Inscripcion(models.Model):
         ]
 
     def clean(self):
+        if self.cuota is not None and self.cuota < 0:
+            raise ValidationError({"cuota": "El monto no puede ser negativo."})
         if self.padrino_id and self.padrino_id == self.persona_id:
             raise ValidationError({"padrino": "Una persona no puede invitarse a sí misma."})
         if not (self.persona_id and self.retiro_id):
@@ -572,6 +577,11 @@ class Inscripcion(models.Model):
             raise ValidationError({"persona": (
                 f"Ya está en el equipo de este retiro como {equipo.get_tipo_display().lower()}."
             )})
+
+    @property
+    def cuota_a_pagar(self):
+        """La suya si la tiene; si no, la del retiro (en la moneda base)."""
+        return self.retiro.cuota if self.cuota is None else self.cuota
 
     def save(self, *args, **kwargs):
         if self.estado != self.Estado.CANCELADA:
@@ -636,6 +646,10 @@ class Participacion(models.Model):
     disponibilidad = models.JSONField(default=dict, blank=True)  # TURNOS_SERVICIO
     camisas = models.JSONField(default=dict, blank=True)         # CAMISAS_SERVICIO
     tallas_camisa = models.JSONField(default=dict, blank=True)   # TALLAS_CAMISA
+    # Lo que aporta este servidor si no es la cuota de servidor del retiro (no
+    # todos pagan lo mismo: p. ej. 20 o 25 $).
+    cuota = models.DecimalField("monto a pagar", max_digits=10, decimal_places=2,
+                                null=True, blank=True)
 
     class Meta:
         constraints = [
@@ -643,6 +657,11 @@ class Participacion(models.Model):
                 fields=["persona", "retiro"], name="uniq_participacion_persona_retiro"
             )
         ]
+
+    @property
+    def cuota_a_pagar(self):
+        """La suya si la tiene; si no, la cuota de servidor del retiro."""
+        return self.retiro.cuota_servidor if self.cuota is None else self.cuota
 
     @property
     def turnos(self):
@@ -677,6 +696,8 @@ class Participacion(models.Model):
         return f"{camisas} · talla {', '.join(self.tallas)}" if self.tallas else camisas
 
     def clean(self):
+        if self.cuota is not None and self.cuota < 0:
+            raise ValidationError({"cuota": "El monto no puede ser negativo."})
         if not (self.persona_id and self.retiro_id):
             return
         antes = _antes(self, "persona_id", "retiro_id", "estado", "tipo")

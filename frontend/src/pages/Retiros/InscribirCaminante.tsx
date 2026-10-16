@@ -10,6 +10,7 @@ import {
   datosDeInscripcion,
   datosDePersona,
   pasosPara,
+  sexoDelRetiro,
   valoresIniciales,
   type Valores,
 } from "@/components/inscripcion/esquema";
@@ -272,7 +273,7 @@ export default function InscribirCaminante() {
     ),
     familia: <PasoFamilia />,
     salud: <PasoSalud />,
-    contactos: <PasoContactos />,
+    contactos: <PasoContactos sexo={sexoDelRetiro(etiquetas.retiro)} />,
     confirmar: (
       <PasoConfirmar
         pasos={pasos}

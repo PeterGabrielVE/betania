@@ -104,6 +104,9 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 # Frontend React compilado (frontend/dist). WhiteNoise sirve sus archivos desde la
 # raíz (/assets, /images...) y config.urls devuelve su index.html.
 FRONTEND_DIST = BASE_DIR / "frontend" / "dist"
+# En desarrollo con Docker las páginas las sirve Vite (docker-compose.override.yml):
+# quien entra por Django va allá en vez de ver una compilación vieja.
+FRONTEND_DEV_URL = os.environ.get("FRONTEND_DEV_URL", "").rstrip("/")
 if FRONTEND_DIST.exists():
     WHITENOISE_ROOT = FRONTEND_DIST
 

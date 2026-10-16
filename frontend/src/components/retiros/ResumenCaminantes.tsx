@@ -1,5 +1,5 @@
 // Piezas del tablero sobre caminantes y servidores: el anillo de confirmados,
-// la tesorería (pago completo / abono parcial / sin abono), una ficha por
+// los anillos de tesorería (pago completo / abono parcial / sin abono), una ficha por
 // estado y los indicadores de atención especial.
 import type { Tablero } from "@/api/client";
 import { claseTarjeta } from "@/components/modulos/estilos";
@@ -99,58 +99,114 @@ export function AnilloConfirmados({ caminantes }: { caminantes: Caminantes }) {
   );
 }
 
-// Colores por estado de pago: siempre con su nombre escrito.
-const TONO_PAGO: Record<string, string> = {
-  pagado:
-    "bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-400",
-  parcial:
-    "bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-400",
-  pendiente: "bg-gray-50 text-gray-700 dark:bg-white/5 dark:text-gray-300",
-};
-const NOMBRE_PAGO: Record<string, string> = {
-  pagado: "Pago completo",
-  parcial: "Abono parcial",
-  pendiente: "Sin abono",
-};
+// Estados del pago, en el orden en que se dibujan en el anillo. "Sin abono"
+// es la pista (lo que falta por llenar).
+const ESTADOS_PAGO = [
+  {
+    valor: "pagado",
+    nombre: "Pago completo",
+    trazo: "stroke-(--viz-pagado)",
+    punto: "bg-(--viz-pagado)",
+  },
+  {
+    valor: "parcial",
+    nombre: "Abono parcial",
+    trazo: "stroke-(--viz-parcial)",
+    punto: "bg-(--viz-parcial)",
+  },
+  {
+    valor: "pendiente",
+    nombre: "Sin abono",
+    trazo: "",
+    punto: "bg-(--viz-pista) ring-1 ring-gray-300 dark:ring-gray-600",
+  },
+];
 
-function FilaPagos({
-  titulo,
-  enlace,
-  pagos,
-}: {
-  titulo: string;
-  enlace: string;
-  pagos: Conteo[];
-}) {
+// Un anillo por grupo: qué parte pagó completo, cuál abonó algo y cuál nada.
+function AnilloPagos({ titulo, pagos }: { titulo: string; pagos: Conteo[] }) {
+  const total = pagos.reduce((suma, p) => suma + p.total, 0);
+  const cuantos = (valor: string) =>
+    pagos.find((p) => p.valor === valor)?.total ?? 0;
+  const radio = 52;
+  const vuelta = 2 * Math.PI * radio;
+  // Separación de 2px entre segmentos (si hay más de uno).
+  const dibujados = ESTADOS_PAGO.filter((e) => e.trazo && cuantos(e.valor));
+  const hueco =
+    dibujados.length > 1 ||
+    (dibujados.length === 1 && cuantos(dibujados[0].valor) < total)
+      ? 2
+      : 0;
+  let inicio = 0;
+  const segmentos = dibujados.map((e) => {
+    const largo = (cuantos(e.valor) / total) * vuelta;
+    const seg = { ...e, desde: inicio, largo: Math.max(largo - hueco, 0) };
+    inicio += largo;
+    return seg;
+  });
+  const completos = porcentaje(cuantos("pagado"), total);
   return (
-    <div>
-      <Link
-        to={enlace}
-        className="mb-2 inline-block text-theme-xs font-semibold tracking-wide text-gray-600 uppercase hover:text-brand-500 dark:text-gray-400"
-      >
-        {titulo} →
-      </Link>
-      <ul className="grid grid-cols-3 gap-2">
-        {pagos.map((p) => (
-          <li
-            key={p.valor}
-            className={`rounded-xl px-3 py-3 text-center ${TONO_PAGO[p.valor]}`}
-          >
-            <span className="block text-xl font-bold tabular-nums">
-              {p.total}
-            </span>
-            <span className="block text-theme-xs font-medium">
-              {NOMBRE_PAGO[p.valor]}
-            </span>
-          </li>
+    <div className="flex flex-col items-center gap-3">
+      <p className="text-theme-xs font-semibold tracking-wide text-gray-600 uppercase dark:text-gray-400">
+        {titulo}
+      </p>
+      <div className="relative size-32">
+        <svg
+          viewBox="0 0 128 128"
+          className="size-32 -rotate-90"
+          role="img"
+          aria-label={`${titulo}: ${ESTADOS_PAGO.map((e) => `${cuantos(e.valor)} ${e.nombre.toLowerCase()}`).join(", ")}`}
+        >
+          <circle
+            cx="64"
+            cy="64"
+            r={radio}
+            fill="none"
+            strokeWidth="14"
+            className="stroke-(--viz-pista)"
+          />
+          {total > 0 &&
+            segmentos.map((s) => (
+              <circle
+                key={s.valor}
+                cx="64"
+                cy="64"
+                r={radio}
+                fill="none"
+                strokeWidth="14"
+                strokeDasharray={`${s.largo} ${vuelta}`}
+                strokeDashoffset={-s.desde}
+                className={`${s.trazo} transition-all`}
+              >
+                <title>{`${s.nombre}: ${cuantos(s.valor)} de ${total}`}</title>
+              </circle>
+            ))}
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-2xl font-bold text-gray-800 tabular-nums dark:text-white/90">
+            {completos}%
+          </span>
+          <span className="text-theme-xs text-gray-500 dark:text-gray-400">
+            pago completo
+          </span>
+        </div>
+      </div>
+      <dl className="space-y-1 text-theme-sm">
+        {ESTADOS_PAGO.map((e) => (
+          <div key={e.valor} className="flex items-center gap-2">
+            <span className={`size-2.5 shrink-0 rounded-full ${e.punto}`} />
+            <dt className="text-gray-500 dark:text-gray-400">{e.nombre}</dt>
+            <dd className="ms-auto ps-3 font-semibold text-gray-800 tabular-nums dark:text-white/90">
+              {cuantos(e.valor)}
+            </dd>
+          </div>
         ))}
-      </ul>
+      </dl>
     </div>
   );
 }
 
-// Cuántos caminantes y servidores pagaron completa la cuota, abonaron una
-// parte o no han abonado nada.
+// Cuántos caminantes y servidores pagaron completo, abonaron una parte o no
+// han abonado nada.
 export function Tesoreria({
   retiroId,
   caminantes,
@@ -158,26 +214,22 @@ export function Tesoreria({
 }: {
   retiroId: string;
   caminantes?: Conteo[];
-  servidores?: Conteo[]; // solo si el retiro tiene cuota de servidor
+  servidores?: Conteo[]; // solo si hay algo que cobrar a los servidores
 }) {
   return (
     <section className={`${claseTarjeta} h-full`}>
-      <Encabezado titulo="Tesorería" nota="Estado de pagos de este retiro" />
-      <div className="space-y-5">
-        {caminantes && (
-          <FilaPagos
-            titulo="Caminantes"
-            enlace={`/retiros/${retiroId}`}
-            pagos={caminantes}
-          />
-        )}
-        {servidores && (
-          <FilaPagos
-            titulo="Servidores"
-            enlace={`/retiros/${retiroId}`}
-            pagos={servidores}
-          />
-        )}
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <Encabezado titulo="Finanzas" nota="Estado de pagos de este retiro" />
+        <Link
+          to={`/control-pagos?retiro=${retiroId}`}
+          className="text-sm text-brand-500 hover:text-brand-600 dark:text-brand-400"
+        >
+          Control de pagos
+        </Link>
+      </div>
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+        {caminantes && <AnilloPagos titulo="Caminantes" pagos={caminantes} />}
+        {servidores && <AnilloPagos titulo="Servidores" pagos={servidores} />}
       </div>
     </section>
   );

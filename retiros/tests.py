@@ -1101,3 +1101,77 @@ class DescargasTests(Base):
         self.assertEqual(self.post("/api/exportar/", {"formato": "xlsx"}).status_code, 400)
         self.client.logout()
         self.assertEqual(self.post("/api/exportar/", tabla).status_code, 403)
+
+
+class ControlPagosTests(Base):
+    """La hoja de control de pagos: monto de cada uno, abonos, pagado y resta."""
+
+    def setUp(self):
+        super().setUp()
+        self.retiro.cuota_servidor = Decimal("25")
+        self.retiro.save()
+        self.ana = Inscripcion.objects.create(retiro=self.retiro, persona=self.persona("Ana Pérez"))
+        self.luis = Inscripcion.objects.create(retiro=self.retiro, persona=self.persona("Luis Gómez"),
+                                               estado=Inscripcion.Estado.CANCELADA)
+        self.abel = Participacion.objects.create(retiro=self.retiro, persona=self.persona("Abel Mora"),
+                                                 tipo="coordinador", cuota=Decimal("20"))
+        self.ramiro = Participacion.objects.create(retiro=self.retiro,
+                                                   persona=self.persona("Ramiro Alastre"),
+                                                   tipo="servidor")
+        AsignacionServicio.objects.create(participacion=self.ramiro,
+                                          area=AreaServicio.objects.create(nombre="Intercesión"))
+        for monto, dia in [(30, 1), (40, 5)]:
+            Pago.objects.create(retiro=self.retiro, inscripcion=self.ana, concepto="cuota",
+                                monto=monto, fecha=date(2027, 3, dia))
+        Pago.objects.create(retiro=self.retiro, persona=self.ramiro.persona, concepto="aportacion",
+                            monto=5, fecha=date(2027, 3, 2))
+        self.ruta = f"/api/control-pagos/?retiro={self.retiro.pk}"
+
+    def test_abonos_pagado_y_resta_de_cada_uno(self):
+        datos = self.client.get(self.ruta).json()
+        ana, luis = datos["caminantes"]["filas"]
+        self.assertEqual([a["monto"] for a in ana["abonos"]], [30, 40])  # en orden
+        self.assertEqual((ana["cuota"], ana["pagado"], ana["saldo"], ana["estado_pago"]),
+                         (100, 70, 30, "parcial"))
+        self.assertEqual((luis["saldo"], luis["cancelado"]), (0, True))
+        self.assertEqual(datos["caminantes"]["totales"]["esperado"], 100)  # sin el que canceló
+
+        abel, ramiro = datos["servidores"]["filas"]
+        # Cada servidor con su monto: 20 el que lo tiene propio, 25 los demás.
+        self.assertEqual((abel["cuota"], abel["cuota_propia"], abel["saldo"]), (20, True, 20))
+        self.assertEqual((abel["equipo"], ramiro["equipo"]), ("Coordinador general", "Intercesión"))
+        self.assertEqual((ramiro["cuota"], ramiro["pagado"], ramiro["saldo"]), (25, 5, 20))
+        self.assertEqual(datos["servidores"]["totales"]["saldo"], 40)
+
+    def test_el_panel_usa_el_monto_de_cada_uno(self):
+        filas = self.client.get(f"/api/retiros/{self.retiro.pk}/panel/").json()
+        abel = next(f for f in filas["servidores"]["filas"] if f["persona"] == "Abel Mora")
+        self.assertEqual(abel["saldo"], 20)
+
+    def test_cambiar_el_monto_y_volver_a_la_cuota_del_retiro(self):
+        ruta = "/api/control-pagos/monto/"
+        r = self.post(ruta, {"tipo": "caminante", "id": str(self.ana.pk), "cuota": 70})
+        self.assertEqual(r.json(), {"cuota": 70, "cuota_propia": True})
+        ana = self.client.get(self.ruta).json()["caminantes"]["filas"][0]
+        self.assertEqual((ana["saldo"], ana["estado_pago"]), (0, "pagado"))  # beca parcial
+
+        r = self.post(ruta, {"tipo": "servidor", "id": str(self.abel.pk), "cuota": None})
+        self.assertEqual(r.json(), {"cuota": 25, "cuota_propia": False})
+        self.assertEqual(
+            self.post(ruta, {"tipo": "servidor", "id": str(self.abel.pk), "cuota": -1}).status_code,
+            400)
+
+    def test_solo_quien_ve_y_cobra_los_pagos(self):
+        cuenta = User.objects.create_user("logistica", password="x")
+        usuario = Usuario.objects.create(persona=self.persona("Logística"), cuenta=cuenta)
+        AsignacionRol.objects.create(usuario=usuario, rol=Rol.LOGISTICA, retiro=self.retiro)
+        self.client.force_login(cuenta)
+        datos = self.client.get(self.ruta).json()
+        self.assertFalse(datos["puede_registrar"])  # logística consulta, no cobra
+        self.assertIn("ficha", datos["caminantes"]["filas"][0])
+        r = self.post("/api/control-pagos/monto/",
+                      {"tipo": "caminante", "id": str(self.ana.pk), "cuota": 10})
+        self.assertEqual(r.status_code, 403)
+
+        self.client.force_login(User.objects.create_user("nadie", password="x"))
+        self.assertEqual(self.client.get(self.ruta).status_code, 403)

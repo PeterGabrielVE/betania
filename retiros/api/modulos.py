@@ -145,7 +145,7 @@ MODULOS = [
             "estado_pago": Extra(
                 # Recién creada no trae la anotación: todavía no tiene pagos.
                 "Pago", "opcion",
-                lambda o: EstadoPago.de(getattr(o, "total_pagado", None), o.retiro.cuota),
+                lambda o: EstadoPago.de(getattr(o, "total_pagado", None), o.cuota_a_pagar),
                 opciones=EstadoPago.choices, requiere=Pago,
             ),
         },

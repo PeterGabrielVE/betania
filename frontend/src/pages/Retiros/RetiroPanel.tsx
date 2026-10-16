@@ -535,7 +535,9 @@ function Servidores({
     return <p className={claseVacio}>Todavía no hay servidores registrados.</p>;
   }
   const conPagos = servidores.filas.some((f) => f.estado_pago !== undefined);
-  const conCuota = conPagos && cuota > 0;
+  // Cuota del retiro o, sin ella, el monto propio de algún servidor.
+  const conCuota =
+    conPagos && (cuota > 0 || servidores.filas.some((f) => (f.saldo ?? 0) > 0));
   const visibles = servidores.filas.filter(
     (f) =>
       (!estado || f.estado === estado) && (!soloDeben || (f.saldo ?? 0) > 0),
@@ -816,6 +818,14 @@ export default function RetiroPanel() {
             consultando={consultando}
             onActualizar={actualizar}
           />
+          {finanzas && (
+            <Link
+              to={`/control-pagos?retiro=${retiro.id}`}
+              className={claseBoton}
+            >
+              Control de pagos
+            </Link>
+          )}
           {puede("pagos") && (
             <Link to="/pagos" className={claseBoton}>
               Registrar pago
@@ -910,7 +920,7 @@ export default function RetiroPanel() {
         {servidores && (
           <Seccion
             titulo={
-              servidores.por_cobrar !== undefined && retiro.cuota_servidor > 0
+              servidores.por_cobrar !== undefined && servidores.por_cobrar > 0
                 ? `Servidores · ${dinero(servidores.por_cobrar)} por cobrar`
                 : "Servidores"
             }

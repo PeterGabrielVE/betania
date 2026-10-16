@@ -215,6 +215,56 @@ export type FichaCaminante = {
   notas: string;
 };
 
+// Control de pagos (/api/control-pagos/?retiro=<id>, ver
+// retiros/api/control_pagos.py). Montos en la moneda base salvo `monto` de
+// un abono, que va en la moneda en que se pagó.
+export type Abono = {
+  id: string;
+  fecha: string;
+  monto: number;
+  moneda: string;
+  monto_base: number;
+  metodo: string;
+  referencia: string;
+  concepto: string;
+};
+export type FilaControlPago = {
+  id: string; // de la inscripción o de la participación
+  persona_id: string;
+  persona: string;
+  telefono: string;
+  equipo?: string; // servidores: sus áreas
+  estado: string;
+  estado_display: string;
+  ficha?: FichaCaminante; // caminantes, para quien ve datos confidenciales
+  cuota: number;
+  cuota_propia: boolean; // no es la del retiro
+  abonos: Abono[];
+  pagado: number;
+  saldo: number;
+  estado_pago: string;
+  cancelado: boolean;
+};
+export type GrupoControlPago = {
+  cuota: number; // la del retiro
+  filas: FilaControlPago[];
+  totales: {
+    personas: number;
+    esperado: number;
+    pagado: number;
+    saldo: number;
+    por_estado_pago: (Opcion & { total: number })[];
+  };
+};
+export type ControlPagos = {
+  retiros: { id: string; etiqueta: string; fecha_inicio: string }[];
+  retiro: { id: string; etiqueta: string; fecha_inicio: string } | null;
+  puede_registrar?: boolean;
+  puede_cambiar_monto?: boolean;
+  caminantes?: GrupoControlPago | null;
+  servidores?: GrupoControlPago | null;
+};
+
 // Panel de un retiro (/api/retiros/<id>/panel/). Cada sección llega en null si
 // el usuario no tiene permiso para verla.
 export type PanelRetiro = {

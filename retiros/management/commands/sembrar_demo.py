@@ -261,6 +261,8 @@ class Command(BaseCommand):
                 duerme_en_casa=None if n == 14 else n % 3 != 2,
                 disponibilidad=turnos, camisas=camisas,
                 tallas_camisa={r.choice(["S", "M", "L", "XL", "XXL"]): True} if camisas else {},
+                # No todos aportan lo mismo: algunos 20 $ en vez de los 25 del retiro.
+                cuota=Decimal("20") if n % 4 == 1 else None,
             )
             if area:
                 AsignacionServicio.objects.create(participacion=part, area=areas[area],

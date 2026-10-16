@@ -31,6 +31,7 @@ import {
   ListIcon,
   PageIcon,
   PlusIcon,
+  TableIcon,
   TaskIcon,
   UserIcon,
 } from "@/icons";
@@ -134,7 +135,10 @@ function TableroRetiro({ t }: { t: Tablero }) {
   const puedeAgregar = (slug: string) => !!modulo(slug)?.puede_agregar;
   const { retiro, caminantes, servidores, finanzas, tareas } = t;
   const cuenta = cuentaRegresiva(t);
-  const conCuotaServidor = retiro.cuota_servidor > 0;
+  // Hay algo que cobrar a los servidores: la cuota del retiro o el monto
+  // propio de alguno.
+  const conCuotaServidor =
+    retiro.cuota_servidor > 0 || (servidores?.por_cobrar ?? 0) > 0;
   const porCobrar =
     (caminantes?.por_cobrar ?? 0) +
     (conCuotaServidor ? (servidores?.por_cobrar ?? 0) : 0);
@@ -166,6 +170,11 @@ function TableroRetiro({ t }: { t: Tablero }) {
       a: "/pagos?nuevo=1",
       icono: <DollarLineIcon className="size-5" />,
       texto: "Registrar pago",
+    },
+    modulo("pagos") && {
+      a: `/control-pagos?retiro=${retiro.id}`,
+      icono: <TableIcon className="size-5" />,
+      texto: "Control de pagos",
     },
     puedeAgregar("gastos") && {
       a: "/gastos?nuevo=1",

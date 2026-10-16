@@ -10,8 +10,11 @@ Necesitas Docker y Docker Compose instalados. Desde esta carpeta:
 
 ```bash
 cp .env.example .env        # 1. crea tu archivo de entorno (ajusta si quieres)
-docker compose up --build   # 2. construye y levanta app + base de datos
+docker compose up --build   # 2. construye y levanta app + base de datos (la primera vez)
 ```
+
+Después basta con `docker compose up`: en desarrollo los cambios se ven al
+guardar, sin reconstruir (ver "Modo desarrollo").
 
 Al arrancar, el contenedor `web` espera a Postgres, corre las migraciones,
 carga países, estados y ciudades (`python manage.py sembrar_geografia`, ver
@@ -39,8 +42,9 @@ toca la parroquia de la demo y esas cuentas, nunca otros datos.
 
 Cuando veas que arrancó, abre:
 
-- **http://localhost:8000/** — el panel (React). Entra con `admin` / `admin1234`
-  (los valores de `DJANGO_SUPERUSER_*` en tu `.env`).
+- **http://localhost:5173/** — el panel (React). Entra con `admin` / `admin1234`
+  (los valores de `DJANGO_SUPERUSER_*` en tu `.env`). Si entras por
+  http://localhost:8000/ te lleva ahí.
 - **http://localhost:8000/admin/** — el admin de Django, con el mismo usuario.
 
 Como superusuario obtienes el rol `super_admin`, así que ves y gestionas todo:
@@ -52,18 +56,31 @@ la base de datos y empezar de cero).
 
 ## Modo desarrollo (recarga en caliente)
 
-En `docker-compose.yml`, descomenta en el servicio `web` las líneas de `volumes`
-y `command` para montar el código y usar `runserver`. Así los cambios de Python
-se reflejan sin reconstruir la imagen. Al montar el código, el frontend
-compilado de la imagen queda oculto: corre `npm run build` en `frontend/`.
+`docker compose up` carga además `docker-compose.override.yml`, que es el modo
+desarrollo:
+
+- **web** monta el código y usa el servidor de desarrollo de Django: al guardar
+  un `.py` se reinicia solo. Al arrancar instala lo que falte de
+  `requirements.txt` y aplica las migraciones.
+- **frontend** corre Vite en http://localhost:5173: al guardar un `.tsx` o un
+  `.css` la pantalla se actualiza sola. Reenvía `/api`, `/admin` y los PDF a
+  `web`. Instala los paquetes de Node solo cuando cambia `package-lock.json`.
+
+Solo hace falta reiniciar (`docker compose restart web`, sin `--build`) tras
+crear una migración nueva o agregar un paquete a `requirements.txt`. Reconstruir
+(`--build`) solo hace falta si cambia el `Dockerfile`.
+
+En producción no se usa ese archivo:
+`docker compose -f docker-compose.yml up -d --build` levanta gunicorn con el
+frontend compilado dentro de la imagen, en el puerto 8000.
 
 ## Frontend (React + Tailwind)
 
 Todo el front es una app React 19 + TypeScript + Vite + Tailwind CSS v4 en
 `frontend/`, basada en la plantilla gratuita [TailAdmin](https://github.com/TailAdmin/free-react-tailwind-admin-dashboard)
-(licencia MIT). Django la sirve ya compilada en el mismo puerto: el `Dockerfile`
-corre `npm run build` y copia `frontend/dist` a la imagen, así que tras cambiar
-el frontend hay que volver a correr `docker compose up --build`.
+(licencia MIT). En desarrollo la sirve Vite (ver "Modo desarrollo"); en
+producción, Django la sirve ya compilada en el mismo puerto: el `Dockerfile`
+corre `npm run build` y copia `frontend/dist` a la imagen.
 
 Cada módulo (retiros, inscripciones, participaciones, servidores por área,
 charlas, personas, usuarios, roles, pagos, gastos y los catálogos) se declara
@@ -145,8 +162,8 @@ Permisos y confidencialidad:
 
 Importar/Exportar Excel sigue estando solo en `/admin/`.
 
-Para desarrollar el frontend con recarga en caliente (Node 20+), con el backend
-corriendo en el puerto 8000:
+Para desarrollar el frontend fuera de Docker (Node 20+), con el backend
+corriendo en el puerto 8000 y el servicio `frontend` detenido:
 
 ```bash
 cd frontend

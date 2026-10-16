@@ -108,12 +108,12 @@ POR_CONFIRMAR = [Inscripcion.Estado.SOLICITADA, Inscripcion.Estado.ACEPTADA,
 DIAS_CUMPLEANOS = 30
 
 
-def _tablero_de(request, hoy):
-    if not _ve(request.user, Retiro):
-        return {"retiros_tablero": [], "tablero": None}
+def elegir_retiro(request, hoy):
+    """Los últimos retiros que el usuario puede ver y el que toca mostrar: el
+    de ?retiro=<id>; si no, la edición que prefiere; si no, el próximo (o el
+    que está en curso) y, si no hay, el más reciente."""
     retiros = list(
         _retiros(request.user).select_related("tipo").order_by("-fecha_inicio")[:30])
-    # El elegido en la página; si no, la edición que el usuario prefiere.
     preferencias = getattr(request.user, "preferencias", None)
     elegido = request.query_params.get("retiro") or str(
         getattr(preferencias, "retiro_id", "") or "")
@@ -123,6 +123,13 @@ def _tablero_de(request, hoy):
         vigentes = [r for r in retiros if r.fecha_fin >= hoy]
         retiro = (min(vigentes, key=lambda r: r.fecha_inicio) if vigentes
                   else next(iter(retiros), None))
+    return retiros, retiro
+
+
+def _tablero_de(request, hoy):
+    if not _ve(request.user, Retiro):
+        return {"retiros_tablero": [], "tablero": None}
+    retiros, retiro = elegir_retiro(request, hoy)
     return {
         "retiros_tablero": [
             {"id": r.pk, "etiqueta": str(r), "fecha_inicio": r.fecha_inicio} for r in retiros
@@ -435,8 +442,8 @@ def _caminantes(retiro, con_pagos, con_ficha):
             fila.update(
                 pagado=pagado,
                 # Quien canceló ya no debe la cuota.
-                saldo=0 if cancelada else max(retiro.cuota - pagado, 0),
-                estado_pago=EstadoPago.de(pagado, retiro.cuota),
+                saldo=0 if cancelada else max(i.cuota_a_pagar - pagado, 0),
+                estado_pago=EstadoPago.de(pagado, i.cuota_a_pagar),
             )
         filas.append(fila)
     inscritos = len(filas) - por_estado[Inscripcion.Estado.CANCELADA]
@@ -517,8 +524,8 @@ def _servidores(retiro, con_pagos=True):
             cancelo = p.estado == Participacion.Estado.CANCELADO
             fila.update(
                 pagado=total,
-                saldo=0 if cancelo else max(retiro.cuota_servidor - total, 0),
-                estado_pago=EstadoPago.de(total, retiro.cuota_servidor),
+                saldo=0 if cancelo else max(p.cuota_a_pagar - total, 0),
+                estado_pago=EstadoPago.de(total, p.cuota_a_pagar),
             )
         filas.append(fila)
     datos = {
@@ -645,8 +652,8 @@ def _como_caminante(persona, con_pagos, sensibles):
             pagado = i.pagado or 0
             cancelada = i.estado == Inscripcion.Estado.CANCELADA
             fila.update(pagado=pagado,
-                        saldo=0 if cancelada else max(i.retiro.cuota - pagado, 0),
-                        estado_pago=EstadoPago.de(pagado, i.retiro.cuota))
+                        saldo=0 if cancelada else max(i.cuota_a_pagar - pagado, 0),
+                        estado_pago=EstadoPago.de(pagado, i.cuota_a_pagar))
         filas.append(fila)
     return filas
 
@@ -683,8 +690,8 @@ def _como_servidor(persona, con_pagos):
         if con_pagos:
             total = aportado.get(p.retiro_id, 0)
             fila.update(pagado=total,
-                        saldo=max(p.retiro.cuota_servidor - total, 0),
-                        estado_pago=EstadoPago.de(total, p.retiro.cuota_servidor))
+                        saldo=max(p.cuota_a_pagar - total, 0),
+                        estado_pago=EstadoPago.de(total, p.cuota_a_pagar))
         filas.append(fila)
     return filas
 
