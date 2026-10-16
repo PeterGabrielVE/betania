@@ -1146,3 +1146,22 @@ pre[class*="language-"].line-numbers {
   --viz-pagado: #039855;
   --viz-parcial: #dc6803;
 }
+
+/* Barra de la carga inicial (components/estados/Esqueleto.tsx). */
+@keyframes barra-carga {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+.barra-carga {
+  animation: barra-carga 1.1s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .barra-carga,
+  .animate-pulse {
+    animation: none;
+  }
+}

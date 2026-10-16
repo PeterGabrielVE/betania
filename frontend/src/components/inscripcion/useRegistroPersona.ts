@@ -69,6 +69,9 @@ export function useRegistroPersona<T extends FieldValues>(
   const personaElegida = useRef(false);
   const [aviso, setAviso] = useState("");
   const [error, setError] = useState("");
+  // Si no se pudo cargar lo que se iba a editar (no existe, sin acceso, el
+  // sistema no responde): la pantalla muestra el error que corresponde.
+  const [errorCarga, setErrorCarga] = useState<unknown>(null);
 
   // La parroquia de una persona nueva es la del retiro; la de una ya
   // registrada se conserva.
@@ -96,6 +99,7 @@ export function useRegistroPersona<T extends FieldValues>(
       }
     } catch (e) {
       setError((e as Error).message);
+      setErrorCarga(e);
     }
   };
 
@@ -183,6 +187,8 @@ export function useRegistroPersona<T extends FieldValues>(
     setAviso,
     error,
     setError,
+    errorCarga,
+    setErrorCarga,
     usarParroquiaDe,
     elegirPersona,
     olvidarPersona,

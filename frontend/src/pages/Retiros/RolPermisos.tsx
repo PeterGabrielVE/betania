@@ -1,3 +1,5 @@
+import PantallaError from "@/components/estados/PantallaError";
+import { EsqueletoTabla } from "@/components/estados/Esqueleto";
 import { api, ApiError } from "@/api/client";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
@@ -9,7 +11,6 @@ import {
 import Badge from "@/components/ui/badge/Badge";
 import Button from "@/components/ui/button/Button";
 import { useAuth } from "@/context/AuthContext";
-import NotFound from "@/pages/OtherPage/NotFound";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router";
 
@@ -37,7 +38,6 @@ type Tabla = {
   puede_cambiar: boolean;
 };
 
-const claseVacio = "text-sm text-gray-500 dark:text-gray-400";
 const claseCasilla = "size-4 rounded border-gray-300 text-brand-500";
 
 // Los permisos marcados de la tabla, como "view_pago", "add_persona"...
@@ -82,11 +82,8 @@ export default function RolPermisos() {
     elegidos.size !== guardados.size ||
     [...elegidos].some((p) => !guardados.has(p));
 
-  if (error) {
-    if ([403, 404].includes(error.status)) return <NotFound />;
-    return <p className={claseVacio}>{error.message}</p>;
-  }
-  if (!tabla) return <p className={claseVacio}>Cargando…</p>;
+  if (error) return <PantallaError error={error} />;
+  if (!tabla) return <EsqueletoTabla filas={10} columnas={5} />;
   const { rol } = tabla;
   const editable = tabla.puede_cambiar;
   const existe = (modelo: string, a: Accion) =>

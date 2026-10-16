@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
+import ErrorBoundary from "./components/estados/ErrorBoundary.tsx";
 import { AppWrapper } from "./components/common/PageMeta.tsx";
 import { AuthProvider } from "./context/AuthContext.tsx";
 import { ThemeProvider } from "./context/ThemeContext.tsx";
@@ -11,7 +12,9 @@ createRoot(document.getElementById("root")!).render(
     <ThemeProvider>
       <AppWrapper>
         <AuthProvider>
-          <App />
+          <ErrorBoundary completa>
+            <App />
+          </ErrorBoundary>
         </AuthProvider>
       </AppWrapper>
     </ThemeProvider>

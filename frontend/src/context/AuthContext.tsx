@@ -1,4 +1,10 @@
-import { api, type Modulo, type Preferencias, type Sesion } from "@/api/client";
+import {
+  api,
+  ApiError,
+  type Modulo,
+  type Preferencias,
+  type Sesion,
+} from "@/api/client";
 import { configurarFormato } from "@/utils/formato";
 import {
   createContext,
@@ -13,9 +19,12 @@ type Estado = {
   sesion: Sesion | null;
   // Módulos que el usuario puede ver (menú, tablas y formularios).
   modulos: Modulo[];
+  // Si al abrir la app el sistema no respondió (sin conexión, error 500…).
+  errorInicial?: ApiError;
 };
 
 type AuthContextType = Estado & {
+  reintentar: () => void;
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   // Cambia la edición y/o la moneda preferidas (se guardan en el servidor).
@@ -61,12 +70,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const [estado, setEstado] = useState<Estado>({ sesion: null, modulos: [] });
 
-  useEffect(() => {
+  const iniciar = useCallback(() => {
     api<Sesion>("/auth/sesion/")
       .then(cargar)
       .then(setEstado)
-      .catch(() => setEstado({ sesion: { autenticado: false }, modulos: [] }));
+      .catch((e) => {
+        // Sin conexión o el servidor caído: no es "sin sesión", es que el
+        // sistema no está; se muestra eso con la opción de reintentar.
+        if (e instanceof ApiError && (e.status === 0 || e.status >= 500)) {
+          setEstado({ sesion: null, modulos: [], errorInicial: e });
+        } else {
+          setEstado({ sesion: { autenticado: false }, modulos: [] });
+        }
+      });
   }, []);
+
+  useEffect(() => {
+    iniciar();
+  }, [iniciar]);
+
+  const reintentar = useCallback(() => {
+    setEstado({ sesion: null, modulos: [] });
+    iniciar();
+  }, [iniciar]);
 
   const login = useCallback(async (username: string, password: string) => {
     const sesion = await api<Sesion>("/auth/login/", {
@@ -95,7 +121,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   return (
     <AuthContext.Provider
-      value={{ ...estado, login, logout, cambiarPreferencias }}
+      value={{ ...estado, login, logout, cambiarPreferencias, reintentar }}
     >
       {children}
     </AuthContext.Provider>

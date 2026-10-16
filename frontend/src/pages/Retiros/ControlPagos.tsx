@@ -1,3 +1,5 @@
+import PantallaError from "@/components/estados/PantallaError";
+import { EsqueletoPanel } from "@/components/estados/Esqueleto";
 import {
   api,
   ApiError,
@@ -785,8 +787,10 @@ export default function ControlPagos() {
       />
       <PageBreadcrumb pageTitle="Control de pagos" />
 
-      {!alDia || !datos ? (
-        <p className={claseVacio}>{error?.message || "Cargando…"}</p>
+      {!datos && error ? (
+        <PantallaError error={error} onReintentar={actualizar} />
+      ) : !alDia || !datos ? (
+        <EsqueletoPanel />
       ) : !datos.retiro ? (
         <p className={claseVacio}>Todavía no hay retiros.</p>
       ) : (

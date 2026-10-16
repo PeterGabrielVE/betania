@@ -1,3 +1,5 @@
+import PantallaError from "@/components/estados/PantallaError";
+import { EsqueletoFormulario } from "@/components/estados/Esqueleto";
 import { api, ApiError, type Registro } from "@/api/client";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
@@ -122,10 +124,10 @@ export default function EditarPersona() {
   if (!personas?.puede_cambiar) return <NotFound />;
   const { persona } = registro;
   if (!persona) {
-    return (
-      <p className="text-sm text-gray-500 dark:text-gray-400">
-        {registro.error || "Cargando…"}
-      </p>
+    return registro.errorCarga ? (
+      <PantallaError error={registro.errorCarga} />
+    ) : (
+      <EsqueletoFormulario />
     );
   }
 

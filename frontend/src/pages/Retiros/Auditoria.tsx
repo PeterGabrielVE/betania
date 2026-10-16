@@ -1,3 +1,5 @@
+import PantallaError from "@/components/estados/PantallaError";
+import { EsqueletoTabla } from "@/components/estados/Esqueleto";
 import { api, type Pagina } from "@/api/client";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
@@ -139,8 +141,10 @@ export default function Auditoria() {
   const [resultado, setResultado] = useState<{
     clave: string;
     datos?: Pagina<Registro>;
-    error?: string;
+    error?: Error;
   }>({ clave: "" });
+  // Para volver a consultar (Reintentar).
+  const [version, setVersion] = useState(0);
 
   useEffect(() => {
     if (!puedeVer) return;
@@ -164,20 +168,19 @@ export default function Auditoria() {
   const consulta = new URLSearchParams(params);
   consulta.set("page", String(pagina));
   consulta.set("page_size", String(porPagina));
-  const clave = `/auditoria/?${consulta}`;
+  const ruta = `/auditoria/?${consulta}`;
+  const clave = `${ruta}#${version}`;
 
   useEffect(() => {
     if (!puedeVer) return;
     let vigente = true;
-    api<Pagina<Registro>>(clave)
+    api<Pagina<Registro>>(ruta)
       .then((datos) => vigente && setResultado({ clave, datos }))
-      .catch(
-        (e: Error) => vigente && setResultado({ clave, error: e.message }),
-      );
+      .catch((e: Error) => vigente && setResultado({ clave, error: e }));
     return () => {
       vigente = false;
     };
-  }, [clave, puedeVer]);
+  }, [ruta, clave, puedeVer]);
 
   if (!puedeVer) return <NotFound />;
   const { datos, error } = resultado;
@@ -304,12 +307,13 @@ export default function Auditoria() {
           )}
         </div>
 
-        {error ? (
-          <p className="text-sm text-error-500" role="alert">
-            {error}
-          </p>
+        {error && !datos ? (
+          <PantallaError
+            error={error}
+            onReintentar={() => setVersion((v) => v + 1)}
+          />
         ) : !datos ? (
-          <p className={claseVacio}>Cargando…</p>
+          <EsqueletoTabla filas={8} columnas={6} conTarjeta={false} />
         ) : filas.length === 0 ? (
           <p className={claseVacio}>
             {hayFiltros

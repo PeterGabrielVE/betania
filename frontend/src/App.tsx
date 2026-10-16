@@ -38,7 +38,7 @@ export default function App() {
         </Route>
 
         <Route path="/signin" element={<SignIn />} />
-        <Route path="*" element={<NotFound />} />
+        <Route path="*" element={<NotFound completa />} />
       </Routes>
     </Router>
   );

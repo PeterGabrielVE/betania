@@ -1,3 +1,5 @@
+import PantallaError from "@/components/estados/PantallaError";
+import { EsqueletoTablero } from "@/components/estados/Esqueleto";
 import { type Resumen, type Tablero } from "@/api/client";
 import PageMeta from "@/components/common/PageMeta";
 import {
@@ -580,7 +582,11 @@ export default function Inicio() {
     );
 
   if (!datos) {
-    return <p className={claseVacio}>{error?.message || "Cargando…"}</p>;
+    return error ? (
+      <PantallaError error={error} onReintentar={actualizar} />
+    ) : (
+      <EsqueletoTablero />
+    );
   }
   const { tablero } = datos;
 

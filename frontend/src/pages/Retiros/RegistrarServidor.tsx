@@ -1,3 +1,5 @@
+import PantallaError from "@/components/estados/PantallaError";
+import { EsqueletoFormulario } from "@/components/estados/Esqueleto";
 import { api, ApiError, type Pagina, type Registro } from "@/api/client";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
@@ -129,7 +131,10 @@ export default function RegistrarServidor() {
         registro.setAviso("");
         setOriginal({ participacion, servicios });
       })
-      .catch((e: Error) => registro.setError(e.message));
+      .catch((e: Error) => {
+        registro.setError(e.message);
+        registro.setErrorCarga(e);
+      });
     // Solo al abrir la pantalla.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editando]);
@@ -138,10 +143,10 @@ export default function RegistrarServidor() {
     return <NotFound />;
   }
   if (editando && !original) {
-    return (
-      <p className="text-sm text-gray-500 dark:text-gray-400">
-        {registro.error || "Cargando…"}
-      </p>
+    return registro.errorCarga ? (
+      <PantallaError error={registro.errorCarga} />
+    ) : (
+      <EsqueletoFormulario />
     );
   }
 

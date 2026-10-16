@@ -1,18 +1,19 @@
+import { CargaInicial } from "@/components/estados/Esqueleto";
+import PantallaError from "@/components/estados/PantallaError";
 import { useAuth } from "@/context/AuthContext";
 import { Navigate, Outlet, useLocation } from "react-router";
 
 // Protege las rutas del panel: sin sesión de Django, manda a /signin.
 export default function RequireAuth() {
-  const { sesion } = useAuth();
+  const { sesion, errorInicial, reintentar } = useAuth();
   const location = useLocation();
 
-  if (sesion === null) {
+  if (errorInicial) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-gray-500 dark:bg-gray-900 dark:text-gray-400">
-        Cargando…
-      </div>
+      <PantallaError error={errorInicial} onReintentar={reintentar} completa />
     );
   }
+  if (sesion === null) return <CargaInicial />;
   if (!sesion.autenticado) {
     return (
       <Navigate to="/signin" replace state={{ desde: location.pathname }} />

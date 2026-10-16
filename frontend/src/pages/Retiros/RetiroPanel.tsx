@@ -1,4 +1,6 @@
-import { ApiError, type FichaCaminante, type PanelRetiro } from "@/api/client";
+import PantallaError from "@/components/estados/PantallaError";
+import { EsqueletoPanel } from "@/components/estados/Esqueleto";
+import { type FichaCaminante, type PanelRetiro } from "@/api/client";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
 import Telefono from "@/components/common/Telefono";
@@ -24,7 +26,6 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { useDatosVivos } from "@/hooks/useDatosVivos";
 import { BoxIconLine, CalenderIcon, DollarLineIcon, GroupIcon } from "@/icons";
-import NotFound from "@/pages/OtherPage/NotFound";
 import { colorEstado, dinero, fecha, montoVista } from "@/utils/formato";
 import { Fragment, useState } from "react";
 import { Link, useParams } from "react-router";
@@ -799,14 +800,9 @@ export default function RetiroPanel() {
   const { datos, alDia, error, hora, consultando, actualizar } =
     useDatosVivos<PanelRetiro>(`/retiros/${id}/panel/`);
 
-  if (!alDia) return <p className={claseVacio}>Cargando…</p>;
+  if (!alDia) return <EsqueletoPanel />;
   const panel = datos;
-  if (!panel) {
-    if (error instanceof ApiError && [403, 404].includes(error.status)) {
-      return <NotFound />;
-    }
-    return <p className={claseVacio}>{error?.message}</p>;
-  }
+  if (!panel) return <PantallaError error={error} onReintentar={actualizar} />;
 
   const { retiro, caminantes, equipo, servidores, charlas, finanzas } = panel;
   const modulo = (slug: string) => modulos.find((m) => m.slug === slug);

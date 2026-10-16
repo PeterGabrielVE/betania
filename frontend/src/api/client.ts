@@ -37,7 +37,28 @@ function aError(status: number, datos: unknown): ApiError {
         : "Revisa los campos marcados.";
     return new ApiError(status, mensaje, campos as Record<string, string[]>);
   }
+  // Sin cuerpo JSON: el servidor (o el proxy delante) se cayó o no responde.
+  if (status >= 500) {
+    return new ApiError(
+      status,
+      "El sistema no está disponible en este momento.",
+    );
+  }
   return new ApiError(status, `Error ${status} al consultar el servidor.`);
+}
+
+// status 0: no hubo respuesta (sin conexión o el servidor apagado).
+export const SIN_CONEXION = 0;
+
+async function pedir(ruta: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(ruta, init);
+  } catch {
+    throw new ApiError(
+      SIN_CONEXION,
+      "No hay conexión con el sistema. Revisa tu internet e intenta de nuevo.",
+    );
+  }
 }
 
 export async function api<T>(
@@ -54,7 +75,7 @@ export async function api<T>(
     headers["X-CSRFToken"] = csrfToken();
   }
 
-  const res = await fetch(`/api${ruta}`, {
+  const res = await pedir(`/api${ruta}`, {
     method,
     headers,
     credentials: "same-origin",
@@ -71,7 +92,7 @@ export async function api<T>(
 // Descarga un archivo de la API (Excel o PDF de una tabla): GET con la ruta o
 // POST con el cuerpo. Lo guarda con el nombre que manda el servidor.
 export async function descargar(ruta: string, body?: unknown): Promise<void> {
-  const res = await fetch(`/api${ruta}`, {
+  const res = await pedir(`/api${ruta}`, {
     method: body === undefined ? "GET" : "POST",
     headers:
       body === undefined

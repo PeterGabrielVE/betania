@@ -1,4 +1,6 @@
-import { ApiError, type FichaPersona } from "@/api/client";
+import PantallaError from "@/components/estados/PantallaError";
+import { EsqueletoFicha } from "@/components/estados/Esqueleto";
+import { type FichaPersona } from "@/api/client";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
 import Telefono from "@/components/common/Telefono";
@@ -12,7 +14,6 @@ import AccionesAsistencia from "@/components/retiros/AccionesAsistencia";
 import Badge from "@/components/ui/badge/Badge";
 import { useAuth } from "@/context/AuthContext";
 import { useDatosVivos } from "@/hooks/useDatosVivos";
-import NotFound from "@/pages/OtherPage/NotFound";
 import { colorEstado, dinero, fecha } from "@/utils/formato";
 import { useState } from "react";
 import { Link, useParams } from "react-router";
@@ -106,13 +107,8 @@ export default function PersonaFicha() {
   // La participación cuyas áreas se están editando.
   const [editando, setEditando] = useState<string | null>(null);
 
-  if (!alDia) return <p className={claseVacio}>Cargando…</p>;
-  if (!datos) {
-    if (error instanceof ApiError && [403, 404].includes(error.status)) {
-      return <NotFound />;
-    }
-    return <p className={claseVacio}>{error?.message}</p>;
-  }
+  if (!alDia) return <EsqueletoFicha />;
+  if (!datos) return <PantallaError error={error} onReintentar={actualizar} />;
 
   const { persona, caminante, servidor, invito, tareas, acceso } = datos;
   const modulo = (slug: string) => modulos.find((m) => m.slug === slug);

@@ -1572,3 +1572,14 @@ class FiltrosAvanzadosTests(Base):
         from openpyxl import load_workbook
         hoja = load_workbook(BytesIO(r.content)).active
         self.assertEqual(hoja.max_row, 5)  # título, subtítulo, vacía, encabezado y Ana
+
+
+class PaginasDeErrorTests(Base):
+    def test_404_y_500_en_espanol(self):
+        from django.test import override_settings
+        with override_settings(DEBUG=False):
+            r = self.client.get("/retiros/00000000-0000-0000-0000-000000000000/lista.pdf")
+        self.assertEqual(r.status_code, 404)
+        self.assertIn("No encontramos esta página", r.content.decode())
+        from django.template.loader import render_to_string
+        self.assertIn("Sistema no disponible", render_to_string("500.html"))

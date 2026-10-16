@@ -1,3 +1,4 @@
+import PantallaError from "@/components/estados/PantallaError";
 import {
   api,
   type Campo,
@@ -405,7 +406,7 @@ function Listado({ modulo }: { modulo: Modulo }) {
   const [resultado, setResultado] = useState<{
     clave: string;
     datos?: Pagina<Registro>;
-    error?: string;
+    error?: Error;
   }>({ clave: "" });
   // ?editar=<id>&volver=<ruta>: abre ese registro (p. ej. desde el panel de un
   // retiro) y, al guardar o cancelar, regresa a esa ruta. ?nuevo=1 abre el
@@ -514,9 +515,7 @@ function Listado({ modulo }: { modulo: Modulo }) {
     let vigente = true;
     api<Pagina<Registro>>(ruta)
       .then((datos) => vigente && setResultado({ clave, datos }))
-      .catch(
-        (e: Error) => vigente && setResultado({ clave, error: e.message }),
-      );
+      .catch((e: Error) => vigente && setResultado({ clave, error: e }));
     return () => {
       vigente = false;
     };
@@ -843,12 +842,19 @@ function Listado({ modulo }: { modulo: Modulo }) {
       )}
 
       {/* Registros */}
-      {!datos && !error ? (
+      {!datos && error ? (
+        <div className="border-t border-gray-100 dark:border-white/5">
+          <PantallaError
+            error={error}
+            onReintentar={() => setVersion((v) => v + 1)}
+          />
+        </div>
+      ) : !datos ? (
         <Esqueleto />
       ) : filas.length === 0 ? (
         <div className="border-t border-gray-100 px-5 py-12 text-center dark:border-white/5">
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            {error ??
+            {error?.message ??
               (hayFiltros
                 ? "Nada coincide con la búsqueda o los filtros."
                 : `Todavía no hay ${modulo.titulo.toLowerCase()}.`)}
