@@ -2,6 +2,7 @@ import { api, type Pagina } from "@/api/client";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
 import BotonesDescarga from "@/components/modulos/BotonesDescarga";
+import BotonLimpiarFiltros from "@/components/modulos/BotonLimpiarFiltros";
 import {
   claseControl,
   claseEnlace,
@@ -292,18 +293,14 @@ export default function Auditoria() {
             />
           </label>
           {hayFiltros && (
-            <button
-              type="button"
-              className={`text-sm ${claseEnlace}`}
+            <BotonLimpiarFiltros
               onClick={() => {
                 setTextoBusqueda("");
                 setBusqueda("");
                 setFiltros({ accion: "", modelo: "", desde: "", hasta: "" });
                 setPagina(1);
               }}
-            >
-              Limpiar filtros
-            </button>
+            />
           )}
         </div>
 

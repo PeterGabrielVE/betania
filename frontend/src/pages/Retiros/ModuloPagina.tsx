@@ -8,6 +8,7 @@ import {
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
 import BotonesDescarga from "@/components/modulos/BotonesDescarga";
+import BotonLimpiarFiltros from "@/components/modulos/BotonLimpiarFiltros";
 import DialogoCuenta from "@/components/modulos/DialogoCuenta";
 import DialogoImportar from "@/components/modulos/DialogoImportar";
 import { celda } from "@/components/modulos/celda";
@@ -714,15 +715,7 @@ function Listado({ modulo }: { modulo: Modulo }) {
             </select>
           ),
         )}
-        {hayFiltros && (
-          <button
-            type="button"
-            className={`text-sm ${claseEnlace}`}
-            onClick={limpiar}
-          >
-            Limpiar filtros
-          </button>
-        )}
+        {hayFiltros && <BotonLimpiarFiltros onClick={limpiar} />}
       </div>
 
       {aviso && (
