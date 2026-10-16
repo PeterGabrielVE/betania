@@ -39,6 +39,8 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     # Fija el contexto de RLS por petición. Debe ir DESPUÉS de Authentication.
     "retiros.middleware.RLSContextMiddleware",
+    # Quién hace cada cambio, para la auditoría.
+    "retiros.auditoria.AuditoriaMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -107,6 +109,10 @@ FRONTEND_DIST = BASE_DIR / "frontend" / "dist"
 # En desarrollo con Docker las páginas las sirve Vite (docker-compose.override.yml):
 # quien entra por Django va allá en vez de ver una compilación vieja.
 FRONTEND_DEV_URL = os.environ.get("FRONTEND_DEV_URL", "").rstrip("/")
+# 1 si Django está detrás de un proxy que pone la IP real en X-Forwarded-For
+# (Vite en desarrollo, nginx en producción). Si no, la auditoría usa la IP de
+# la conexión, porque ese encabezado lo puede inventar cualquiera.
+PROXY_CONFIABLE = os.environ.get("PROXY_CONFIABLE", "0") == "1"
 if FRONTEND_DIST.exists():
     WHITENOISE_ROOT = FRONTEND_DIST
 

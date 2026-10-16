@@ -10,6 +10,7 @@ import {
   GridIcon,
   HorizontaLDots,
   ListIcon,
+  TimeIcon,
   UserCircleIcon,
 } from "../icons";
 import { cn } from "../utils";
@@ -37,6 +38,7 @@ const iconosGrupo: Record<string, React.ReactNode> = {
   Personas: <UserCircleIcon fontSize={24} />,
   Finanzas: <DollarLineIcon fontSize={24} />,
   Catálogos: <ListIcon fontSize={24} />,
+  Sistema: <TimeIcon fontSize={24} />,
 };
 
 const AppSidebar: React.FC = () => {

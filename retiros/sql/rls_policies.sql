@@ -107,3 +107,16 @@ SELECT
   CASE WHEN rol_datos_sensibles() THEN i.salud_alimentacion  ELSE NULL END AS salud_alimentacion,
   CASE WHEN rol_datos_sensibles() THEN i.contacto_emergencia ELSE NULL END AS contacto_emergencia
 FROM retiros_inscripcion i;
+
+-- AUDITORÍA: solo se inserta y se lee (sin políticas de UPDATE ni DELETE, nadie
+-- la cambia ni la borra). Cada quien lee lo de las parroquias que ve; lo que no
+-- es de una parroquia (roles, catálogos, ingresos de cuentas sin persona), solo
+-- el super administrador.
+ALTER TABLE retiros_auditoria ENABLE ROW LEVEL SECURITY;
+ALTER TABLE retiros_auditoria FORCE  ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS auditoria_leer ON retiros_auditoria;
+CREATE POLICY auditoria_leer ON retiros_auditoria FOR SELECT
+  USING (app_rol() = 'super_admin'
+         OR (parroquia_id IS NOT NULL AND parroquia_visible(parroquia_id)));
+DROP POLICY IF EXISTS auditoria_insertar ON retiros_auditoria;
+CREATE POLICY auditoria_insertar ON retiros_auditoria FOR INSERT WITH CHECK (true);

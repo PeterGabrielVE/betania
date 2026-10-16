@@ -992,3 +992,54 @@ class Gasto(Movimiento):
 
     def __str__(self):
         return f"{self.get_categoria_display()} {self.monto} {self.moneda}"
+
+
+# --------------------------------------------------------------------------- #
+# Auditoría
+# --------------------------------------------------------------------------- #
+class Auditoria(models.Model):
+    """
+    Quién hizo qué y cuándo: altas, cambios y bajas de cada módulo (con el
+    antes y el después de cada campo), permisos dados o quitados a un rol, e
+    ingresos y salidas del sistema. Se escribe sola (ver auditoria.py) y no se
+    edita ni se borra: en la base de datos solo admite insertar y leer (RLS).
+
+    No se registra cuando un super administrador entra o sale.
+    """
+
+    class Accion(models.TextChoices):
+        CREAR = "crear", "Creó"
+        CAMBIAR = "cambiar", "Cambió"
+        ELIMINAR = "eliminar", "Eliminó"
+        INGRESO = "ingreso", "Inició sesión"
+        SALIDA = "salida", "Cerró sesión"
+        INGRESO_FALLIDO = "ingreso_fallido", "Intento fallido de ingreso"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    fecha = models.DateTimeField("fecha y hora", auto_now_add=True, db_index=True)
+    # Sin restricción en la base: el registro queda aunque se borre la cuenta o
+    # la parroquia (y como no se puede editar, tampoco se pone en nulo).
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.DO_NOTHING,
+                                null=True, blank=True, related_name="+", db_constraint=False)
+    # Como se llamaba al momento.
+    usuario_nombre = models.CharField("usuario", max_length=150, blank=True)
+    accion = models.CharField("acción", max_length=20, choices=Accion.choices, db_index=True)
+    modelo = models.CharField("módulo", max_length=60, blank=True, db_index=True)
+    objeto_id = models.CharField(max_length=64, blank=True)
+    objeto = models.CharField("registro", max_length=255, blank=True)
+    # {campo: {"etiqueta": ..., "antes": ..., "despues": ...}}
+    cambios = models.JSONField(default=dict, blank=True)
+    ip = models.GenericIPAddressField(null=True, blank=True)
+    # De qué parroquia es lo afectado: el RLS deja ver a cada quien lo suyo.
+    parroquia = models.ForeignKey(Parroquia, on_delete=models.DO_NOTHING, null=True,
+                                  blank=True, related_name="+", db_constraint=False)
+
+    class Meta:
+        verbose_name = "registro de auditoría"
+        verbose_name_plural = "auditoría"
+        ordering = ["-fecha"]
+        # Solo se consulta: nadie la crea, cambia ni borra a mano.
+        default_permissions = ("view",)
+
+    def __str__(self):
+        return f"{self.usuario_nombre or 'Sistema'} · {self.get_accion_display()} · {self.objeto}"

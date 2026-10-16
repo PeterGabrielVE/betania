@@ -1365,3 +1365,115 @@ class RolesYPermisosTests(Base):
                                   if c != "view_pago"])
         self.entrar_con(logistica, retiro=self.retiro)
         self.assertEqual(self.client.get("/api/pagos/").status_code, 403)
+
+
+class AuditoriaTests(Base):
+    """Quién hizo qué y cuándo; sin los ingresos y salidas del super administrador."""
+
+    def ultimos(self, **filtro):
+        from .models import Auditoria
+        return list(Auditoria.objects.filter(**filtro).order_by("-fecha"))
+
+    def test_registra_altas_cambios_y_bajas_con_quien_y_que(self):
+        from .models import Auditoria
+        r = self.post("/api/personas/", {"primer_nombre": "Ana", "primer_apellido": "Pérez",
+                                         "parroquia": str(self.parroquia.pk),
+                                         "datos_sensibles": {"direccion": "Calle 1"}})
+        pk = r.json()["id"]
+        alta = self.ultimos(accion="crear", objeto_id=pk)[0]
+        self.assertEqual((alta.usuario_id, alta.modelo, alta.parroquia_id),
+                         (self.admin.pk, "persona", self.parroquia.pk))
+        # Lo confidencial no se copia.
+        self.assertEqual(alta.cambios["datos_sensibles"]["confidencial"], True)
+        self.assertNotIn("Calle 1", str(alta.cambios))
+
+        self.client.patch(f"/api/personas/{pk}/", {"telefono": "0414-1234567"},
+                          content_type="application/json")
+        cambio = self.ultimos(accion="cambiar", objeto_id=pk)[0]
+        self.assertEqual(cambio.cambios["telefono"]["despues"], "0414-1234567")
+        self.assertEqual(set(cambio.cambios), {"telefono"})  # solo lo que cambió
+
+        self.client.delete(f"/api/personas/{pk}/")
+        self.assertEqual(self.ultimos(accion="eliminar", objeto_id=pk)[0].objeto, "Ana Pérez")
+        self.assertEqual(Auditoria.objects.filter(objeto_id=pk).count(), 3)
+
+    def test_opciones_y_estados_se_guardan_con_su_nombre(self):
+        ins = Inscripcion.objects.create(retiro=self.retiro, persona=self.persona("Luis"))
+        self.client.patch(f"/api/inscripciones/{ins.pk}/", {"estado": "confirmada"},
+                          content_type="application/json")
+        cambio = self.ultimos(accion="cambiar", objeto_id=str(ins.pk))[0]
+        self.assertEqual((cambio.cambios["estado"]["antes"], cambio.cambios["estado"]["despues"]),
+                         ("Solicitada", "Confirmada"))
+        fila = self.client.get("/api/auditoria/?accion=cambiar").json()["results"][0]
+        self.assertEqual((fila["modulo"], fila["resumen"]),
+                         ("Caminantes", "Estado: Solicitada → Confirmada"))
+
+    def test_ingresos_y_salidas_menos_los_del_super_admin(self):
+        cuenta = User.objects.create_user("ana", password="clave-larga-2027")
+        Usuario.objects.create(persona=self.persona("Ana"), cuenta=cuenta)
+        self.client.logout()  # el admin (superusuario): no se registra
+        self.assertEqual(self.ultimos(accion="salida"), [])
+        self.client.post("/api/auth/login/", {"username": "ana", "password": "mala"},
+                         content_type="application/json")
+        self.client.post("/api/auth/login/", {"username": "ana", "password": "clave-larga-2027"},
+                         content_type="application/json")
+        self.client.post("/api/auth/logout/")
+        self.client.post("/api/auth/login/", {"username": "admin", "password": "x"},
+                         content_type="application/json")
+        sesiones = {"accion__in": ["ingreso", "salida", "ingreso_fallido"]}
+        acciones = [a.accion for a in self.ultimos(**sesiones)]
+        self.assertEqual(acciones, ["salida", "ingreso", "ingreso_fallido"])
+        self.assertEqual(self.ultimos(accion="ingreso")[0].usuario_nombre, "Ana (ana)")
+        # Tampoco el que tiene un rol global (super administrador).
+        jefe = User.objects.create_user("jefe", password="clave-larga-2027")
+        AsignacionRol.objects.create(
+            usuario=Usuario.objects.create(persona=self.persona("Jefe"), cuenta=jefe),
+            rol=rol_de(RolSistema.SUPER_ADMIN))
+        self.client.post("/api/auth/login/", {"username": "jefe", "password": "clave-larga-2027"},
+                         content_type="application/json")
+        self.client.post("/api/auth/logout/")
+        self.assertEqual(len(self.ultimos(**sesiones)), 3)
+
+    def test_permisos_de_un_rol_y_filtros(self):
+        rol = Rol.objects.create(nombre="Cocina", ambito=Rol.Ambito.RETIRO)
+        self.client.put(f"/api/roles/{rol.pk}/permisos/", {"permisos": ["view_retiro"]},
+                        content_type="application/json")
+        cambio = self.ultimos(accion="cambiar", modelo="rol")[0]
+        self.assertEqual(cambio.cambios["permisos"]["detalle"], "agregados")
+        hoy = timezone.localdate().isoformat()
+        self.assertTrue(self.client.get(f"/api/auditoria/?modelo=rol&desde={hoy}").json()["count"])
+        self.assertEqual(self.client.get("/api/auditoria/?hasta=2000-01-01").json()["count"], 0)
+        opciones = self.client.get("/api/auditoria/opciones/").json()
+        self.assertIn({"valor": "rol", "etiqueta": "Roles y permisos"}, opciones["modulos"])
+
+    def test_no_se_edita_ni_se_borra_y_no_cualquiera_la_ve(self):
+        from .models import Auditoria
+        self.persona("Rosa")
+        registro = Auditoria.objects.first()
+        self.assertEqual(self.client.delete(f"/api/auditoria/{registro.pk}/").status_code, 403)
+        self.assertEqual(self.client.patch(f"/api/auditoria/{registro.pk}/", {"objeto": "x"},
+                                           content_type="application/json").status_code, 403)
+        self.client.force_login(User.objects.create_user("nadie", password="x"))
+        self.assertEqual(self.client.get("/api/auditoria/").status_code, 403)
+
+    def test_la_demo_no_llena_la_auditoria(self):
+        from io import StringIO
+
+        from .models import Auditoria
+        antes = Auditoria.objects.count()
+        call_command("sembrar_demo", stdout=StringIO())
+        self.assertEqual(Auditoria.objects.count(), antes)
+
+    def test_la_ip_no_se_puede_inventar(self):
+        from django.test import override_settings
+        falsa = {"HTTP_X_FORWARDED_FOR": "6.6.6.6"}
+        with override_settings(PROXY_CONFIABLE=False):
+            self.client.post("/api/personas/", {"primer_nombre": "Eva", "primer_apellido": "Rey",
+                                                "parroquia": str(self.parroquia.pk)},
+                             content_type="application/json", **falsa)
+        self.assertEqual(self.ultimos(accion="crear", modelo="persona")[0].ip, "127.0.0.1")
+        with override_settings(PROXY_CONFIABLE=True):  # detrás de nginx, sí se usa
+            self.client.post("/api/personas/", {"primer_nombre": "Iris", "primer_apellido": "Paz",
+                                                "parroquia": str(self.parroquia.pk)},
+                             content_type="application/json", **falsa)
+        self.assertEqual(self.ultimos(accion="crear", modelo="persona")[0].ip, "6.6.6.6")

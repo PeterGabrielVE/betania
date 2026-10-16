@@ -24,6 +24,7 @@ from django.core.management.base import BaseCommand
 from django.db import connection, transaction
 from django.utils import timezone
 
+from retiros.auditoria import sin_auditar
 from retiros.models import (
     AreaServicio, AsignacionRol, AsignacionServicio, Charla, Ciudad, Diocesis, Gasto,
     Inscripcion, Moneda, Pago, Pais, Parroquia, Participacion, Persona, Retiro, Rol, RolSistema, Tarea,
@@ -90,8 +91,13 @@ class Command(BaseCommand):
         parser.add_argument("--borrar", action="store_true",
                             help="Borra la demo anterior antes de crearla de nuevo.")
 
-    @transaction.atomic
     def handle(self, *args, borrar=False, **options):
+        # Carga masiva: no llena la auditoría.
+        with sin_auditar():
+            self._sembrar(*args, borrar=borrar, **options)
+
+    @transaction.atomic
+    def _sembrar(self, *args, borrar=False, **options):
         # Las políticas de RLS dejan pasar todo a super_admin.
         with connection.cursor() as c:
             c.execute("SELECT set_config('app.rol', 'super_admin', true)")

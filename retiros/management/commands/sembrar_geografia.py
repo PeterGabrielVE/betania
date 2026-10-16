@@ -8,6 +8,7 @@ Se puede correr las veces que sea: solo agrega lo que falta.
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
+from retiros.auditoria import sin_auditar
 from retiros.geografia import ESTADOS_VENEZUELA, PAISES, VENEZUELA
 from retiros.models import Ciudad, Estado, Pais
 
@@ -15,8 +16,13 @@ from retiros.models import Ciudad, Estado, Pais
 class Command(BaseCommand):
     help = "Carga países, y estados y ciudades de Venezuela (sin duplicar)."
 
-    @transaction.atomic
     def handle(self, *args, **options):
+        # Carga masiva: no llena la auditoría.
+        with sin_auditar():
+            self._sembrar(*args, **options)
+
+    @transaction.atomic
+    def _sembrar(self, *args, **options):
         nuevos = {"países": 0, "estados": 0, "ciudades": 0}
         paises = {}
         for codigo, nombre in PAISES:

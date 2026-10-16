@@ -18,9 +18,10 @@ export default defineConfig({
     // Mismo origen en desarrollo: sin CORS y las cookies de sesión/CSRF funcionan.
     proxy: Object.fromEntries(
       // /retiros/<id>/lista.pdf es de Django; /retiros a secas es una página React.
+      // xfwd: pasa la IP del navegador a Django (auditoría).
       ["/api", "/admin", "/static", "^/retiros/.+\\.pdf$"].map((ruta) => [
         ruta,
-        backend,
+        { target: backend, changeOrigin: true, xfwd: true },
       ]),
     ),
   },

@@ -11,12 +11,13 @@ from ..models import (
     CAMISAS_SERVICIO, TALLAS_CAMISA, TURNOS_SERVICIO,
     AreaServicio, AsignacionRol, AsignacionServicio, Charla, Ciudad, Diocesis, Estado,
     EstadoPago, Gasto, Inscripcion, Pago, Pais, Parroquia, Participacion, Persona, Retiro, Tarea,
-    Rol, TipoRetiro, Usuario,
+    Auditoria, Rol, TipoRetiro, Usuario,
 )
 from .registro import Extra, Modulo, anotado, sub
 
 # Secciones del menú, en el orden en que aparecen.
 RETIROS, PERSONAS, FINANZAS, CATALOGOS = "Retiros", "Personas", "Finanzas", "Catálogos"
+SISTEMA = "Sistema"
 
 # Secciones del formulario de inscripción para caminantes (el de papel).
 _DATOS, _CIVIL, _SACRAMENTOS = "Datos del caminante", "Estado civil", "Sacramentos"
@@ -330,7 +331,53 @@ MODULOS = [
         buscar=["nombre"], filtros=["parroquia"], orden=["nombre"],
         relacionados=["parroquia"],
     ),
+    # ---- Sistema ----
+    Modulo(
+        # Solo lectura: la escribe retiros/auditoria.py. Pantalla propia en el
+        # frontend (/auditoria), con el detalle de cada cambio.
+        "auditoria", Auditoria, "Auditoría", "registro de auditoría", SISTEMA,
+        campos=["cambios"],
+        lista=["fecha", "usuario_nombre", "accion", "modulo", "objeto", "resumen", "ip"],
+        buscar=["usuario_nombre", "objeto", "objeto_id"],
+        filtros=["accion", "modelo"],
+        orden=["-fecha"],
+        rango_fecha="fecha",
+        solo_lectura=True,
+        extras={
+            "modulo": Extra("Módulo", "texto", lambda o: titulo_modelo(o.modelo)),
+            "resumen": Extra("Cambios", "texto", lambda o: resumen_cambios(o.cambios)),
+        },
+    ),
 ]
+
+# Nombre de cada modelo como se ve en el menú (para la auditoría).
+TITULOS_MODELO = {"user": "Cuentas de acceso"}
+for _m in MODULOS:
+    TITULOS_MODELO.setdefault(_m.modelo._meta.model_name, _m.titulo)
+
+
+def titulo_modelo(nombre):
+    return TITULOS_MODELO.get(nombre, nombre or "—")
+
+
+def resumen_cambios(cambios, maximo=4):
+    """"Estado: Aceptada → Confirmada · Monto: 30 → 60"."""
+    partes = []
+    for datos in (cambios or {}).values():
+        if datos.get("confidencial"):
+            partes.append(f"{datos['etiqueta']} (confidencial)")
+            continue
+        antes, despues = datos.get("antes"), datos.get("despues")
+        if datos.get("detalle"):
+            partes.append(f"{datos['etiqueta']} {datos['detalle']}: {antes or despues}")
+        elif antes is None:
+            partes.append(f"{datos['etiqueta']}: {despues}")
+        else:
+            partes.append(f"{datos['etiqueta']}: {antes} → {despues if despues is not None else '—'}")
+    texto = " · ".join(partes[:maximo])
+    if len(partes) > maximo:
+        texto += f" · y {len(partes) - maximo} más"
+    return texto
 
 POR_MODELO = {m.modelo: m for m in MODULOS}
 

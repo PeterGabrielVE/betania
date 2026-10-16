@@ -246,6 +246,30 @@ la puede inscribir en un retiro o registrar como servidor con sus datos ya
 cargados. Se llega desde Personas, Caminantes, Servidores y el panel de un
 retiro.
 
+## Auditoría
+
+**Sistema → Auditoría** muestra quién hizo qué y cuándo, con su IP:
+
+- Altas, cambios y bajas de todos los módulos, con el antes y el después de
+  cada campo («Ver detalle»). Los permisos que se dan o quitan a un rol.
+- Ingresos, salidas e intentos fallidos de inicio de sesión (con el usuario
+  intentado; la clave nunca se guarda).
+- **No** se registra cuando un super administrador (superusuario o rol de
+  alcance global) entra o sale. Sus cambios a los datos sí.
+- Los datos confidenciales (salud, contactos, familia) y las contraseñas no se
+  copian: solo se anota que cambiaron.
+- Filtros por acción, módulo y fechas, búsqueda y descarga en Excel o PDF.
+
+No se puede editar ni borrar, ni desde la API ni en la base de datos (las
+políticas de RLS de la tabla solo permiten insertar y leer). La ve quien tenga
+el permiso «Ver auditoría» (al inicio, el super administrador, que ve todo, y
+el administrador diocesano, que ve lo de su diócesis). Las cargas masivas
+(`sembrar_demo`, `sembrar_geografia`, `sembrar_areas`) no dejan registro.
+
+Detrás de un proxy (nginx…) pon `PROXY_CONFIABLE=1` para registrar la IP real
+del visitante; si no, se usa la de la conexión (ese encabezado lo podría
+inventar cualquiera).
+
 ## Preferencias de cada usuario
 
 En el encabezado cada usuario elige la **edición** (el retiro) con la que

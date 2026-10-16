@@ -14,6 +14,7 @@ from django.utils.functional import cached_property
 from django.utils.text import capfirst
 from rest_framework import filters, routers, serializers, status, viewsets
 from rest_framework.decorators import action, api_view
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
 from django.conf import settings
@@ -198,6 +199,15 @@ class ModuloViewSet(viewsets.ModelViewSet):
                     qs = qs.filter(**{nombre: valor})
                 except (ValueError, DjangoValidationError):
                     return qs.none()
+        if self.modulo.rango_fecha:
+            for parametro, operador in (("desde", "gte"), ("hasta", "lte")):
+                valor = self.request.query_params.get(parametro)
+                if valor:
+                    try:
+                        dia = date.fromisoformat(valor)
+                    except ValueError:
+                        return qs.none()
+                    qs = qs.filter(**{f"{self.modulo.rango_fecha}__date__{operador}": dia})
         return qs
 
     @action(detail=False, methods=["get"])
@@ -247,6 +257,11 @@ class ModuloViewSet(viewsets.ModelViewSet):
             # Reglas del modelo al borrar (p. ej. un rol del sistema).
             return Response({"detail": " ".join(e.messages)},
                             status=status.HTTP_409_CONFLICT)
+
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        if self.modulo.solo_lectura and request.method not in ("GET", "HEAD", "OPTIONS"):
+            raise PermissionDenied("Este módulo es de solo lectura.")
 
     def create(self, request, *args, **kwargs):
         return self._guardar(super().create, request, *args, **kwargs)
@@ -322,9 +337,9 @@ def esquema(request):
             "lista": columnas_lista(m, user),
             "filtros": [con_fijo(_filtro(m, n)) for n in m.filtros],
             "buscable": bool(m.buscar),
-            "puede_agregar": user.has_perm(m.permiso("add")),
-            "puede_cambiar": user.has_perm(m.permiso("change")),
-            "puede_eliminar": user.has_perm(m.permiso("delete")),
+            "puede_agregar": not m.solo_lectura and user.has_perm(m.permiso("add")),
+            "puede_cambiar": not m.solo_lectura and user.has_perm(m.permiso("change")),
+            "puede_eliminar": not m.solo_lectura and user.has_perm(m.permiso("delete")),
         })
     return Response(modulos)
 

@@ -19,6 +19,7 @@ import {
 } from "@/components/retiros/asistencia";
 import {
   claseBoton,
+  claseBotonPrincipal,
   claseControl,
   claseEnlace,
 } from "@/components/modulos/estilos";
@@ -26,7 +27,6 @@ import FormularioModulo from "@/components/modulos/FormularioModulo";
 import Paginacion from "@/components/modulos/Paginacion";
 import { TAMANOS_PAGINA } from "@/components/modulos/paginas";
 import SelectorRemoto from "@/components/modulos/SelectorRemoto";
-import Button from "@/components/ui/button/Button";
 import { Modal } from "@/components/ui/modal";
 import {
   Table,
@@ -41,6 +41,7 @@ import {
   KeyIcon,
   LockIcon,
   PencilIcon,
+  PlusIcon,
   TrashBinIcon,
   UploadIcon,
 } from "@/icons";
@@ -642,8 +643,9 @@ function Listado({ modulo }: { modulo: Modulo }) {
             )}
           {!!datos?.count && <BotonesDescarga ruta={rutaDescarga} />}
           {modulo.puede_agregar && (
-            <Button
-              size="sm"
+            <button
+              type="button"
+              className={claseBotonPrincipal}
               onClick={() =>
                 // Caminantes y servidores se dan de alta con su formulario por pasos.
                 ALTA_POR_PASOS[modulo.slug]
@@ -651,8 +653,9 @@ function Listado({ modulo }: { modulo: Modulo }) {
                   : setEditando(null)
               }
             >
+              <PlusIcon className="size-5" aria-hidden="true" />
               Agregar {modulo.singular}
-            </Button>
+            </button>
           )}
         </div>
       </div>
@@ -733,12 +736,13 @@ function Listado({ modulo }: { modulo: Modulo }) {
           <span className="font-medium text-gray-800 dark:text-white/90">
             {elegidos.length} {elegidos.length === 1 ? "elegido" : "elegidos"}
           </span>
-          <Button
-            size="sm"
+          <button
+            type="button"
+            className={claseBotonPrincipal}
             onClick={() => marcarAsistencia(ASISTENCIA[quien].confirmado)}
           >
             Confirmar asistencia
-          </Button>
+          </button>
           <button
             type="button"
             className={`${claseBoton} text-error-600 dark:text-error-400`}

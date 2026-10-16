@@ -10,6 +10,7 @@ faltan y completa la descripción de las que la tienen vacía; no toca las
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
+from retiros.auditoria import sin_auditar
 from retiros.areas import AREAS_SERVICIO
 from retiros.models import AreaServicio
 
@@ -17,8 +18,13 @@ from retiros.models import AreaServicio
 class Command(BaseCommand):
     help = "Carga las áreas de servicio de Emaús (sin duplicar)."
 
-    @transaction.atomic
     def handle(self, *args, **options):
+        # Carga masiva: no llena la auditoría.
+        with sin_auditar():
+            self._sembrar(*args, **options)
+
+    @transaction.atomic
+    def _sembrar(self, *args, **options):
         nuevas = completadas = 0
         for nombre, descripcion in AREAS_SERVICIO:
             area, creada = AreaServicio.objects.get_or_create(

@@ -52,6 +52,10 @@ class Modulo:
     prefetch: list = field(default_factory=list)      # prefetch_related
     # False: el módulo existe (API, formularios) pero no aparece en el menú.
     en_menu: bool = True
+    # Campo de fecha que se filtra con ?desde=AAAA-MM-DD&hasta=AAAA-MM-DD.
+    rango_fecha: str = ""
+    # Nadie crea, cambia ni borra (ni el superusuario): p. ej. la auditoría.
+    solo_lectura: bool = False
 
     def campo(self, nombre):
         return self.modelo._meta.get_field(nombre)
