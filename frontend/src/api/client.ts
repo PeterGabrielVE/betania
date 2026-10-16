@@ -89,6 +89,22 @@ export async function api<T>(
   return datos as T;
 }
 
+// Sube un archivo (multipart) a la API y devuelve el JSON de la respuesta.
+export async function subirArchivo<T>(
+  ruta: string,
+  datos: FormData,
+): Promise<T> {
+  const res = await pedir(`/api${ruta}`, {
+    method: "POST",
+    headers: { Accept: "application/json", "X-CSRFToken": csrfToken() },
+    credentials: "same-origin",
+    body: datos,
+  });
+  const cuerpo = await res.json().catch(() => null);
+  if (!res.ok) throw aError(res.status, cuerpo);
+  return cuerpo as T;
+}
+
 // Descarga un archivo de la API (Excel o PDF de una tabla): GET con la ruta o
 // POST con el cuerpo. Lo guarda con el nombre que manda el servidor.
 export async function descargar(ruta: string, body?: unknown): Promise<void> {

@@ -15,9 +15,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # Dependencias de sistema:
 #  - WeasyPrint necesita pango/cairo/gdk-pixbuf y tipografías (para el PDF).
 #  - postgresql-client aporta psql/pg_isready (para el entrypoint).
+#  - tesseract-ocr con el idioma español: leer planillas (retiros/ocr).
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf-2.0-0 libcairo2 \
         libffi8 fonts-dejavu-core postgresql-client \
+        tesseract-ocr tesseract-ocr-spa \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

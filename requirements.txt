@@ -6,4 +6,7 @@ dj-database-url>=2.1
 django-import-export>=4.0
 weasyprint>=60
 openpyxl>=3.1
+pytesseract>=0.3.10
+Pillow>=10.0
+pymupdf>=1.24
 djangorestframework>=3.15

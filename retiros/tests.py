@@ -1583,3 +1583,137 @@ class PaginasDeErrorTests(Base):
         self.assertIn("No encontramos esta página", r.content.decode())
         from django.template.loader import render_to_string
         self.assertIn("Sistema no disponible", render_to_string("500.html"))
+
+
+def _imagen(lineas, ancho=2000, columnas=None):
+    """Una planilla o un listado de prueba, como PNG."""
+    import io
+
+    from PIL import Image, ImageDraw, ImageFont
+    fuente = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 32)
+    img = Image.new("RGB", (ancho, 140 + 70 * len(lineas)), "white")
+    d = ImageDraw.Draw(img)
+    for i, linea in enumerate(lineas):
+        if columnas:
+            for x, celda in zip(columnas, linea):
+                d.text((x, 60 + 70 * i), celda, fill="black", font=fuente)
+        else:
+            d.text((80, 60 + 70 * i), linea, fill="black", font=fuente)
+    salida = io.BytesIO()
+    img.save(salida, "PNG")
+    return salida.getvalue()
+
+
+PLANILLA = [
+    "PLANILLA DE INSCRIPCIÓN",
+    "Nombres y Apellidos: JOSÉ GREGORIO PÉREZ LOZADA",
+    "Cédula de Identidad: V-12.345.678     Fecha de Nacimiento: 12/03/1980",
+    "Teléfono Celular: 0414-123.45.67     Teléfono de Habitación: 0212 555 1234",
+    "Estado: Miranda     Ciudad: Los Teques",
+    "Estado Civil: Casado     Número de hijos: 3",
+    "Tratamiento: Metformina 850 mg",
+    "Talla de camisa: L",
+    "En caso de emergencia avisar a: María Rodríguez",
+    "Parentesco: Esposa     Celular: 0424-765.43.21",
+    "Invitado por: Pedro Ramírez",
+]
+
+
+class OCRTests(Base):
+    """Leer planillas y listados con Tesseract (en el propio servidor)."""
+
+    def subir(self, ruta, contenido, nombre="planilla.png", **datos):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        return self.client.post(ruta, {"archivo": SimpleUploadedFile(nombre, contenido), **datos})
+
+    def test_planilla_de_caminante(self):
+        call_command("sembrar_geografia", verbosity=0)
+        r = self.subir("/api/ocr/planilla/", _imagen(PLANILLA), tipo="caminante")
+        self.assertEqual(r.status_code, 200, r.content)
+        c = {k: v["valor"] for k, v in r.json()["campos"].items()}
+        self.assertEqual((c["primer_nombre"], c["segundo_nombre"], c["primer_apellido"],
+                          c["segundo_apellido"]), ("José", "Gregorio", "Pérez", "Lozada"))
+        self.assertEqual((c["tipo_documento"], c["documento"]), ("V", "12345678"))
+        self.assertEqual(c["fecha_nacimiento"], "1980-03-12")
+        self.assertEqual((c["telefono"], c["telefono_casa"]), ("0414-1234567", "0212-5551234"))
+        self.assertEqual((c["estado_civil"], c["hijos"], c["talla_camiseta"]), ("Casado", "3", "L"))
+        self.assertEqual(c["tratamiento"], "Metformina 850 mg")
+        # Los teléfonos después de "En caso de emergencia" son del familiar.
+        self.assertEqual((c["contacto_nombre"], c["contacto_relacion"], c["contacto_celular"]),
+                         ("María Rodríguez", "Esposa", "0424-7654321"))
+        self.assertEqual(c["padrino_nombre"], "Pedro Ramírez")
+        # Estado y ciudad, reconocidos en el catálogo.
+        self.assertEqual(Ciudad.objects.get(pk=c["ciudad"]).nombre, "Los Teques")
+        self.assertTrue(all(0 <= v["confianza"] <= 100 for v in r.json()["campos"].values()))
+
+    def test_planilla_de_servidor_y_pdf(self):
+        import pymupdf
+        call_command("sembrar_areas", verbosity=0)
+        imagen = _imagen(["PLANILLA DE SERVIDOR", "Nombres: Rosa María   Apellidos: Díaz Peña",
+                          "Área de servicio: Cocina",
+                          "Dormirá en la casa: Sí", "Viernes: noche   Sábado: todo el día",
+                          "Camisa: Azul   Talla: M"])
+        documento = pymupdf.open()
+        pagina = documento.new_page()
+        pagina.insert_image(pagina.rect, stream=imagen)
+        r = self.subir("/api/ocr/planilla/", documento.tobytes(), "planilla.pdf", tipo="servidor")
+        self.assertEqual(r.status_code, 200, r.content)
+        c = {k: v["valor"] for k, v in r.json()["campos"].items()}
+        self.assertEqual((c["primer_nombre"], c["primer_apellido"]), ("Rosa", "Díaz"))
+        self.assertEqual(AreaServicio.objects.get(pk=c["areas"][0]).nombre, "Cocina")
+        self.assertEqual(c["duerme"], "si")
+        self.assertIn("viernes_noche", c["turnos"])
+        self.assertIn("sabado_tarde", c["turnos"])
+        self.assertEqual((c["camisas"], c["tallas"]), (["azul"], ["M"]))
+
+    def test_sin_datos_confidenciales_no_los_devuelve(self):
+        cuenta = User.objects.create_user("teso", password="x")
+        u = Usuario.objects.create(persona=self.persona("Teso"), cuenta=cuenta)
+        rol = Rol.objects.create(nombre="Inscribe", ambito=Rol.Ambito.PARROQUIA)
+        rol.permisos.set(Permission.objects.filter(codename__in=["add_persona", "view_persona"]))
+        AsignacionRol.objects.create(usuario=u, rol=rol, parroquia=self.parroquia)
+        self.client.force_login(cuenta)
+        campos = self.subir("/api/ocr/planilla/", _imagen(PLANILLA)).json()["campos"]
+        self.assertIn("documento", campos)
+        for clave in ("tratamiento", "contacto_nombre", "estado_civil", "telefono_casa"):
+            self.assertNotIn(clave, campos)
+
+    def test_archivos_que_no_sirven_y_permisos(self):
+        self.assertEqual(self.subir("/api/ocr/planilla/", b"hola", "nota.txt").status_code, 400)
+        self.assertEqual(self.subir("/api/ocr/planilla/", b"no es imagen").status_code, 400)
+        self.client.force_login(User.objects.create_user("nadie", password="x"))
+        self.assertEqual(self.subir("/api/ocr/planilla/", _imagen(PLANILLA)).status_code, 403)
+
+    LISTADO = [
+        ["N°", "NOMBRE Y APELLIDO", "CELULAR", "EDAD", "TALLA", "CONTACTO", "CELULAR"],
+        ["1", "ABEL MORA", "0414-1234567", "45", "L", "ROSA MORA", "0424-7654321"],
+        ["2", "LUIS ALASTRE", "0412-2223344", "38", "M", "ANA PEÑA", "0416-9998877"],
+    ]
+    COLUMNAS = [60, 150, 680, 960, 1080, 1200, 1620]
+
+    def test_listado_y_carga_sin_duplicar(self):
+        r = self.subir("/api/ocr/listado/", _imagen(self.LISTADO, columnas=self.COLUMNAS),
+                       "lista.png")
+        self.assertEqual(r.status_code, 200, r.content)
+        filas = r.json()["filas"]
+        self.assertEqual([f["nombre"] for f in filas], ["Abel Mora", "Luis Alastre"])
+        self.assertEqual((filas[0]["telefono"], filas[0]["edad"], filas[0]["talla"],
+                          filas[0]["contacto_nombre"], filas[0]["contacto_celular"]),
+                         ("0414-1234567", 45, "L", "Rosa Mora", "0424-7654321"))
+
+        datos = {"retiro": str(self.retiro.pk), "como": "caminantes",
+                 "filas": filas + [{"nombre": "Solo"}]}
+        r = self.client.post("/api/ocr/listado/importar/", datos, content_type="application/json")
+        self.assertEqual((r.json()["creados"], r.json()["errores"]), (2, 1), r.content)
+        abel = Inscripcion.objects.get(persona__primer_nombre="Abel")
+        self.assertEqual((abel.salud_alimentacion["talla_camiseta"],
+                          abel.contacto_emergencia["celular"]), ("L", "0424-7654321"))
+        # La misma hoja otra vez: no duplica personas ni inscripciones.
+        r = self.client.post("/api/ocr/listado/importar/", datos, content_type="application/json")
+        self.assertEqual((r.json()["creados"], r.json()["existentes"]), (0, 2))
+        self.assertEqual(Persona.objects.filter(primer_nombre="Abel").count(), 1)
+
+    def test_listado_ilegible(self):
+        r = self.subir("/api/ocr/listado/", _imagen(["una hoja sin tabla"]), "x.png")
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("encabezados", r.json()["detail"])

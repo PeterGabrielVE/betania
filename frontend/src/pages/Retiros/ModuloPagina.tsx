@@ -19,6 +19,7 @@ import {
 import PanelFiltros from "@/components/modulos/PanelFiltros";
 import DialogoCuenta from "@/components/modulos/DialogoCuenta";
 import DialogoImportar from "@/components/modulos/DialogoImportar";
+import DialogoListado from "@/components/ocr/DialogoListado";
 import { celda } from "@/components/modulos/celda";
 import { DialogoCancelar } from "@/components/retiros/AccionesAsistencia";
 import {
@@ -47,6 +48,7 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import NotFound from "@/pages/OtherPage/NotFound";
 import {
+  EscanearIcon,
   KeyIcon,
   LockIcon,
   PencilIcon,
@@ -186,6 +188,16 @@ function rutaDeEdicion(slug: string, id: string, volver: string) {
   const ruta = EDICION_POR_PASOS[slug](id);
   return `${ruta}${ruta.includes("?") ? "&" : "?"}volver=${encodeURIComponent(volver)}`;
 }
+
+// Módulos donde se puede leer la foto de un listado, y cómo se cargan.
+const LISTADO_OCR: Record<
+  string,
+  "caminantes" | "servidores" | "personas" | undefined
+> = {
+  personas: "personas",
+  inscripciones: "caminantes",
+  participaciones: "servidores",
+};
 
 // Módulos donde se confirma o cancela la asistencia de varios a la vez.
 const ASISTENCIA_MASIVA: Record<string, Quien | undefined> = {
@@ -423,6 +435,8 @@ function Listado({ modulo }: { modulo: Modulo }) {
   // Usuarios: la cuenta que se está editando; Personas: importar de Excel.
   const [cuentaDe, setCuentaDe] = useState<string | null>(null);
   const [importando, setImportando] = useState(false);
+  // Leer la foto de un listado de personas (OCR).
+  const [leyendoListado, setLeyendoListado] = useState(false);
   // Panel lateral de filtros (edad, fechas, pago…) y lo aplicado en él.
   const [panelAbierto, setPanelAbierto] = useState(false);
   const [avanzados, setAvanzados] = useState<ValoresFiltros>({});
@@ -660,6 +674,16 @@ function Listado({ modulo }: { modulo: Modulo }) {
                 Importar
               </button>
             )}
+          {LISTADO_OCR[modulo.slug] && modulo.puede_agregar && (
+            <button
+              type="button"
+              className={`${claseBoton} inline-flex items-center gap-2`}
+              onClick={() => setLeyendoListado(true)}
+            >
+              <EscanearIcon className="size-5" aria-hidden="true" />
+              Leer listado
+            </button>
+          )}
           {!!datos?.count && <BotonesDescarga ruta={rutaDescarga} />}
           {modulo.puede_agregar && (
             <button
@@ -926,6 +950,13 @@ function Listado({ modulo }: { modulo: Modulo }) {
           usuarioId={cuentaDe}
           onCerrar={() => setCuentaDe(null)}
           onGuardado={() => setVersion((v) => v + 1)}
+        />
+      )}
+      {leyendoListado && LISTADO_OCR[modulo.slug] && (
+        <DialogoListado
+          como={LISTADO_OCR[modulo.slug]!}
+          onCerrar={() => setLeyendoListado(false)}
+          onCargado={() => setVersion((v) => v + 1)}
         />
       )}
       {importando && (

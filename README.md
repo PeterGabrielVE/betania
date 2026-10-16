@@ -265,6 +265,27 @@ Además de la búsqueda y los filtros rápidos, estos listados tienen un botón
 Lo aplicado se ve como etiquetas bajo los filtros; cada una se quita con su
 ×. Los filtros se declaran en `retiros/api/filtros.py` (`Modulo.avanzados`).
 
+## Leer planillas en papel (OCR)
+
+En **Inscribir caminante** y **Registrar servidor**, el botón **Leer planilla**
+lee la foto (con la cámara del celular) o el PDF escaneado de la planilla y
+propone sus datos: nombres y apellidos, cédula, fecha de nacimiento,
+teléfonos, correo, estado y ciudad, estado civil, sacramentos, salud, talla,
+el familiar de contacto y, en servidores, áreas, turnos y camisa. Se ve cada
+dato con la confianza de la lectura y se elige qué usar; después todo queda en
+los pasos del formulario para revisarlo. Si la cédula ya está registrada, se
+conservan sus datos guardados y la planilla solo completa lo vacío.
+
+En **Personas**, **Caminantes** y **Servidores**, **Leer listado** lee la foto de
+una hoja tabulada (como el "Listado de caminantes" o el "Control de pago
+servidores"): reconoce las columnas por sus encabezados, muestra una tabla
+para corregir y carga las filas al retiro elegido, sin duplicar personas.
+
+El OCR es **Tesseract, en el propio servidor**: las fotos no salen a ningún
+servicio externo. Lee bien la letra de molde y el texto impreso; con letra
+cursiva se equivoca más, por eso todo se revisa antes de guardar. La lógica
+está en `retiros/ocr/` (las etiquetas que reconoce, en `planilla.py`).
+
 ## Auditoría
 
 **Sistema → Auditoría** muestra quién hizo qué y cuándo, con su IP:

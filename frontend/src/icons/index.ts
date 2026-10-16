@@ -21,6 +21,8 @@ import { ReactComponent as CopiarIcon } from "./copiar.svg?react";
 import { ReactComponent as CopiadoIcon } from "./copiado.svg?react";
 import { ReactComponent as LlamarIcon } from "./llamar.svg?react";
 import { ReactComponent as WhatsappIcon } from "./whatsapp.svg?react";
+import { ReactComponent as EscanearIcon } from "./escanear.svg?react";
+import { ReactComponent as CamaraIcon } from "./camara.svg?react";
 import { ReactComponent as ArrowRightIcon } from "./arrow-right.svg?react";
 import { ReactComponent as GroupIcon } from "./group.svg?react";
 import { ReactComponent as BoxIconLine } from "./box-line.svg?react";
@@ -186,6 +188,8 @@ export {
   CopiadoIcon,
   LlamarIcon,
   WhatsappIcon,
+  EscanearIcon,
+  CamaraIcon,
   FileIcon,
   GridIcon,
   AudioIcon,

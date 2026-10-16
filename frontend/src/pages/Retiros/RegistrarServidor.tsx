@@ -1,3 +1,5 @@
+import LeerPlanilla from "@/components/ocr/LeerPlanilla";
+import { aplicarLectura } from "@/components/ocr/aplicarLectura";
 import PantallaError from "@/components/estados/PantallaError";
 import { EsqueletoFormulario } from "@/components/estados/Esqueleto";
 import { api, ApiError, type Pagina, type Registro } from "@/api/client";
@@ -78,6 +80,8 @@ export default function RegistrarServidor() {
     (c) => c.nombre === "datos_sensibles",
   );
   const pasos = useMemo(() => pasosServidor(sensibles), [sensibles]);
+  // Resultado de llenar el formulario con una planilla leída.
+  const [avisoLectura, setAvisoLectura] = useState("");
   const [venezuela, setVenezuela] = useState("");
   const esquema = useMemo(
     () => crearEsquemaServidor(sensibles, (pais) => pais === venezuela),
@@ -410,6 +414,37 @@ export default function RegistrarServidor() {
           </Link>
         </div>
       )}
+
+      {/* Llenar desde la planilla en papel (OCR en el propio sistema). */}
+      <div className="mb-4 flex flex-wrap items-center justify-end gap-3">
+        {avisoLectura ? (
+          <p
+            className="me-auto text-sm text-success-700 dark:text-success-500"
+            role="status"
+          >
+            {avisoLectura}
+          </p>
+        ) : (
+          <span className="text-theme-xs text-gray-500 dark:text-gray-400">
+            ¿Tienes la planilla en papel?
+          </span>
+        )}
+        <LeerPlanilla
+          tipo="servidor"
+          onAplicar={async (leidos) => {
+            const r = await aplicarLectura(formulario, leidos, {
+              buscarPorDocumento: editando
+                ? undefined
+                : () => registro.buscarPorDocumento(pasos[0].campos),
+            });
+            setAvisoLectura(
+              r.registrada
+                ? `Ya estaba registrada: se conservaron sus datos y la planilla completó ${r.llenados} campos. Revísalos en cada paso.`
+                : `Se llenaron ${r.llenados} campos con la planilla. Revísalos en cada paso antes de guardar.`,
+            );
+          }}
+        />
+      </div>
 
       <FormProvider {...formulario}>
         <form

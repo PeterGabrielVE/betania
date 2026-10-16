@@ -1,6 +1,6 @@
 from django.urls import include, path
 
-from . import auditoria, control_pagos, cuentas, paneles, permisos_rol, sesion, vistas
+from . import auditoria, control_pagos, cuentas, ocr, paneles, permisos_rol, sesion, vistas
 
 urlpatterns = [
     path("auth/sesion/", sesion.sesion),
@@ -19,5 +19,8 @@ urlpatterns = [
     path("usuarios/<uuid:pk>/cuenta/", cuentas.cuenta_usuario),
     path("roles/<uuid:pk>/permisos/", permisos_rol.permisos_rol),
     path("auditoria/opciones/", auditoria.opciones),
+    path("ocr/planilla/", ocr.leer_planilla),
+    path("ocr/listado/", ocr.leer_listado),
+    path("ocr/listado/importar/", ocr.importar_listado),
     path("", include(vistas.router.urls)),
 ]

@@ -1,3 +1,5 @@
+import LeerPlanilla from "@/components/ocr/LeerPlanilla";
+import { aplicarLectura } from "@/components/ocr/aplicarLectura";
 import PantallaError from "@/components/estados/PantallaError";
 import { EsqueletoFormulario } from "@/components/estados/Esqueleto";
 import { api, ApiError, type Registro } from "@/api/client";
@@ -72,6 +74,8 @@ export default function InscribirCaminante() {
     !!personas?.campos.some((c) => c.nombre === "datos_sensibles") &&
     !!inscripciones?.campos.some((c) => c.nombre === "salud_alimentacion");
   const pasos = useMemo(() => pasosPara(sensibles), [sensibles]);
+  // Resultado de llenar el formulario con una planilla leída.
+  const [avisoLectura, setAvisoLectura] = useState("");
   const estados =
     inscripciones?.campos.find((c) => c.nombre === "estado")?.opciones ?? [];
 
@@ -318,6 +322,37 @@ export default function InscribirCaminante() {
           </Link>
         </div>
       )}
+
+      {/* Llenar desde la planilla en papel (OCR en el propio sistema). */}
+      <div className="mb-4 flex flex-wrap items-center justify-end gap-3">
+        {avisoLectura ? (
+          <p
+            className="me-auto text-sm text-success-700 dark:text-success-500"
+            role="status"
+          >
+            {avisoLectura}
+          </p>
+        ) : (
+          <span className="text-theme-xs text-gray-500 dark:text-gray-400">
+            ¿Tienes la planilla en papel?
+          </span>
+        )}
+        <LeerPlanilla
+          tipo="caminante"
+          onAplicar={async (leidos) => {
+            const r = await aplicarLectura(formulario, leidos, {
+              buscarPorDocumento: editando
+                ? undefined
+                : () => registro.buscarPorDocumento(pasos[0].campos),
+            });
+            setAvisoLectura(
+              r.registrada
+                ? `Ya estaba registrada: se conservaron sus datos y la planilla completó ${r.llenados} campos. Revísalos en cada paso.`
+                : `Se llenaron ${r.llenados} campos con la planilla. Revísalos en cada paso antes de guardar.`,
+            );
+          }}
+        />
+      </div>
 
       <FormProvider {...formulario}>
         <form
