@@ -20,6 +20,8 @@ import PanelFiltros from "@/components/modulos/PanelFiltros";
 import DialogoCuenta from "@/components/modulos/DialogoCuenta";
 import DialogoImportar from "@/components/modulos/DialogoImportar";
 import DialogoListado from "@/components/ocr/DialogoListado";
+import DialogoNuevaPersona from "@/components/modulos/DialogoNuevaPersona";
+import { opcionesNuevaPersona } from "@/components/modulos/nuevaPersona";
 import { celda } from "@/components/modulos/celda";
 import { DialogoCancelar } from "@/components/retiros/AccionesAsistencia";
 import {
@@ -437,6 +439,9 @@ function Listado({ modulo }: { modulo: Modulo }) {
   const [importando, setImportando] = useState(false);
   // Leer la foto de un listado de personas (OCR).
   const [leyendoListado, setLeyendoListado] = useState(false);
+  // Personas: elegir si se registra un caminante, un servidor o solo la persona.
+  const [eligiendoAlta, setEligiendoAlta] = useState(false);
+  const { modulos } = useAuth();
   // Panel lateral de filtros (edad, fechas, pago…) y lo aplicado en él.
   const [panelAbierto, setPanelAbierto] = useState(false);
   const [avanzados, setAvanzados] = useState<ValoresFiltros>({});
@@ -689,12 +694,19 @@ function Listado({ modulo }: { modulo: Modulo }) {
             <button
               type="button"
               className={claseBotonPrincipal}
-              onClick={() =>
+              onClick={() => {
                 // Caminantes y servidores se dan de alta con su formulario por pasos.
-                ALTA_POR_PASOS[modulo.slug]
-                  ? navigate(ALTA_POR_PASOS[modulo.slug])
-                  : setEditando(null)
-              }
+                if (ALTA_POR_PASOS[modulo.slug]) {
+                  navigate(ALTA_POR_PASOS[modulo.slug]);
+                } else if (modulo.slug === "personas") {
+                  const puede = opcionesNuevaPersona(modulos);
+                  // Si no puede inscribir ni registrar servidores, directo al formulario.
+                  if (puede.caminante || puede.servidor) setEligiendoAlta(true);
+                  else setEditando(null);
+                } else {
+                  setEditando(null);
+                }
+              }}
             >
               <PlusIcon className="size-5" aria-hidden="true" />
               Agregar {modulo.singular}
@@ -950,6 +962,15 @@ function Listado({ modulo }: { modulo: Modulo }) {
           usuarioId={cuentaDe}
           onCerrar={() => setCuentaDe(null)}
           onGuardado={() => setVersion((v) => v + 1)}
+        />
+      )}
+      {eligiendoAlta && (
+        <DialogoNuevaPersona
+          onCerrar={() => setEligiendoAlta(false)}
+          onSoloPersona={() => {
+            setEligiendoAlta(false);
+            setEditando(null);
+          }}
         />
       )}
       {leyendoListado && LISTADO_OCR[modulo.slug] && (
