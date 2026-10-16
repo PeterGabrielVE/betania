@@ -56,6 +56,8 @@ class Modulo:
     rango_fecha: str = ""
     # Nadie crea, cambia ni borra (ni el superusuario): p. ej. la auditoría.
     solo_lectura: bool = False
+    # Filtros del panel lateral (ver api/filtros.py).
+    avanzados: list = field(default_factory=list)
 
     def campo(self, nombre):
         return self.modelo._meta.get_field(nombre)

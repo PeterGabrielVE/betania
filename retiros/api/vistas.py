@@ -23,6 +23,7 @@ from ..acceso import ambito_fijo
 from ..exportar import FORMATOS, MAX_FILAS, Dinero, descargar
 from .sesion import _preferencias_json
 from .modulos import AYUDAS, ETIQUETAS, MODULOS, POR_MODELO
+from . import filtros as filtros_avanzados
 from .permisos import PermisosModelo, ve_sensibles
 
 _TIPOS = [
@@ -199,6 +200,10 @@ class ModuloViewSet(viewsets.ModelViewSet):
                     qs = qs.filter(**{nombre: valor})
                 except (ValueError, DjangoValidationError):
                     return qs.none()
+        if self.modulo.avanzados:
+            qs = filtros_avanzados.aplicar(qs, filtros_avanzados.visibles(
+                self.modulo.avanzados, self.request.user, ve_sensibles(self.request)),
+                self.request.query_params)
         if self.modulo.rango_fecha:
             for parametro, operador in (("desde", "gte"), ("hasta", "lte")):
                 valor = self.request.query_params.get(parametro)
@@ -336,6 +341,8 @@ def esquema(request):
             "campos": [con_fijo(_describir(m, n)) for n in campos],
             "lista": columnas_lista(m, user),
             "filtros": [con_fijo(_filtro(m, n)) for n in m.filtros],
+            "avanzados": [f.describir() for f in
+                          filtros_avanzados.visibles(m.avanzados, user, sensibles)],
             "buscable": bool(m.buscar),
             "puede_agregar": not m.solo_lectura and user.has_perm(m.permiso("add")),
             "puede_cambiar": not m.solo_lectura and user.has_perm(m.permiso("change")),

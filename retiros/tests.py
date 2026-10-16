@@ -1477,3 +1477,98 @@ class AuditoriaTests(Base):
                                                 "parroquia": str(self.parroquia.pk)},
                              content_type="application/json", **falsa)
         self.assertEqual(self.ultimos(accion="crear", modelo="persona")[0].ip, "6.6.6.6")
+
+
+class FiltrosAvanzadosTests(Base):
+    """Panel de filtros: edad, fechas, pago, salud, disponibilidad…"""
+
+    def setUp(self):
+        super().setUp()
+        hoy = timezone.localdate()
+        self.joven = self.persona("Ana Joven", fecha_nacimiento=hoy.replace(year=hoy.year - 25))
+        self.mayor = self.persona("Luis Mayor", fecha_nacimiento=hoy.replace(year=hoy.year - 60))
+        self.ana = Inscripcion.objects.create(
+            retiro=self.retiro, persona=self.joven,
+            salud_alimentacion={"tratamiento": "Insulina", "talla_camiseta": "M"})
+        self.luis = Inscripcion.objects.create(retiro=self.retiro, persona=self.mayor,
+                                               salud_alimentacion={"tratamiento": ""})
+        Pago.objects.create(retiro=self.retiro, inscripcion=self.ana, concepto="cuota",
+                            monto=100, fecha=date(2027, 3, 1))
+        self.retiro.cuota_servidor = Decimal("25")
+        self.retiro.save()
+        cocina = AreaServicio.objects.create(nombre="Cocina")
+        self.rosa = Participacion.objects.create(
+            retiro=self.retiro, persona=self.persona("Rosa"), tipo="servidor",
+            duerme_en_casa=True, disponibilidad={"viernes_noche": True})
+        self.pedro = Participacion.objects.create(
+            retiro=self.retiro, persona=self.persona("Pedro"), tipo="servidor")
+        AsignacionServicio.objects.create(participacion=self.rosa, area=cocina,
+                                          es_coordinador=True)
+        Pago.objects.create(retiro=self.retiro, persona=self.rosa.persona, concepto="aportacion",
+                            monto=10, fecha=date(2027, 3, 1))
+        self.cocina = cocina
+
+    def nombres(self, ruta):
+        r = self.client.get(ruta)
+        self.assertEqual(r.status_code, 200, r.content)
+        return sorted(f["etiqueta"].split(" →")[0].split(" ·")[0] for f in r.json()["results"])
+
+    def test_el_esquema_describe_el_panel(self):
+        modulos = {m["slug"]: m for m in self.client.get("/api/esquema/").json()}
+        nombres = [f["nombre"] for f in modulos["inscripciones"]["avanzados"]]
+        self.assertIn("edad", nombres)
+        self.assertIn("tratamiento", nombres)
+        self.assertEqual(modulos["retiros"].get("avanzados"), [])
+
+    def test_edad_y_fechas(self):
+        self.assertEqual(self.nombres("/api/inscripciones/?f_edad_min=18&f_edad_max=30"),
+                         ["Ana Joven"])
+        self.assertEqual(self.nombres("/api/personas/?f_edad_min=50"), ["Luis Mayor"])
+        hoy = timezone.localdate().isoformat()
+        self.assertEqual(len(self.nombres(f"/api/inscripciones/?f_inscrito_desde={hoy}")), 2)
+        self.assertEqual(self.nombres("/api/inscripciones/?f_inscrito_hasta=2000-01-01"), [])
+
+    def test_estado_del_pago(self):
+        self.assertEqual(self.nombres("/api/inscripciones/?f_estado_pago=pagado"), ["Ana Joven"])
+        self.assertEqual(self.nombres("/api/inscripciones/?f_estado_pago=pendiente,parcial"),
+                         ["Luis Mayor"])
+        self.assertEqual(self.nombres("/api/participaciones/?f_estado_pago=parcial"), ["Rosa"])
+        self.assertEqual(self.nombres("/api/participaciones/?f_estado_pago=pendiente"), ["Pedro"])
+
+    def test_salud_solo_para_quien_ve_datos_confidenciales(self):
+        self.assertEqual(self.nombres("/api/inscripciones/?f_tratamiento=si"), ["Ana Joven"])
+        self.assertEqual(self.nombres("/api/inscripciones/?f_tratamiento=no"), ["Luis Mayor"])
+        self.assertEqual(self.nombres("/api/inscripciones/?f_talla=M"), ["Ana Joven"])
+        cuenta = User.objects.create_user("teso", password="x")
+        u = Usuario.objects.create(persona=self.persona("Teso"), cuenta=cuenta)
+        AsignacionRol.objects.create(usuario=u, rol=rol_de(RolSistema.TESORERIA),
+                                     parroquia=self.parroquia)
+        self.client.force_login(cuenta)
+        # Sin acceso a datos confidenciales, el filtro no existe (se ignora).
+        self.assertEqual(len(self.nombres("/api/inscripciones/?f_tratamiento=si")), 2)
+        modulos = {m["slug"]: m for m in self.client.get("/api/esquema/").json()}
+        self.assertNotIn("tratamiento", [f["nombre"] for f in modulos["inscripciones"]["avanzados"]])
+
+    def test_servicio_y_disponibilidad(self):
+        self.assertEqual(self.nombres(f"/api/participaciones/?f_area={self.cocina.pk}"), ["Rosa"])
+        self.assertEqual(self.nombres("/api/participaciones/?f_coordina=si"), ["Rosa"])
+        self.assertEqual(self.nombres("/api/participaciones/?f_sin_area=si"), ["Pedro"])
+        self.assertEqual(self.nombres("/api/participaciones/?f_duerme=sin"), ["Pedro"])
+        self.assertEqual(self.nombres("/api/participaciones/?f_turno=viernes_noche,sabado_manana"),
+                         ["Rosa"])
+
+    def test_participacion_de_las_personas(self):
+        self.assertEqual(self.nombres("/api/personas/?f_caminante=si"), ["Ana Joven", "Luis Mayor"])
+        self.assertEqual(self.nombres("/api/personas/?f_servidor=si"), ["Pedro", "Rosa"])
+        self.assertEqual(len(self.nombres(f"/api/personas/?f_en_retiro={self.retiro.pk}")), 4)
+
+    def test_valores_raros_y_descarga(self):
+        self.assertEqual(self.nombres("/api/inscripciones/?f_edad_min=abc"), [])
+        self.assertEqual(self.nombres("/api/participaciones/?f_area=no-es-un-id"), [])
+        self.assertEqual(len(self.nombres("/api/inscripciones/?f_estado_pago=inventado")), 2)
+        r = self.client.get("/api/inscripciones/exportar/?formato=xlsx&f_edad_max=30")
+        from io import BytesIO
+
+        from openpyxl import load_workbook
+        hoja = load_workbook(BytesIO(r.content)).active
+        self.assertEqual(hoja.max_row, 5)  # título, subtítulo, vacía, encabezado y Ana

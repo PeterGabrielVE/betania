@@ -13,6 +13,7 @@ from ..models import (
     EstadoPago, Gasto, Inscripcion, Pago, Pais, Parroquia, Participacion, Persona, Retiro, Tarea,
     Auditoria, Rol, TipoRetiro, Usuario,
 )
+from . import filtros as F
 from .registro import Extra, Modulo, anotado, sub
 
 # Secciones del menú, en el orden en que aparecen.
@@ -88,6 +89,7 @@ MODULOS = [
                "fecha_nacimiento", "parroquia", "creado"],
         buscar=["nombre", "documento", "telefono", "email"],
         filtros=["parroquia"],
+        avanzados=F.PERSONAS,
         orden=["nombre"],
         relacionados=["parroquia", "pais", "estado", "ciudad"],
         sensibles=["datos_sensibles"],
@@ -136,6 +138,7 @@ MODULOS = [
                "consentimiento_datos", "creado"],
         buscar=["persona__nombre", "padrino__nombre", "retiro__tipo__nombre"],
         filtros=["estado", "retiro"],
+        avanzados=F.CAMINANTES,
         orden=["-creado"],
         relacionados=["persona", "padrino", "retiro__tipo"],
         sensibles=["salud_alimentacion", "contacto_emergencia"],
@@ -204,6 +207,7 @@ MODULOS = [
             )),
         },
         filtros=["estado", "tipo", "retiro"],
+        avanzados=F.SERVIDORES,
         etiquetas={"persona": "Servidor", "tipo": "Participa como",
                    "duerme_en_casa": "Dormirá en la casa de retiro"},
         subcampos={

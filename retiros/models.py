@@ -735,6 +735,7 @@ class Participacion(models.Model):
     # todos pagan lo mismo: p. ej. 20 o 25 $).
     cuota = models.DecimalField("monto a pagar", max_digits=10, decimal_places=2,
                                 null=True, blank=True)
+    creado = models.DateTimeField("registrado", auto_now_add=True, null=True)
 
     class Meta:
         constraints = [

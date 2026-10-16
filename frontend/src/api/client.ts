@@ -186,10 +186,24 @@ export type Modulo = {
   campos: Campo[]; // formulario
   lista: Campo[]; // columnas de la tabla
   filtros: Campo[];
+  // Panel lateral de filtros (ver retiros/api/filtros.py); vacío si no tiene.
+  avanzados: FiltroAvanzado[];
   buscable: boolean;
   puede_agregar: boolean;
   puede_cambiar: boolean;
   puede_eliminar: boolean;
+};
+
+// Un filtro del panel lateral. Se manda como f_<nombre> (rangos:
+// f_<nombre>_min/_max o f_<nombre>_desde/_hasta; opciones: separadas por coma).
+export type FiltroAvanzado = {
+  nombre: string;
+  etiqueta: string;
+  tipo: "rango_numero" | "rango_fecha" | "opciones" | "si_no" | "fk";
+  seccion: string;
+  opciones?: { valor: string; etiqueta: string }[];
+  recurso?: string;
+  ayuda?: string;
 };
 
 // Un registro de cualquier módulo. Cada relación trae además `<campo>_etiqueta`.

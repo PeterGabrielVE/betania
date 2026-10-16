@@ -246,6 +246,25 @@ la puede inscribir en un retiro o registrar como servidor con sus datos ya
 cargados. Se llega desde Personas, Caminantes, Servidores y el panel de un
 retiro.
 
+## Filtros de Personas, Caminantes y Servidores
+
+Además de la búsqueda y los filtros rápidos, estos listados tienen un botón
+**Filtros** que abre un panel lateral (se aplican también a las descargas):
+
+- **Personas:** edad, mes de cumpleaños, país/estado/ciudad, tipo de
+  documento, fecha de registro, si ha sido caminante o ha servido, si
+  participó en un retiro y si tiene usuario del sistema.
+- **Caminantes:** fecha de inscripción, tipo de retiro, estado del pago, si lo
+  invitó alguien, consentimiento, edad, cumpleaños, procedencia y —para quien
+  ve datos confidenciales— condición médica, tratamiento, alimentación
+  especial, requerimientos, talla y familiar de contacto.
+- **Servidores:** fecha de registro, tipo de retiro, área, si coordina o no
+  tiene área, estado del pago, si duerme en la casa, turnos, camisa y talla,
+  edad, cumpleaños y procedencia.
+
+Lo aplicado se ve como etiquetas bajo los filtros; cada una se quita con su
+×. Los filtros se declaran en `retiros/api/filtros.py` (`Modulo.avanzados`).
+
 ## Auditoría
 
 **Sistema → Auditoría** muestra quién hizo qué y cuándo, con su IP:

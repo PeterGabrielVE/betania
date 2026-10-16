@@ -9,6 +9,13 @@ import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
 import BotonesDescarga from "@/components/modulos/BotonesDescarga";
 import BotonLimpiarFiltros from "@/components/modulos/BotonLimpiarFiltros";
+import {
+  parametrosFiltros,
+  resumenFiltros,
+  sinFiltro,
+  type ValoresFiltros,
+} from "@/components/modulos/filtrosAvanzados";
+import PanelFiltros from "@/components/modulos/PanelFiltros";
 import DialogoCuenta from "@/components/modulos/DialogoCuenta";
 import DialogoImportar from "@/components/modulos/DialogoImportar";
 import { celda } from "@/components/modulos/celda";
@@ -43,6 +50,7 @@ import {
   LockIcon,
   PencilIcon,
   PlusIcon,
+  SliderHorizontalIcon,
   TrashBinIcon,
   UploadIcon,
 } from "@/icons";
@@ -414,6 +422,9 @@ function Listado({ modulo }: { modulo: Modulo }) {
   // Usuarios: la cuenta que se está editando; Personas: importar de Excel.
   const [cuentaDe, setCuentaDe] = useState<string | null>(null);
   const [importando, setImportando] = useState(false);
+  // Panel lateral de filtros (edad, fechas, pago…) y lo aplicado en él.
+  const [panelAbierto, setPanelAbierto] = useState(false);
+  const [avanzados, setAvanzados] = useState<ValoresFiltros>({});
   const editar = busqueda.get("editar");
   const volver = busqueda.get("volver");
 
@@ -471,7 +482,11 @@ function Listado({ modulo }: { modulo: Modulo }) {
   for (const [nombre, filtro] of Object.entries(filtros)) {
     if (filtro.valor) params.set(nombre, filtro.valor);
   }
+  for (const [nombre, valor] of parametrosFiltros(avanzados)) {
+    params.set(nombre, valor);
+  }
   const ruta = `/${modulo.slug}/?${params}`;
+  const aplicados = resumenFiltros(modulo.avanzados ?? [], avanzados);
 
   // La descarga: lo mismo que la tabla, sin paginar, y bajo el título qué
   // filtros tenía ("Estado: Confirmada · Búsqueda: «pérez»").
@@ -488,6 +503,7 @@ function Listado({ modulo }: { modulo: Modulo }) {
           etiqueta || f.opciones?.find((o) => o.valor === valor)?.etiqueta;
         return `${f.etiqueta}: ${texto ?? valor}`;
       });
+    detalle.push(...aplicados.map((a) => a.texto));
     if (consulta.busqueda) detalle.push(`Búsqueda: «${consulta.busqueda}»`);
     if (detalle.length) p.set("detalle", detalle.join(" · "));
     return `/${modulo.slug}/exportar/?${p}`;
@@ -510,7 +526,9 @@ function Listado({ modulo }: { modulo: Modulo }) {
   const { datos, error } = resultado;
   const filas = datos?.results ?? [];
   const hayFiltros =
-    !!consulta.busqueda || Object.values(filtros).some((f) => f.valor);
+    !!consulta.busqueda ||
+    Object.values(filtros).some((f) => f.valor) ||
+    aplicados.length > 0;
 
   const filtrar = (nombre: string, valor: string, etiqueta = "") => {
     setFiltros((f) => ({ ...f, [nombre]: { valor, etiqueta } }));
@@ -520,6 +538,7 @@ function Listado({ modulo }: { modulo: Modulo }) {
   const limpiar = () => {
     setTexto("");
     setFiltros({});
+    setAvanzados({});
     setConsulta({ busqueda: "", pagina: 1 });
   };
 
@@ -715,8 +734,67 @@ function Listado({ modulo }: { modulo: Modulo }) {
             </select>
           ),
         )}
+        {(modulo.avanzados ?? []).length > 0 && (
+          <button
+            type="button"
+            onClick={() => setPanelAbierto(true)}
+            className={`${claseControl} inline-flex items-center gap-2 font-medium ${
+              aplicados.length
+                ? "border-brand-300 bg-brand-25 text-brand-700 dark:border-brand-500/40 dark:bg-brand-500/10 dark:text-brand-300"
+                : "text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/5"
+            }`}
+            aria-haspopup="dialog"
+          >
+            <SliderHorizontalIcon className="size-5" aria-hidden="true" />
+            Filtros
+            {aplicados.length > 0 && (
+              <span className="flex size-5 items-center justify-center rounded-full bg-brand-500 text-theme-xs text-white">
+                {aplicados.length}
+              </span>
+            )}
+          </button>
+        )}
         {hayFiltros && <BotonLimpiarFiltros onClick={limpiar} />}
       </div>
+
+      {/* Lo aplicado en el panel, para verlo y quitarlo de a uno. */}
+      {aplicados.length > 0 && (
+        <ul
+          className="flex flex-wrap gap-2 px-5 pb-4"
+          aria-label="Filtros aplicados"
+        >
+          {aplicados.map((a) => (
+            <li
+              key={a.nombre}
+              className="inline-flex items-center gap-1 rounded-full border border-brand-200 bg-brand-25 py-1 ps-3 pe-1 text-theme-xs font-medium text-brand-700 dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-300"
+            >
+              {a.texto}
+              <button
+                type="button"
+                onClick={() => {
+                  setAvanzados((v) => sinFiltro(modulo.avanzados, v, a.nombre));
+                  setConsulta((c) => ({ ...c, pagina: 1 }));
+                }}
+                className="flex size-5 items-center justify-center rounded-full hover:bg-brand-100 dark:hover:bg-brand-500/20"
+                aria-label={`Quitar ${a.texto}`}
+              >
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <PanelFiltros
+        abierto={panelAbierto}
+        filtros={modulo.avanzados ?? []}
+        valores={avanzados}
+        onCerrar={() => setPanelAbierto(false)}
+        onAplicar={(valores) => {
+          setAvanzados(valores);
+          setConsulta((c) => ({ ...c, pagina: 1 }));
+          setPanelAbierto(false);
+        }}
+      />
 
       {aviso && (
         <p className="px-5 pb-4 text-sm text-error-500" role="alert">
