@@ -21,9 +21,14 @@ from . import tasas
 from .models import (
     AreaServicio, AsignacionRol, AsignacionServicio, Charla, Ciudad, Diocesis, Estado,
     EstadoPago, Gasto, Inscripcion, Pago, Pais, Parroquia, Participacion, Persona, Retiro, Rol,
-    Tarea, TipoRetiro, Usuario,
+    RolSistema, Tarea, TipoRetiro, Usuario,
 )
 from .reportes import PersonaResource
+
+
+def rol_de(codigo):
+    """El Rol del sistema con ese código (los carga la migración 0014)."""
+    return Rol.objects.get(codigo=codigo)
 
 
 class Base(TestCase):
@@ -399,7 +404,7 @@ class AccesoPorRolTests(Base):
     def entrar_como(self, rol):
         cuenta = User.objects.create_user(rol, password="x")
         usuario = Usuario.objects.create(persona=self.persona(rol), cuenta=cuenta)
-        AsignacionRol.objects.create(usuario=usuario, rol=rol, retiro=self.retiro)
+        AsignacionRol.objects.create(usuario=usuario, rol=rol_de(rol), retiro=self.retiro)
         self.client.force_login(cuenta)
         return usuario
 
@@ -414,7 +419,7 @@ class AccesoPorRolTests(Base):
         self.assertEqual(self.client.get("/api/esquema/").json(), [])
 
     def test_logistica_edita_caminantes_y_consulta_pagos(self):
-        self.entrar_como(Rol.LOGISTICA)
+        self.entrar_como(RolSistema.LOGISTICA)
         panel = self.client.get(self.ruta).json()
         self.assertIn("ficha", panel["caminantes"]["filas"][0])
         self.assertIsNotNone(panel["finanzas"])
@@ -429,7 +434,7 @@ class AccesoPorRolTests(Base):
         self.assertEqual(self.post("/api/pagos/", pago).status_code, 403)
 
     def test_coordinacion_registra_pagos(self):
-        self.entrar_como(Rol.COORD_RETIRO)
+        self.entrar_como(RolSistema.COORD_RETIRO)
         pago = {"retiro": str(self.retiro.pk), "concepto": "cuota", "monto": 100,
                 "fecha": "2027-03-01", "inscripcion": str(self.ana.pk)}
         self.assertEqual(self.post("/api/pagos/", pago).status_code, 201)
@@ -442,7 +447,7 @@ class AccesoPorRolTests(Base):
             parroquia=self.parroquia, tipo=samuel, edicion=1,
             fecha_inicio=date(2027, 5, 1), fecha_fin=date(2027, 5, 3),
         )
-        self.entrar_como(Rol.COORD_RETIRO)
+        self.entrar_como(RolSistema.COORD_RETIRO)
 
         retiros = self.client.get("/api/retiros/").json()["results"]
         self.assertEqual([r["id"] for r in retiros], [str(self.retiro.pk)])
@@ -476,7 +481,7 @@ class AccesoPorRolTests(Base):
         self.assertEqual((len(r["results"]), r["count"]), (2, 4))
 
     def test_usuario_inactivo_pierde_el_acceso(self):
-        usuario = self.entrar_como(Rol.COORD_RETIRO)
+        usuario = self.entrar_como(RolSistema.COORD_RETIRO)
         usuario.activo = False
         usuario.save()
         self.assertEqual(self.client.get(self.ruta).status_code, 403)
@@ -706,7 +711,7 @@ class PreferenciasTests(Base):
         )
         cuenta = User.objects.create_user("coord", password="x")
         usuario = Usuario.objects.create(persona=self.persona("Coord Uno"), cuenta=cuenta)
-        AsignacionRol.objects.create(usuario=usuario, rol=Rol.COORD_RETIRO, retiro=self.retiro)
+        AsignacionRol.objects.create(usuario=usuario, rol=rol_de(RolSistema.COORD_RETIRO), retiro=self.retiro)
         self.client.force_login(cuenta)
         self.assertEqual(self.cambiar(retiro=str(samuel.pk)).status_code, 400)
         self.assertEqual(self.cambiar(retiro=str(self.retiro.pk)).status_code, 200)
@@ -760,7 +765,7 @@ class FichaYServidoresTests(Base):
     def test_ficha_con_usuario_y_roles(self):
         usuario = Usuario.objects.create(
             persona=self.ana, cuenta=User.objects.create_user("ana", password="x"))
-        AsignacionRol.objects.create(usuario=usuario, rol=Rol.LOGISTICA, retiro=self.retiro)
+        AsignacionRol.objects.create(usuario=usuario, rol=rol_de(RolSistema.LOGISTICA), retiro=self.retiro)
         acceso = self.client.get(f"/api/personas/{self.ana.pk}/ficha/").json()["acceso"]
         self.assertEqual(acceso["usuario"], "ana")
         self.assertEqual(acceso["roles"], [{"rol": "logistica",
@@ -791,7 +796,8 @@ class FichaYServidoresTests(Base):
         modulos = {m["slug"]: m for m in self.client.get("/api/esquema/").json()}
         self.assertEqual(
             [s for s, m in modulos.items() if m["grupo"] == "Personas"],
-            ["personas", "inscripciones", "participaciones", "servicios", "usuarios", "roles"])
+            ["personas", "inscripciones", "participaciones", "servicios", "usuarios",
+             "asignaciones", "roles"])
         self.assertEqual((modulos["inscripciones"]["titulo"],
                           modulos["participaciones"]["titulo"]), ("Caminantes", "Servidores"))
         self.assertFalse(modulos["servicios"]["en_menu"])
@@ -1083,7 +1089,7 @@ class DescargasTests(Base):
     def test_el_rol_fija_la_columna_y_la_pone_en_el_subtitulo(self):
         cuenta = User.objects.create_user("coord", password="x")
         usuario = Usuario.objects.create(persona=self.persona("Coord"), cuenta=cuenta)
-        AsignacionRol.objects.create(usuario=usuario, rol=Rol.COORD_RETIRO, retiro=self.retiro)
+        AsignacionRol.objects.create(usuario=usuario, rol=rol_de(RolSistema.COORD_RETIRO), retiro=self.retiro)
         self.client.force_login(cuenta)
         hoja = self.libro(self.client.get("/api/retiros/exportar/?formato=xlsx"))
         self.assertNotIn("Parroquia", [c.value for c in hoja[4]])
@@ -1164,7 +1170,7 @@ class ControlPagosTests(Base):
     def test_solo_quien_ve_y_cobra_los_pagos(self):
         cuenta = User.objects.create_user("logistica", password="x")
         usuario = Usuario.objects.create(persona=self.persona("Logística"), cuenta=cuenta)
-        AsignacionRol.objects.create(usuario=usuario, rol=Rol.LOGISTICA, retiro=self.retiro)
+        AsignacionRol.objects.create(usuario=usuario, rol=rol_de(RolSistema.LOGISTICA), retiro=self.retiro)
         self.client.force_login(cuenta)
         datos = self.client.get(self.ruta).json()
         self.assertFalse(datos["puede_registrar"])  # logística consulta, no cobra
@@ -1266,3 +1272,96 @@ class CuentasEImportacionTests(Base):
     def test_importar_avisa_si_el_archivo_no_sirve(self):
         self.assertEqual(self.subir("a,b\n1,2\n").status_code, 400)
         self.assertEqual(self.subir("x", nombre="personas.txt").status_code, 400)
+
+
+
+class RolesYPermisosTests(Base):
+    """Los roles se crean, cambian, asignan y eliminan; sus permisos mandan."""
+
+    def entrar_con(self, rol, **ambito):
+        cuenta = User.objects.create_user(f"u{Usuario.objects.count()}", password="x")
+        usuario = Usuario.objects.create(persona=self.persona(cuenta.username), cuenta=cuenta)
+        AsignacionRol.objects.create(usuario=usuario, rol=rol, **ambito)
+        self.client.force_login(cuenta)
+        return cuenta
+
+    def permisos(self, rol, lista=None):
+        ruta = f"/api/roles/{rol.pk}/permisos/"
+        if lista is None:
+            return self.client.get(ruta)
+        return self.client.put(ruta, {"permisos": lista}, content_type="application/json")
+
+    def test_los_roles_del_sistema_vienen_con_sus_permisos(self):
+        logistica = Rol.objects.get(codigo=RolSistema.LOGISTICA)
+        self.assertTrue(logistica.sistema and logistica.ve_datos_sensibles)
+        codigos = set(logistica.permisos.values_list("codename", flat=True))
+        self.assertIn("view_pago", codigos)
+        self.assertNotIn("add_pago", codigos)
+        self.assertEqual(Rol.objects.filter(sistema=True).count(), 8)
+
+    def test_crear_un_rol_darle_permisos_asignarlo_y_que_mande(self):
+        r = self.post("/api/roles/", {"nombre": "Cocina", "ambito": "retiro",
+                                      "ve_datos_sensibles": False})
+        self.assertEqual(r.status_code, 201, r.content)
+        cocina = Rol.objects.get(nombre="Cocina")
+        self.assertEqual(cocina.codigo, "cocina")
+        tabla = self.permisos(cocina).json()
+        self.assertIn("Retiros", [g["grupo"] for g in tabla["grupos"]])
+        r = self.permisos(cocina, ["view_retiro", "view_inscripcion", "inventado"])
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(set(cocina.permisos.values_list("codename", flat=True)),
+                         {"view_retiro", "view_inscripcion"})
+
+        Inscripcion.objects.create(retiro=self.retiro, persona=self.persona("Ana"),
+                                   salud_alimentacion={"tratamiento": "Insulina"})
+        self.entrar_con(cocina, retiro=self.retiro)
+        self.assertEqual(self.client.get("/api/inscripciones/").status_code, 200)
+        self.assertEqual(self.client.get("/api/pagos/").status_code, 403)
+        fila = self.client.get("/api/inscripciones/").json()["results"][0]
+        self.assertNotIn("salud_alimentacion", fila)  # no ve datos confidenciales
+
+    def test_el_ambito_del_rol_se_exige_al_asignarlo(self):
+        rol = Rol.objects.create(nombre="Visitante", ambito=Rol.Ambito.RETIRO)
+        usuario = Usuario.objects.create(persona=self.persona("Luis"))
+        r = self.post("/api/asignaciones/", {"usuario": str(usuario.pk), "rol": str(rol.pk),
+                                             "parroquia": str(self.parroquia.pk)})
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("retiro", r.json())
+        r = self.post("/api/asignaciones/", {"usuario": str(usuario.pk), "rol": str(rol.pk),
+                                             "retiro": str(self.retiro.pk)})
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertEqual(rol.asignaciones.count(), 1)
+
+    def test_no_se_borran_los_del_sistema_ni_los_asignados(self):
+        sistema = Rol.objects.get(codigo=RolSistema.TESORERIA)
+        r = self.client.delete(f"/api/roles/{sistema.pk}/")
+        self.assertEqual(r.status_code, 409)
+        self.assertIn("del sistema", r.json()["detail"])
+        propio = Rol.objects.create(nombre="Propio", ambito=Rol.Ambito.PARROQUIA)
+        usuario = Usuario.objects.create(persona=self.persona("Rosa"))
+        AsignacionRol.objects.create(usuario=usuario, rol=propio, parroquia=self.parroquia)
+        self.assertIn("asignado", self.client.delete(f"/api/roles/{propio.pk}/").json()["detail"])
+        AsignacionRol.objects.all().delete()
+        self.assertEqual(self.client.delete(f"/api/roles/{propio.pk}/").status_code, 204)
+
+    def test_nadie_da_permisos_que_no_tiene(self):
+        # Quien administra roles sin ser superusuario.
+        jefe = Rol.objects.create(nombre="Jefe de roles", ambito=Rol.Ambito.PARROQUIA)
+        jefe.permisos.set(Permission.objects.filter(codename__in=[
+            "view_rol", "change_rol", "view_retiro"]))
+        otro = Rol.objects.create(nombre="Otro", ambito=Rol.Ambito.PARROQUIA)
+        self.entrar_con(jefe, parroquia=self.parroquia)
+        self.assertEqual(self.permisos(otro, ["view_retiro"]).status_code, 200)
+        r = self.permisos(otro, ["view_retiro", "add_pago"])
+        self.assertEqual(r.status_code, 403)
+        self.assertIn("add_pago", r.json()["detail"])
+        # Ni subirse a sí mismo.
+        self.assertEqual(self.permisos(jefe, ["view_rol", "change_rol", "view_retiro",
+                                              "delete_pago"]).status_code, 403)
+
+    def test_quitar_un_permiso_se_aplica_de_inmediato(self):
+        logistica = Rol.objects.get(codigo=RolSistema.LOGISTICA)
+        self.permisos(logistica, [c for c in logistica.permisos.values_list("codename", flat=True)
+                                  if c != "view_pago"])
+        self.entrar_con(logistica, retiro=self.retiro)
+        self.assertEqual(self.client.get("/api/pagos/").status_code, 403)

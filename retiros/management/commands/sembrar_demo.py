@@ -26,7 +26,7 @@ from django.utils import timezone
 
 from retiros.models import (
     AreaServicio, AsignacionRol, AsignacionServicio, Charla, Ciudad, Diocesis, Gasto,
-    Inscripcion, Moneda, Pago, Pais, Parroquia, Participacion, Persona, Retiro, Rol, Tarea,
+    Inscripcion, Moneda, Pago, Pais, Parroquia, Participacion, Persona, Retiro, Rol, RolSistema, Tarea,
     TipoRetiro, Usuario,
 )
 
@@ -35,9 +35,9 @@ PARROQUIA = "San José (demo)"
 CLAVE = "demo-betania-123"
 # Cuentas de la demo: usuario, nombre, rol y ámbito ("retiro" o "parroquia").
 CUENTAS = [
-    ("demo.coordinador", "Alberto José Marín Paredes", Rol.COORD_RETIRO, "retiro"),
-    ("demo.logistica", "Beatriz Elena Sosa Rangel", Rol.LOGISTICA, "retiro"),
-    ("demo.tesoreria", "Gustavo Adolfo Pinto Lugo", Rol.TESORERIA, "parroquia"),
+    ("demo.coordinador", "Alberto José Marín Paredes", RolSistema.COORD_RETIRO, "retiro"),
+    ("demo.logistica", "Beatriz Elena Sosa Rangel", RolSistema.LOGISTICA, "retiro"),
+    ("demo.tesoreria", "Gustavo Adolfo Pinto Lugo", RolSistema.TESORERIA, "parroquia"),
 ]
 # Bolívares por dólar para los pagos en bolívares (así no consulta el BCV).
 TASA_VES = Decimal("145.30")
@@ -320,7 +320,7 @@ class Command(BaseCommand):
             persona = self.persona(nombre, self.nacimiento(1978), familia=False)
             u = Usuario.objects.create(persona=persona, cuenta=cuenta)
             AsignacionRol.objects.create(
-                usuario=u, rol=rol, **({"retiro": actual} if ambito == "retiro"
+                usuario=u, rol=Rol.objects.get(codigo=rol), **({"retiro": actual} if ambito == "retiro"
                                        else {"parroquia": self.parroquia}))
 
         self.stdout.write(self.style.SUCCESS(

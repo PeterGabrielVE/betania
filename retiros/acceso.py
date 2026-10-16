@@ -1,52 +1,19 @@
 """
-Qué puede hacer cada rol. Un usuario que no es superusuario entra con su cuenta
-(auth.User) enlazada a un Usuario (Usuario.cuenta) y obtiene los permisos de sus
-AsignacionRol; no hace falta darle permisos uno por uno en el admin.
+Qué puede hacer cada usuario. Un usuario que no es superusuario entra con su
+cuenta (auth.User) enlazada a un Usuario (Usuario.cuenta) y obtiene los permisos
+de los roles que tiene asignados (AsignacionRol -> Rol.permisos). Los roles y sus
+permisos se crean y cambian desde la pantalla Roles y permisos; los iniciales
+están en roles.py.
 
-    Coordinación (de parroquia o de retiro): ve todo el retiro, incluidos datos
-        confidenciales y finanzas; registra pagos y gastos y edita caminantes,
-        equipo, charlas y tareas.
-    Logística: ve lo mismo que coordinación; edita caminantes, equipo y tareas, pero los
-        pagos y gastos solo los consulta.
-
-Los demás roles siguen usando los permisos normales de Django (usuario o grupo).
+El ámbito del rol (global, diócesis, parroquia, retiro) decide además qué filas
+ve (RLS, ver middleware.py) y qué filtros quedan fijos (ambito_fijo).
 """
 
 from django.contrib.auth.backends import BaseBackend
+from django.contrib.auth.models import Permission
+from django.db.models import Prefetch
 
 from .models import Retiro, Rol
-
-# De mayor a menor alcance: con varias asignaciones, la primera fija el contexto RLS.
-PRIORIDAD = [
-    Rol.SUPER_ADMIN, Rol.ADMIN_DIOCESANO, Rol.COORD_PARROQUIA, Rol.COORD_RETIRO,
-    Rol.LOGISTICA, Rol.TESORERIA, Rol.SECRETARIA, Rol.SERVIDOR,
-]
-
-_VER = [
-    "diocesis", "parroquia", "pais", "estado", "ciudad", "tiporetiro", "areaservicio", "persona", "retiro", "charla",
-    "inscripcion", "participacion", "asignacionservicio", "pago", "gasto", "tarea",
-]
-_EQUIPO = ["persona", "inscripcion", "participacion", "asignacionservicio", "tarea"]
-
-
-def _perms(acciones, modelos):
-    return {f"retiros.{a}_{m}" for a in acciones for m in modelos}
-
-
-_COORDINACION = (
-    _perms(["view"], _VER)
-    | _perms(["add", "change", "delete"], [*_EQUIPO, "charla", "pago", "gasto"])
-    | _perms(["change"], ["retiro"])
-)
-
-PERMISOS_ROL = {
-    Rol.COORD_PARROQUIA: _COORDINACION | _perms(["add"], ["retiro"]),
-    Rol.COORD_RETIRO: _COORDINACION,
-    Rol.LOGISTICA: (
-        _perms(["view"], _VER) | _perms(["add", "change"], _EQUIPO)
-        | _perms(["delete"], ["tarea"])
-    ),
-}
 
 
 def asignaciones(user):
@@ -56,17 +23,29 @@ def asignaciones(user):
     usuario = getattr(user, "usuario_retiros", None)
     if usuario is None or not usuario.activo:
         return []
-    roles = list(usuario.roles.all())
-    return sorted(roles, key=lambda a: PRIORIDAD.index(a.rol))
+    if not hasattr(usuario, "_asignaciones"):
+        roles = usuario.roles.select_related("rol").prefetch_related(Prefetch(
+            "rol__permisos", queryset=Permission.objects.select_related("content_type"),
+            to_attr="_permisos"))
+        usuario._asignaciones = sorted(roles, key=_alcance)
+    return usuario._asignaciones
+
+
+def _alcance(asignacion):
+    """Para ordenar de mayor a menor alcance: global, diócesis, parroquia, retiro."""
+    ambito = asignacion.rol.ambito
+    if ambito == Rol.Ambito.PARROQUIA_O_RETIRO:
+        ambito = Rol.Ambito.RETIRO if asignacion.retiro_id else Rol.Ambito.PARROQUIA
+    return Rol.ORDEN_AMBITO.index(ambito)
 
 
 def ambito_fijo(user):
     """La parroquia y el tipo de retiro a los que el rol limita al usuario:
     {"parroquia": Parroquia, "tipo": TipoRetiro} (cada uno solo si está fijo).
 
-    Un coordinador de parroquia tiene fija su parroquia; uno de retiro o de
-    logística, además, el tipo de ese retiro. Con varios roles solo se fija lo
-    que todos comparten; los roles globales o diocesanos no tienen nada fijo."""
+    Un rol de parroquia tiene fija su parroquia; uno de retiro, además, el tipo
+    de ese retiro. Con varios roles solo se fija lo que todos comparten; los
+    roles globales o diocesanos no tienen nada fijo."""
     if not hasattr(user, "_ambito_fijo"):
         user._ambito_fijo = _calcular_ambito(user)
     return user._ambito_fijo
@@ -75,7 +54,7 @@ def ambito_fijo(user):
 def _calcular_ambito(user):
     asigs = asignaciones(user)
     if (not asigs or user.is_superuser
-            or any(a.rol in (Rol.SUPER_ADMIN, Rol.ADMIN_DIOCESANO) for a in asigs)):
+            or any(a.rol.ambito in (Rol.Ambito.GLOBAL, Rol.Ambito.DIOCESIS) for a in asigs)):
         return {}
     retiros = {
         r.pk: r for r in Retiro.objects.select_related("parroquia", "tipo")
@@ -102,14 +81,28 @@ def retiros_visibles(user):
     return Retiro.objects.filter(**{n: obj.pk for n, obj in ambito.items()})
 
 
+def permisos_de(asignacion):
+    """"retiros.view_pago"... del rol de una asignación."""
+    return {f"{p.content_type.app_label}.{p.codename}" for p in asignacion.rol._permisos}
+
+
+def ve_datos_sensibles(user):
+    return user.is_superuser or any(a.rol.ve_datos_sensibles for a in asignaciones(user))
+
+
+def ve_finanzas(user):
+    return user.is_superuser or any(
+        {"retiros.view_pago", "retiros.view_gasto"} & permisos_de(a) for a in asignaciones(user))
+
+
 class RolBackend(BaseBackend):
-    """Permisos de Django que salen de los roles (ver PERMISOS_ROL)."""
+    """Permisos de Django que salen de los roles del usuario (Rol.permisos)."""
 
     def get_all_permissions(self, user_obj, obj=None):
         if obj is not None:
             return set()
         if not hasattr(user_obj, "_permisos_rol"):
             user_obj._permisos_rol = set().union(
-                *(PERMISOS_ROL.get(a.rol, set()) for a in asignaciones(user_obj))
+                *(permisos_de(a) for a in asignaciones(user_obj))
             )
         return user_obj._permisos_rol

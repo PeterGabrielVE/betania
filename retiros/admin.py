@@ -107,7 +107,7 @@ class UsuarioAdmin(admin.ModelAdmin):
 
     @admin.display(description="Roles")
     def roles_resumen(self, obj):
-        return ", ".join(a.get_rol_display() for a in obj.roles.all()) or "—"
+        return ", ".join(str(a.rol) for a in obj.roles.select_related("rol")) or "—"
 
 
 @admin.register(AsignacionRol)

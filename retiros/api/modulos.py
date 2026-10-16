@@ -11,7 +11,7 @@ from ..models import (
     CAMISAS_SERVICIO, TALLAS_CAMISA, TURNOS_SERVICIO,
     AreaServicio, AsignacionRol, AsignacionServicio, Charla, Ciudad, Diocesis, Estado,
     EstadoPago, Gasto, Inscripcion, Pago, Pais, Parroquia, Participacion, Persona, Retiro, Tarea,
-    TipoRetiro, Usuario,
+    Rol, TipoRetiro, Usuario,
 )
 from .registro import Extra, Modulo, anotado, sub
 
@@ -240,13 +240,30 @@ MODULOS = [
         },
     ),
     Modulo(
-        "roles", AsignacionRol, "Roles", "asignación de rol", PERSONAS,
+        "asignaciones", AsignacionRol, "Asignar roles", "asignación de rol", PERSONAS,
         campos=["usuario", "rol", "diocesis", "parroquia", "retiro"],
         lista=["usuario", "rol", "diocesis", "parroquia", "retiro"],
-        buscar=["usuario__persona__nombre"],
+        buscar=["usuario__persona__nombre", "rol__nombre"],
         filtros=["rol", "parroquia"],
         orden=["usuario__persona__nombre"],
-        relacionados=["usuario__persona", "diocesis", "parroquia", "retiro__tipo"],
+        relacionados=["usuario__persona", "rol", "diocesis", "parroquia", "retiro__tipo"],
+    ),
+    Modulo(
+        # Qué puede hacer cada rol: sus permisos se marcan en /roles/<id>/permisos.
+        "roles", Rol, "Roles y permisos", "rol", PERSONAS,
+        campos=["nombre", "descripcion", "ambito", "ve_datos_sensibles"],
+        lista=["nombre", "ambito", "ve_datos_sensibles", "num_permisos", "num_asignaciones"],
+        buscar=["nombre", "descripcion"],
+        filtros=["ambito"],
+        orden=["nombre"],
+        anotaciones={
+            "permisos_total": Count("permisos", distinct=True),
+            "asignaciones_total": Count("asignaciones", distinct=True),
+        },
+        extras={
+            "num_permisos": Extra("Permisos", "numero", anotado("permisos_total")),
+            "num_asignaciones": Extra("Asignado a", "numero", anotado("asignaciones_total")),
+        },
     ),
     # ---- Finanzas ----
     Modulo(
@@ -341,4 +358,9 @@ ETIQUETAS = {
 AYUDAS = {
     "tasa": "Déjala vacía para usar la tasa oficial del BCV de hoy.",
     "inscripcion": "Para la cuota de un caminante basta con elegir la persona.",
+    "ambito": ("Dónde se asigna y qué ve: global, todo; una diócesis, sus parroquias; "
+               "una parroquia o un retiro, esa parroquia (y de retiro, solo ese tipo de "
+               "retiro)."),
+    "ve_datos_sensibles": ("Salud, tratamiento, comida especial, contactos de emergencia "
+                           "y familia de los caminantes."),
 }

@@ -21,6 +21,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils.text import slugify
 
 from .tasas import TasaNoDisponible, tasa_bcv
 
@@ -37,9 +38,12 @@ def moneda_predeterminada():
 
 
 # --------------------------------------------------------------------------- #
-# Catálogo de roles
+# Roles
 # --------------------------------------------------------------------------- #
-class Rol(models.TextChoices):
+class RolSistema(models.TextChoices):
+    """Los roles con que viene el sistema (su código). Se cargan como filas de
+    Rol (migración 0014) y desde ahí se les cambian los permisos; se pueden
+    crear otros."""
     SUPER_ADMIN = "super_admin", "Super administrador"          # ámbito global
     ADMIN_DIOCESANO = "admin_diocesano", "Administrador diocesano"  # ámbito diócesis
     COORD_PARROQUIA = "coord_parroquia", "Coordinador de parroquia"  # ámbito parroquia
@@ -48,6 +52,73 @@ class Rol(models.TextChoices):
     TESORERIA = "tesoreria", "Tesorería"                         # ámbito parroquia
     SECRETARIA = "secretaria", "Secretaría / inscripciones"      # ámbito parroquia
     SERVIDOR = "servidor", "Servidor / equipo"                  # ámbito parroquia o retiro
+
+
+class Rol(models.Model):
+    """
+    Un rol: qué puede hacer (permisos de Django por módulo: ver, agregar,
+    cambiar, eliminar), dónde se asigna (su ámbito) y si ve los datos
+    confidenciales. Se asigna a usuarios con AsignacionRol.
+
+    El ámbito decide también qué filas ve (RLS, ver middleware.py): global ve
+    todo; diócesis, las parroquias de su diócesis; los demás, su parroquia. Los
+    de retiro, además, solo los retiros de ese tipo (acceso.ambito_fijo).
+    """
+
+    class Ambito(models.TextChoices):
+        GLOBAL = "global", "Global (todo el sistema)"
+        DIOCESIS = "diocesis", "Una diócesis"
+        PARROQUIA = "parroquia", "Una parroquia"
+        RETIRO = "retiro", "Un retiro"
+        PARROQUIA_O_RETIRO = "parroquia_o_retiro", "Una parroquia o un retiro"
+
+    # De mayor a menor alcance: con varias asignaciones manda la primera.
+    ORDEN_AMBITO = [Ambito.GLOBAL, Ambito.DIOCESIS, Ambito.PARROQUIA,
+                    Ambito.PARROQUIA_O_RETIRO, Ambito.RETIRO]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    codigo = models.SlugField(max_length=50, unique=True, editable=False)
+    nombre = models.CharField(max_length=80, unique=True)
+    descripcion = models.TextField("descripción", blank=True)
+    ambito = models.CharField("se asigna en", max_length=20, choices=Ambito.choices,
+                              default=Ambito.PARROQUIA)
+    ve_datos_sensibles = models.BooleanField(
+        "ve datos confidenciales", default=False,
+        help_text="Salud, tratamiento, comida especial, contactos de emergencia y familia.")
+    permisos = models.ManyToManyField("auth.Permission", blank=True, related_name="roles_retiros")
+    # Los del sistema no se borran (sí se les cambian los permisos).
+    sistema = models.BooleanField(default=False, editable=False)
+
+    class Meta:
+        ordering = ["nombre"]
+        verbose_name_plural = "roles"
+
+    @property
+    def ve_finanzas(self):
+        """Quien puede ver pagos o gastos ve también sus filas (RLS)."""
+        return any(p.codename in ("view_pago", "view_gasto") for p in self.permisos.all())
+
+    def delete(self, *args, **kwargs):
+        if self.sistema:
+            raise ValidationError("Es un rol del sistema: no se puede eliminar (sí "
+                                  "cambiarle los permisos).")
+        asignados = self.asignaciones.count()
+        if asignados:
+            raise ValidationError(f"Está asignado a {asignados} usuario(s): quítaselo "
+                                  "antes de eliminarlo.")
+        return super().delete(*args, **kwargs)
+
+    def save(self, *args, **kwargs):
+        if not self.codigo:
+            base = slugify(self.nombre).replace("-", "_")[:40] or "rol"
+            codigo, n = base, 2
+            while Rol.objects.filter(codigo=codigo).exists():
+                codigo, n = f"{base}_{n}", n + 1
+            self.codigo = codigo
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.nombre
 
 
 # --------------------------------------------------------------------------- #
@@ -392,7 +463,7 @@ class AsignacionRol(models.Model):
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     usuario = models.ForeignKey(Usuario, on_delete=models.CASCADE, related_name="roles")
-    rol = models.CharField(max_length=20, choices=Rol.choices)
+    rol = models.ForeignKey(Rol, on_delete=models.PROTECT, related_name="asignaciones")
     diocesis = models.ForeignKey(
         Diocesis, on_delete=models.CASCADE, null=True, blank=True, related_name="asignaciones_rol"
     )
@@ -415,26 +486,25 @@ class AsignacionRol(models.Model):
         ]
 
     def clean(self):
-        """Valida que el ámbito corresponda al rol."""
-        requiere = {
-            Rol.ADMIN_DIOCESANO: "diocesis",
-            Rol.COORD_PARROQUIA: "parroquia",
-            Rol.TESORERIA: "parroquia",
-            Rol.SECRETARIA: "parroquia",
-            Rol.COORD_RETIRO: "retiro",
-            Rol.LOGISTICA: "retiro",
-        }
-        campo = requiere.get(self.rol)
-        if campo and getattr(self, f"{campo}_id") is None:
-            raise ValidationError(f"El rol '{self.get_rol_display()}' requiere un(a) {campo}.")
-        if self.rol == Rol.SUPER_ADMIN and (self.diocesis_id or self.parroquia_id or self.retiro_id):
-            raise ValidationError("Super administrador es de ámbito global: no lleva ámbito.")
-        if self.rol == Rol.SERVIDOR and not (self.parroquia_id or self.retiro_id):
-            raise ValidationError("Servidor requiere parroquia o retiro.")
+        """Valida que el ámbito corresponda al del rol."""
+        if not self.rol_id:
+            return
+        ambito = self.rol.ambito
+        lleva = {"diocesis": self.diocesis_id, "parroquia": self.parroquia_id,
+                 "retiro": self.retiro_id}
+        A = Rol.Ambito
+        if ambito == A.GLOBAL and any(lleva.values()):
+            raise ValidationError(f"{self.rol} es de alcance global: no lleva diócesis, "
+                                  "parroquia ni retiro.")
+        if ambito in (A.DIOCESIS, A.PARROQUIA, A.RETIRO) and not lleva[ambito]:
+            raise ValidationError({ambito: f"El rol {self.rol} se asigna en un(a) "
+                                           f"{A(ambito).label.split()[-1].lower()}."})
+        if ambito == A.PARROQUIA_O_RETIRO and not (self.parroquia_id or self.retiro_id):
+            raise ValidationError(f"El rol {self.rol} se asigna en una parroquia o un retiro.")
 
     def __str__(self):
         ambito = self.retiro or self.parroquia or self.diocesis or "global"
-        return f"{self.usuario} · {self.get_rol_display()} · {ambito}"
+        return f"{self.usuario} · {self.rol} · {ambito}"
 
 
 # --------------------------------------------------------------------------- #

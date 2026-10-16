@@ -1,6 +1,6 @@
 from django.urls import include, path
 
-from . import control_pagos, cuentas, paneles, sesion, vistas
+from . import control_pagos, cuentas, paneles, permisos_rol, sesion, vistas
 
 urlpatterns = [
     path("auth/sesion/", sesion.sesion),
@@ -17,5 +17,6 @@ urlpatterns = [
     # Deben ir antes del router (que tomaría "importar" por un id).
     path("personas/importar/", cuentas.importar_personas),
     path("usuarios/<uuid:pk>/cuenta/", cuentas.cuenta_usuario),
+    path("roles/<uuid:pk>/permisos/", permisos_rol.permisos_rol),
     path("", include(vistas.router.urls)),
 ]

@@ -8,7 +8,8 @@ import { cuerpoDe, estadoInicial } from "./formulario";
 interface FormularioModuloProps {
   modulo: Modulo;
   registro: Registro | null; // null = alta
-  onGuardado: () => void;
+  // Recibe lo guardado (p. ej. para abrir los permisos de un rol recién creado).
+  onGuardado: (guardado: Registro) => void;
   onCancelar: () => void;
 }
 
@@ -38,11 +39,11 @@ export default function FormularioModulo({
 
     setEnviando(true);
     try {
-      await api(
+      const guardado = await api<Registro>(
         registro ? `/${modulo.slug}/${registro.id}/` : `/${modulo.slug}/`,
         { method: registro ? "PATCH" : "POST", body: cuerpo },
       );
-      onGuardado();
+      onGuardado(guardado);
     } catch (err) {
       if (err instanceof ApiError) {
         setErrores(err.campos);

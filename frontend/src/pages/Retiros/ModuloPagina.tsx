@@ -73,6 +73,8 @@ type Acciones = {
   onEliminar: (fila: Registro) => void;
   // Usuarios: su cuenta de acceso (usuario y contraseña).
   onCuenta?: (fila: Registro) => void;
+  // Roles: su tabla de permisos.
+  onPermisos?: (fila: Registro) => void;
   // Caminantes y servidores: casillas para confirmar o cancelar varios.
   seleccion?: {
     ids: Set<string>;
@@ -109,9 +111,21 @@ function BotonesFila({
   onEditar,
   onEliminar,
   onCuenta,
+  onPermisos,
 }: Acciones & { fila: Registro }) {
   return (
     <div className="flex items-center gap-1">
+      {onPermisos && (
+        <button
+          type="button"
+          className={`${claseIcono} hover:text-brand-500`}
+          onClick={() => onPermisos(fila)}
+          title="Permisos del rol"
+        >
+          <LockIcon className="size-4" />
+          <span className="sr-only">Permisos de {fila.etiqueta}</span>
+        </button>
+      )}
       {onCuenta && (
         <button
           type="button"
@@ -562,6 +576,10 @@ function Listado({ modulo }: { modulo: Modulo }) {
         ? navigate(rutaDeEdicion(modulo.slug, fila.id, `/${modulo.slug}`))
         : setEditando(fila),
     onEliminar: eliminar,
+    onPermisos:
+      modulo.slug === "roles"
+        ? (fila: Registro) => navigate(`/roles/${fila.id}/permisos`)
+        : undefined,
     onCuenta:
       modulo.slug === "usuarios" && modulo.puede_cambiar
         ? (fila: Registro) => setCuentaDe(fila.id)
@@ -810,9 +828,14 @@ function Listado({ modulo }: { modulo: Modulo }) {
             modulo={modulo}
             registro={editando}
             onCancelar={cerrar}
-            onGuardado={() => {
+            onGuardado={(guardado) => {
+              const nuevo = !editando;
               cerrar();
               setVersion((v) => v + 1);
+              // Un rol nuevo no sirve sin permisos: se abre su tabla.
+              if (nuevo && modulo.slug === "roles") {
+                navigate(`/roles/${guardado.id}/permisos`);
+              }
             }}
           />
         )}

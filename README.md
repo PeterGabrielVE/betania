@@ -159,8 +159,7 @@ Permisos y confidencialidad:
 - Lo que sale de las finanzas (columnas de pago, sección de finanzas del panel)
   solo se muestra con permiso para ver pagos.
 - El PDF de confirmados exige sesión y permiso para ver inscripciones.
-- Los demás usuarios obtienen sus permisos de su rol (ver "Acceso de
-  coordinación y logística" más abajo).
+- Los demás usuarios obtienen sus permisos de su rol (ver "Roles, permisos y acceso" más abajo).
 
 **Importar personas** (Personas → Importar): sube un Excel o CSV (hay una
 plantilla para descargar); primero muestra cuántas son nuevas, cuántas se
@@ -177,23 +176,41 @@ npm install
 npm run dev      # http://localhost:5173, reenvía /api y /admin a Django
 ```
 
-## Acceso de coordinación y logística
+## Roles, permisos y acceso
 
-Coordinación y logística entran al mismo panel con su propio usuario. Los
-permisos salen del rol (`retiros/acceso.py`); no hay que marcarlos uno por uno.
+Cada usuario entra con su propia cuenta y puede hacer lo que digan sus roles.
+Los roles se administran en **Personas → Roles y permisos**:
 
-| Rol | Ve | Edita |
-| --- | --- | --- |
-| Coordinador de retiro / de parroquia | Todo el retiro: ficha de cada caminante (salud, tratamiento, comida, requerimientos, contactos), equipo y finanzas | Caminantes, equipo, charlas, tareas, **pagos** y gastos |
-| Coordinador de logística | Lo mismo | Caminantes, equipo y tareas; pagos y gastos solo los consulta |
+- **Crear, cambiar y eliminar roles**: nombre, descripción, dónde se asigna
+  (todo el sistema, una diócesis, una parroquia, un retiro, o parroquia o
+  retiro) y si ve datos confidenciales (salud, tratamiento, comida especial,
+  contactos y familia).
+- **Permisos** (el candado de cada rol): una tabla con cada módulo y sus
+  acciones (ver, agregar, cambiar, eliminar). Marcar agregar, cambiar o
+  eliminar marca también ver. Quien puede ver pagos o gastos ve también las
+  finanzas del retiro.
+- **Asignarlos** en **Personas → Asignar roles**: usuario, rol y su diócesis,
+  parroquia o retiro, según el rol.
+
+Dónde se asigna el rol decide además qué ve: uno global, todo; uno de
+diócesis, sus parroquias; uno de parroquia, su parroquia; uno de retiro, su
+parroquia y solo los retiros de ese tipo (p. ej. Emaús hombres). Esto lo
+aplica también la base de datos (RLS).
+
+El sistema trae ocho roles (super administrador, administrador diocesano,
+coordinador de parroquia, coordinador de retiro, coordinador de logística,
+tesorería, secretaría y servidor) con permisos iniciales (ver
+`retiros/roles.py`); se les pueden cambiar los permisos, pero no eliminar. Un
+rol asignado a alguien tampoco se elimina hasta quitárselo. Quien no es
+superusuario solo puede dar permisos que él mismo tiene.
 
 Para dar acceso a alguien, desde el panel:
 
 1. **Personas → Usuarios → Agregar usuario**: elige su persona.
 2. En su fila, la **llave**: escribe el nombre de usuario y la contraseña (o
    «Generar» una). Al guardar se muestra para anotarla y dársela.
-3. **Personas → Roles → Agregar**: su rol (p. ej. *Coordinador de logística*)
-   y el retiro o la parroquia.
+3. **Personas → Asignar roles → Agregar**: su rol (p. ej. *Coordinador de
+   logística*) y el retiro o la parroquia.
 
 Desactivar al usuario le impide entrar; borrarlo borra también su cuenta.
 

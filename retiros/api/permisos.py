@@ -1,14 +1,9 @@
 from rest_framework import permissions
 
-# Mismos roles que rol_datos_sensibles() en rls_policies.sql.
-ROLES_DATOS_SENSIBLES = {
-    "coord_parroquia", "coord_retiro", "logistica", "secretaria", "admin_diocesano",
-    "super_admin",
-}
-
-
 def ve_sensibles(request):
-    return getattr(request, "rls_rol", "") in ROLES_DATOS_SENSIBLES
+    """Si algún rol del usuario ve datos confidenciales (Rol.ve_datos_sensibles;
+    lo fija el middleware, como rol_datos_sensibles() en rls_policies.sql)."""
+    return getattr(request, "rls_sensibles", False)
 
 
 def permiso(modelo, accion):

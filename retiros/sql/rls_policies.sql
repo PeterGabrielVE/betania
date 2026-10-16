@@ -1,7 +1,9 @@
 -- ============================================================================
 -- Row-Level Security (idempotente: se puede reejecutar sin error).
 -- Diócesis -> Parroquia -> (Personas, Retiros). La PARROQUIA es el inquilino.
--- La app fija por petición: app.rol, app.parroquia_id, app.diocesis_id.
+-- La app fija por petición (retiros/middleware.py): app.rol (nivel: super_admin,
+-- admin_diocesano o el código del rol), app.parroquia_id, app.diocesis_id,
+-- app.finanzas y app.sensibles ('1' según los permisos de sus roles).
 -- ============================================================================
 
 CREATE OR REPLACE FUNCTION app_parroquia() RETURNS uuid
@@ -11,15 +13,15 @@ CREATE OR REPLACE FUNCTION app_diocesis() RETURNS uuid
 CREATE OR REPLACE FUNCTION app_rol() RETURNS text
   LANGUAGE sql STABLE AS $$ SELECT current_setting('app.rol', true) $$;
 
+-- Los roles se definen en la app (pantalla Roles y permisos): aquí solo se lee
+-- lo que la app calculó de ellos.
 CREATE OR REPLACE FUNCTION rol_finanzas() RETURNS boolean
   LANGUAGE sql STABLE AS $$
-    SELECT app_rol() IN ('tesoreria', 'coord_parroquia', 'coord_retiro', 'logistica',
-                         'admin_diocesano', 'super_admin');
+    SELECT app_rol() = 'super_admin' OR current_setting('app.finanzas', true) = '1';
   $$;
 CREATE OR REPLACE FUNCTION rol_datos_sensibles() RETURNS boolean
   LANGUAGE sql STABLE AS $$
-    SELECT app_rol() IN ('coord_parroquia', 'coord_retiro', 'logistica', 'secretaria',
-                         'admin_diocesano', 'super_admin');
+    SELECT app_rol() = 'super_admin' OR current_setting('app.sensibles', true) = '1';
   $$;
 CREATE OR REPLACE FUNCTION parroquia_visible(pid uuid) RETURNS boolean
   LANGUAGE sql STABLE AS $$

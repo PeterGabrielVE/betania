@@ -243,6 +243,10 @@ class ModuloViewSet(viewsets.ModelViewSet):
                 {"detail": "Ya existe un registro con esos datos."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        except DjangoValidationError as e:
+            # Reglas del modelo al borrar (p. ej. un rol del sistema).
+            return Response({"detail": " ".join(e.messages)},
+                            status=status.HTTP_409_CONFLICT)
 
     def create(self, request, *args, **kwargs):
         return self._guardar(super().create, request, *args, **kwargs)

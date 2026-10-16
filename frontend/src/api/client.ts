@@ -43,7 +43,7 @@ function aError(status: number, datos: unknown): ApiError {
 export async function api<T>(
   ruta: string,
   opciones: {
-    method?: "GET" | "POST" | "PATCH" | "DELETE";
+    method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
     body?: unknown;
   } = {},
 ): Promise<T> {

@@ -704,9 +704,9 @@ def _acceso(persona):
         "usuario": usuario.cuenta.get_username() if usuario.cuenta_id else "",
         "activo": usuario.activo,
         "roles": [
-            {"rol": a.rol, "rol_display": a.get_rol_display(),
+            {"rol": a.rol.codigo, "rol_display": str(a.rol),
              "ambito": str(a.retiro or a.parroquia or a.diocesis or "Todo el sistema")}
-            for a in usuario.roles.select_related("retiro__tipo", "parroquia", "diocesis")
+            for a in usuario.roles.select_related("rol", "retiro__tipo", "parroquia", "diocesis")
         ],
     }
 
