@@ -8,6 +8,7 @@ import {
 } from "@/api/client";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
+import Telefono from "@/components/common/Telefono";
 import BotonesDescarga from "@/components/modulos/BotonesDescarga";
 import {
   claseBoton,
@@ -598,9 +599,10 @@ function Tabla({
                       {f.persona}
                     </Link>
                     {f.telefono && (
-                      <span className="block text-theme-xs font-normal text-gray-400">
-                        {f.telefono}
-                      </span>
+                      <Telefono
+                        numero={f.telefono}
+                        className="flex text-theme-xs font-normal text-gray-400"
+                      />
                     )}
                   </TableCell>
                   <TableCell className={claseCelda}>

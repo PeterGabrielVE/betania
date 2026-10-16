@@ -1,6 +1,7 @@
 import { ApiError, type FichaCaminante, type PanelRetiro } from "@/api/client";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
+import Telefono from "@/components/common/Telefono";
 import {
   claseBoton,
   claseControl,
@@ -178,12 +179,22 @@ function Ficha({
         <Dato titulo="Requerimientos especiales" valor={ficha.requerimientos} />
         <Dato
           titulo="Teléfonos del caminante"
-          valor={[
-            fila.telefono && `Celular: ${fila.telefono}`,
-            ficha.telefono_casa && `Casa: ${ficha.telefono_casa}`,
-          ]
-            .filter(Boolean)
-            .join(" · ")}
+          valor={
+            (fila.telefono || ficha.telefono_casa) && (
+              <span className="flex flex-wrap gap-x-4 gap-y-1">
+                {fila.telefono && (
+                  <span>
+                    Celular: <Telefono numero={fila.telefono} />
+                  </span>
+                )}
+                {ficha.telefono_casa && (
+                  <span>
+                    Casa: <Telefono numero={ficha.telefono_casa} />
+                  </span>
+                )}
+              </span>
+            )
+          }
         />
         <Dato
           titulo="Familiares / contacto de emergencia"
@@ -194,7 +205,14 @@ function Ficha({
                   <li key={i}>
                     {c.nombre || "Sin nombre"}
                     {c.relacion && ` (${c.relacion})`}
-                    {c.telefono && ` · ${c.telefono}`}
+                    {c.telefono &&
+                      // Puede traer dos ("0212… / 0414…"): cada uno se copia aparte.
+                      c.telefono.split(" / ").map((t) => (
+                        <span key={t}>
+                          {" · "}
+                          <Telefono numero={t} />
+                        </span>
+                      ))}
                   </li>
                 ))}
               </ul>
@@ -438,7 +456,13 @@ function Caminantes({
                       </>
                     )}
                     <TableCell className={claseCelda}>
-                      {f.telefono || f.ficha?.telefono_casa || "—"}
+                      {f.telefono || f.ficha?.telefono_casa ? (
+                        <Telefono
+                          numero={f.telefono || f.ficha!.telefono_casa}
+                        />
+                      ) : (
+                        "—"
+                      )}
                     </TableCell>
                     {!conFicha && (
                       <TableCell className={claseCelda}>
@@ -672,7 +696,7 @@ function Servidores({
                     {f.areas || f.tipo}
                   </TableCell>
                   <TableCell className={claseCelda}>
-                    {f.telefono || "—"}
+                    {f.telefono ? <Telefono numero={f.telefono} /> : "—"}
                   </TableCell>
                   <TableCell className={claseCelda}>
                     {f.duerme_en_casa === null

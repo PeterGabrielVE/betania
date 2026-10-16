@@ -1,6 +1,7 @@
 import { ApiError, type FichaPersona } from "@/api/client";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
+import Telefono from "@/components/common/Telefono";
 import {
   claseBoton,
   claseEnlace,
@@ -159,9 +160,7 @@ export default function PersonaFicha() {
             </p>
             <p className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-theme-sm">
               {persona.telefono && (
-                <a href={`tel:${persona.telefono}`} className={claseEnlace}>
-                  {persona.telefono}
-                </a>
+                <Telefono numero={persona.telefono} className={claseEnlace} />
               )}
               {persona.email && (
                 <a href={`mailto:${persona.email}`} className={claseEnlace}>
@@ -411,7 +410,14 @@ export default function PersonaFicha() {
                 valor={fecha(persona.fecha_nacimiento)}
               />
               <Dato titulo="Ocupación" valor={texto("ocupacion")} />
-              <Dato titulo="Teléfono de casa" valor={texto("telefono_casa")} />
+              <Dato
+                titulo="Teléfono de casa"
+                valor={
+                  texto("telefono_casa") && (
+                    <Telefono numero={texto("telefono_casa")} />
+                  )
+                }
+              />
               <Dato
                 titulo="Sector / urbanización / dirección"
                 valor={texto("direccion")}

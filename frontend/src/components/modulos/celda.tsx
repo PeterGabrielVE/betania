@@ -1,4 +1,5 @@
 import type { Campo, Registro } from "@/api/client";
+import Telefono from "@/components/common/Telefono";
 import Badge from "@/components/ui/badge/Badge";
 import { FilePdfIcon } from "@/icons";
 import { colorEstado, dinero, fecha } from "@/utils/formato";
@@ -48,6 +49,10 @@ export function celda(campo: Campo, fila: Registro): React.ReactNode {
         </a>
       );
     default:
-      return valor === null || valor === "" ? "—" : String(valor);
+      if (valor === null || valor === "" || valor === undefined) return "—";
+      // Teléfonos: con su botón para copiarlo.
+      if (campo.nombre === "telefono")
+        return <Telefono numero={String(valor)} />;
+      return String(valor);
   }
 }

@@ -17,6 +17,10 @@ import { ReactComponent as DownloadIcon } from "./download.svg?react";
 import { ReactComponent as FileExcelIcon } from "./file-excel.svg?react";
 import { ReactComponent as FilePdfIcon } from "./file-pdf.svg?react";
 import { ReactComponent as FilterXIcon } from "./filter-x.svg?react";
+import { ReactComponent as CopiarIcon } from "./copiar.svg?react";
+import { ReactComponent as CopiadoIcon } from "./copiado.svg?react";
+import { ReactComponent as LlamarIcon } from "./llamar.svg?react";
+import { ReactComponent as WhatsappIcon } from "./whatsapp.svg?react";
 import { ReactComponent as ArrowRightIcon } from "./arrow-right.svg?react";
 import { ReactComponent as GroupIcon } from "./group.svg?react";
 import { ReactComponent as BoxIconLine } from "./box-line.svg?react";
@@ -178,6 +182,10 @@ export {
   FileExcelIcon,
   FilePdfIcon,
   FilterXIcon,
+  CopiarIcon,
+  CopiadoIcon,
+  LlamarIcon,
+  WhatsappIcon,
   FileIcon,
   GridIcon,
   AudioIcon,
