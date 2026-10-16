@@ -1717,3 +1717,48 @@ class OCRTests(Base):
         r = self.subir("/api/ocr/listado/", _imagen(["una hoja sin tabla"]), "x.png")
         self.assertEqual(r.status_code, 400)
         self.assertIn("encabezados", r.json()["detail"])
+
+
+class EnlacesDelTableroTests(Base):
+    """Cada número del tablero coincide con la lista a la que lleva."""
+
+    def test_los_filtros_del_tablero_dan_el_mismo_numero(self):
+        r = self.retiro
+        Inscripcion.objects.create(retiro=r, persona=self.persona("A"),
+                                   salud_alimentacion={"tratamiento": "Insulina"})
+        Inscripcion.objects.create(retiro=r, persona=self.persona("B"),
+                                   salud_alimentacion={"condicion_medica": "Asma",
+                                                       "regimen_alimenticio": "Sin sal"})
+        Inscripcion.objects.create(retiro=r, persona=self.persona("C"),
+                                   estado=Inscripcion.Estado.CANCELADA,
+                                   salud_alimentacion={"tratamiento": "X"})
+        Participacion.objects.create(retiro=r, persona=self.persona("S1"), tipo="servidor")
+        Participacion.objects.create(retiro=r, persona=self.persona("S2"), tipo="servidor",
+                                     estado=Participacion.Estado.CANCELADO)
+        tablero = self.client.get(f"/api/resumen/?retiro={r.pk}").json()["tablero"]
+        atencion = tablero["caminantes"]["atencion"]
+        contar = lambda ruta: self.client.get(ruta).json()["count"]  # noqa: E731
+        base = f"/api/inscripciones/?retiro={r.pk}&f_vigente=si"
+        self.assertEqual(contar(f"{base}&f_salud=si"), atencion["salud"])
+        self.assertEqual(atencion["salud"], 2)
+        self.assertEqual(contar(f"{base}&f_comida=si"), atencion["comida"])
+        self.assertEqual(contar(f"/api/participaciones/?retiro={r.pk}&f_vigente=si"),
+                         tablero["servidores"]["total"])
+
+
+class AsignacionCoherenteTests(Base):
+    def test_el_retiro_manda_sobre_la_parroquia(self):
+        otra = Parroquia.objects.create(nombre="Otra", diocesis=self.parroquia.diocesis)
+        cuenta = User.objects.create_user("coord", password="x")
+        usuario = Usuario.objects.create(persona=self.persona("Coord"), cuenta=cuenta)
+        rol = rol_de(RolSistema.COORD_RETIRO)
+        # Ya no se puede guardar un retiro con la parroquia de otro lado…
+        r = self.post("/api/asignaciones/", {"usuario": str(usuario.pk), "rol": str(rol.pk),
+                                             "retiro": str(self.retiro.pk),
+                                             "parroquia": str(otra.pk)})
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("parroquia", r.json())
+        # …y si ya existía así, se usa la parroquia del retiro.
+        AsignacionRol.objects.create(usuario=usuario, rol=rol, retiro=self.retiro, parroquia=otra)
+        self.client.force_login(cuenta)
+        self.assertEqual(self.client.get("/api/retiros/").json()["count"], 1)

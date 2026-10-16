@@ -104,10 +104,13 @@ def si_no(condicion):
     return lambda qs, valor: qs.filter(condicion) if valor == "si" else qs.exclude(condicion)
 
 
+def escrito(campo_json, clave):
+    """Q: que un dato del JSON tenga algo escrito."""
+    return Q(**{f"{campo_json}__has_key": clave}) & ~Q(**{f"{campo_json}__{clave}": ""})
+
+
 def con_texto(campo_json, clave):
-    """Que un dato del JSON tenga algo escrito."""
-    return si_no(Q(**{f"{campo_json}__has_key": clave})
-                 & ~Q(**{f"{campo_json}__{clave}": ""}))
+    return si_no(escrito(campo_json, clave))
 
 
 def alguna_marcada(campo_json):
@@ -201,6 +204,9 @@ PERSONAS = [
 
 CAMINANTES = [
     Filtro("inscrito", "Fecha de inscripción", "rango_fecha", _FECHAS, por_fechas("creado")),
+    # Como cuenta el tablero: los inscritos son los que no cancelaron.
+    Filtro("vigente", "Vigente (no canceló)", "si_no", "Inscripción",
+           si_no(~Q(estado=Inscripcion.Estado.CANCELADA)), opciones=SI_NO),
     Filtro("tipo_retiro", "Tipo de retiro", "fk", "Inscripción", por_fk("retiro__tipo"),
            recurso="tipos-retiro"),
     Filtro("estado_pago", "Estado del pago", "opciones", "Inscripción",
@@ -212,6 +218,10 @@ CAMINANTES = [
     Filtro("consentimiento", "Autorizó el uso de sus datos", "si_no", "Inscripción",
            si_no(Q(consentimiento_datos=True)), opciones=SI_NO),
     *de_la_persona("persona__"),
+    Filtro("salud", "Con condición médica o tratamiento", "si_no", "Salud",
+           si_no(escrito("salud_alimentacion", "condicion_medica")
+                 | escrito("salud_alimentacion", "tratamiento")),
+           opciones=SI_NO, sensible=True),
     Filtro("condicion", "Con condición médica", "si_no", "Salud",
            con_texto("salud_alimentacion", "condicion_medica"), opciones=SI_NO, sensible=True),
     Filtro("tratamiento", "Con tratamiento o medicamentos", "si_no", "Salud",
@@ -236,6 +246,8 @@ def _en_area(qs, valor):
 SERVIDORES = [
     Filtro("registrado", "Fecha de registro", "rango_fecha", _FECHAS, por_fechas("creado"),
            ayuda="Los registrados antes de existir este dato no tienen fecha."),
+    Filtro("vigente", "Vigente (no canceló)", "si_no", "Servicio",
+           si_no(~Q(estado=Participacion.Estado.CANCELADO)), opciones=SI_NO),
     Filtro("tipo_retiro", "Tipo de retiro", "fk", "Servicio", por_fk("retiro__tipo"),
            recurso="tipos-retiro"),
     Filtro("area", "Área de servicio", "fk", "Servicio", _en_area, recurso="areas-servicio"),

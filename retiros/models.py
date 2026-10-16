@@ -501,6 +501,15 @@ class AsignacionRol(models.Model):
                                            f"{A(ambito).label.split()[-1].lower()}."})
         if ambito == A.PARROQUIA_O_RETIRO and not (self.parroquia_id or self.retiro_id):
             raise ValidationError(f"El rol {self.rol} se asigna en una parroquia o un retiro.")
+        # Un retiro ya dice su parroquia y su diócesis: no pueden ser otras.
+        if self.retiro_id:
+            retiro = Retiro.objects.select_related("parroquia").get(pk=self.retiro_id)
+            if self.parroquia_id and self.parroquia_id != retiro.parroquia_id:
+                raise ValidationError({"parroquia": (
+                    f"El retiro {retiro} es de la parroquia {retiro.parroquia}: deja la "
+                    "parroquia vacía o elige esa.")})
+            if self.diocesis_id and self.diocesis_id != retiro.parroquia.diocesis_id:
+                raise ValidationError({"diocesis": "Esa diócesis no es la del retiro."})
 
     def __str__(self):
         ambito = self.retiro or self.parroquia or self.diocesis or "global"

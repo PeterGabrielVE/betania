@@ -402,20 +402,37 @@ function Esqueleto() {
 // Listado + alta/edición/borrado de un módulo, dibujado a partir de su esquema.
 function Listado({ modulo }: { modulo: Modulo }) {
   const navigate = useNavigate();
-  const [texto, setTexto] = useState("");
-  const [consulta, setConsulta] = useState({ busqueda: "", pagina: 1 });
+  // ?editar, ?nuevo (ver abajo) y filtros en la dirección: ?estado=confirmada,
+  // ?retiro=<id>&retiro__etiqueta=…, ?search=…, ?f_edad_min=… (panel lateral).
+  // Así el tablero y otras pantallas abren un listado ya filtrado.
+  const [busqueda, setBusquedaUrl] = useSearchParams();
+  const [texto, setTexto] = useState(() => busqueda.get("search") ?? "");
+  const [consulta, setConsulta] = useState(() => ({
+    busqueda: busqueda.get("search") ?? "",
+    pagina: 1,
+  }));
   const [porPagina, setPorPagina] = useState(porPaginaGuardado);
   // Filtros activos: campo -> valor (y su texto, para las relaciones).
   // Empieza con la edición preferida en el filtro "Retiro" (se puede quitar).
   const [filtros, setFiltros] = useState<
     Record<string, { valor: string; etiqueta: string }>
-  >(() =>
-    Object.fromEntries(
+  >(() => {
+    const iniciales = Object.fromEntries(
       modulo.filtros
         .filter((f) => f.predeterminado)
         .map((f) => [f.nombre, f.predeterminado!]),
-    ),
-  );
+    );
+    for (const f of modulo.filtros) {
+      const valor = busqueda.get(f.nombre);
+      if (valor !== null) {
+        iniciales[f.nombre] = {
+          valor,
+          etiqueta: busqueda.get(`${f.nombre}__etiqueta`) ?? "",
+        };
+      }
+    }
+    return iniciales;
+  });
   const [version, setVersion] = useState(0); // se incrementa para recargar
   const [resultado, setResultado] = useState<{
     clave: string;
@@ -425,7 +442,6 @@ function Listado({ modulo }: { modulo: Modulo }) {
   // ?editar=<id>&volver=<ruta>: abre ese registro (p. ej. desde el panel de un
   // retiro) y, al guardar o cancelar, regresa a esa ruta. ?nuevo=1 abre el
   // formulario de alta (los accesos rápidos del inicio).
-  const [busqueda] = useSearchParams();
   // undefined = cerrado, null = alta, registro = edición
   const [editando, setEditando] = useState<Registro | null | undefined>(() =>
     busqueda.has("nuevo") && modulo.puede_agregar ? null : undefined,
@@ -444,7 +460,27 @@ function Listado({ modulo }: { modulo: Modulo }) {
   const { modulos } = useAuth();
   // Panel lateral de filtros (edad, fechas, pago…) y lo aplicado en él.
   const [panelAbierto, setPanelAbierto] = useState(false);
-  const [avanzados, setAvanzados] = useState<ValoresFiltros>({});
+  const [avanzados, setAvanzados] = useState<ValoresFiltros>(() =>
+    Object.fromEntries([...busqueda].filter(([k]) => k.startsWith("f_"))),
+  );
+  // Los filtros de la dirección ya se aplicaron: se quitan de ella para que
+  // no vuelvan al recargar después de cambiarlos a mano.
+  useEffect(() => {
+    const deFiltro = (k: string) =>
+      k === "search" ||
+      k.startsWith("f_") ||
+      modulo.filtros.some(
+        (f) => k === f.nombre || k === `${f.nombre}__etiqueta`,
+      );
+    if ([...busqueda.keys()].some(deFiltro)) {
+      setBusquedaUrl(
+        new URLSearchParams([...busqueda].filter(([k]) => !deFiltro(k))),
+        { replace: true },
+      );
+    }
+    // Solo al abrir el listado.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const editar = busqueda.get("editar");
   const volver = busqueda.get("volver");
 

@@ -63,7 +63,8 @@ def _calcular_ambito(user):
     parroquias, tipos = {}, {}
     for a in asigs:
         retiro = retiros.get(a.retiro_id)
-        parroquia = a.parroquia if a.parroquia_id else retiro and retiro.parroquia
+        # Con retiro, manda el retiro: su parroquia es la de él.
+        parroquia = retiro.parroquia if retiro else a.parroquia
         parroquias[parroquia and parroquia.pk] = parroquia
         tipos[retiro and retiro.tipo_id] = retiro and retiro.tipo
     ambito = {}

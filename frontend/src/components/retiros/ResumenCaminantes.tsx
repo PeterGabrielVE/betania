@@ -258,11 +258,35 @@ const PLURAL: Record<string, string> = {
   confirmada: "Confirmados",
 };
 
-// Una ficha por estado de la inscripción, y los servidores del retiro.
+type RetiroCorto = { id: string; etiqueta: string };
+
+// Listado ya filtrado por el retiro (y lo demás que se pase): lo que abre
+// cada ficha o indicador del tablero.
+function enlace(
+  ruta: string,
+  retiro: RetiroCorto,
+  filtros: Record<string, string>,
+) {
+  const p = new URLSearchParams({
+    retiro: retiro.id,
+    retiro__etiqueta: retiro.etiqueta,
+    ...filtros,
+  });
+  return `${ruta}?${p}`;
+}
+
+// Al pasar el mouse o llegar con el teclado: se nota que lleva a la lista.
+const claseEnlaceFicha =
+  "transition hover:-translate-y-0.5 hover:shadow-theme-md focus:outline-hidden focus-visible:ring-3 focus-visible:ring-brand-500/30";
+
+// Una ficha por estado de la inscripción, y los servidores del retiro. Cada
+// una lleva a la lista de esas personas.
 export function FichasPorEstado({
+  retiro,
   caminantes,
   servidores,
 }: {
+  retiro: RetiroCorto;
   caminantes: Caminantes;
   // Los que van (sin los que cancelaron) y, si se sabe, cuántos confirmaron.
   servidores?: { total: number; confirmados?: number; por_confirmar?: number };
@@ -273,12 +297,14 @@ export function FichasPorEstado({
       total: e.total,
       titulo: PLURAL[e.estado] ?? e.etiqueta,
       nota: "caminantes",
+      a: enlace("/inscripciones", retiro, { estado: e.estado }),
     })),
     {
       clave: "cancelada",
       total: caminantes.cancelados,
       titulo: "Cancelados",
       nota: "caminantes",
+      a: enlace("/inscripciones", retiro, { estado: "cancelada" }),
     },
     ...(servidores !== undefined
       ? [
@@ -290,6 +316,8 @@ export function FichasPorEstado({
               servidores.confirmados !== undefined
                 ? `${servidores.confirmados} confirmados · ${servidores.por_confirmar} por confirmar`
                 : "en este retiro",
+            // Como el tablero: los que van (sin los que cancelaron).
+            a: enlace("/participaciones", retiro, { f_vigente: "si" }),
           },
         ]
       : []),
@@ -297,17 +325,20 @@ export function FichasPorEstado({
   return (
     <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
       {fichas.map((f) => (
-        <li
-          key={f.clave}
-          className={`flex items-center gap-3 rounded-xl border px-4 py-3 ${TONO_ESTADO[f.clave]}`}
-        >
-          <span className="text-2xl font-bold tabular-nums">{f.total}</span>
-          <span className="min-w-0 leading-tight">
-            <span className="block truncate text-theme-xs font-semibold uppercase">
-              {f.titulo}
+        <li key={f.clave}>
+          <Link
+            to={f.a}
+            className={`flex h-full items-center gap-3 rounded-xl border px-4 py-3 ${TONO_ESTADO[f.clave]} ${claseEnlaceFicha}`}
+            aria-label={`Ver ${f.titulo.toLowerCase()}: ${f.total}`}
+          >
+            <span className="text-2xl font-bold tabular-nums">{f.total}</span>
+            <span className="min-w-0 leading-tight">
+              <span className="block truncate text-theme-xs font-semibold uppercase">
+                {f.titulo}
+              </span>
+              <span className="block text-theme-xs opacity-80">{f.nota}</span>
             </span>
-            <span className="block text-theme-xs opacity-80">{f.nota}</span>
-          </span>
+          </Link>
         </li>
       ))}
     </ul>
@@ -319,25 +350,40 @@ function Indicador({
   valor,
   nota,
   tono,
+  a,
 }: {
   titulo: string;
   valor: string | number;
   nota: string;
   tono: string;
+  a: string; // la lista de esas personas
 }) {
   return (
-    <div className={`rounded-xl border px-4 py-4 ${tono}`}>
+    <Link
+      to={a}
+      className={`block rounded-xl border px-4 py-4 ${tono} ${claseEnlaceFicha}`}
+      aria-label={`Ver la lista: ${titulo.toLowerCase()} (${valor})`}
+    >
       <p className="text-theme-xs font-semibold uppercase">{titulo}</p>
       <p className="mt-1 text-title-sm font-bold tabular-nums">{valor}</p>
       <p className="text-theme-xs opacity-80">{nota}</p>
-    </div>
+    </Link>
   );
 }
 
 // % con pago entre los confirmados y a cuántos hay que atender de forma
 // especial (salud, comida, requerimientos).
-export function Indicadores({ caminantes }: { caminantes: Caminantes }) {
+export function Indicadores({
+  retiro,
+  caminantes,
+}: {
+  retiro: RetiroCorto;
+  caminantes: Caminantes;
+}) {
   const { atencion, confirmados_pagados, confirmados } = caminantes;
+  // Como el tablero: entre los inscritos (sin los que cancelaron).
+  const vigentes = (filtro: string) =>
+    enlace("/inscripciones", retiro, { f_vigente: "si", [filtro]: "si" });
   const deActivos = (n: number) =>
     `${porcentaje(n, atencion?.activos ?? 0)}% de los inscritos`;
   return (
@@ -348,6 +394,10 @@ export function Indicadores({ caminantes }: { caminantes: Caminantes }) {
           valor={`${porcentaje(confirmados_pagados, confirmados)}%`}
           nota={`${confirmados_pagados} de ${confirmados} confirmados pagaron completo`}
           tono={TONO_ESTADO.confirmada}
+          a={enlace("/inscripciones", retiro, {
+            estado: "confirmada",
+            f_estado_pago: "pagado",
+          })}
         />
       )}
       {atencion && (
@@ -357,18 +407,21 @@ export function Indicadores({ caminantes }: { caminantes: Caminantes }) {
             valor={atencion.salud}
             nota={deActivos(atencion.salud)}
             tono={TONO_ESTADO.cancelada}
+            a={vigentes("f_salud")}
           />
           <Indicador
             titulo="Comida especial"
             valor={atencion.comida}
             nota={deActivos(atencion.comida)}
             tono={TONO_ESTADO.lista_espera}
+            a={vigentes("f_comida")}
           />
           <Indicador
             titulo="Requerimientos especiales"
             valor={atencion.requerimientos}
             nota={deActivos(atencion.requerimientos)}
             tono={TONO_ESTADO.solicitada}
+            a={vigentes("f_requerimientos")}
           />
         </>
       )}

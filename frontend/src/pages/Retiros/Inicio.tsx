@@ -317,6 +317,7 @@ function TableroRetiro({ t }: { t: Tablero }) {
           )}
           <div className="col-span-12">
             <FichasPorEstado
+              retiro={retiro}
               caminantes={caminantes}
               servidores={servidores ?? undefined}
             />
@@ -324,7 +325,7 @@ function TableroRetiro({ t }: { t: Tablero }) {
           {(caminantes.atencion ||
             caminantes.confirmados_pagados !== undefined) && (
             <div className="col-span-12">
-              <Indicadores caminantes={caminantes} />
+              <Indicadores retiro={retiro} caminantes={caminantes} />
             </div>
           )}
         </>

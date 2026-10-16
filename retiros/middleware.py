@@ -53,7 +53,8 @@ class RLSContextMiddleware:
         if asign is None:
             return "", "", "", "", ""
         parroquia_id = asign.parroquia_id
-        if not parroquia_id and asign.retiro_id:
+        # Con retiro, manda el retiro: su parroquia es la de él.
+        if asign.retiro_id:
             # El RLS oculta el retiro mientras no haya contexto: su parroquia se
             # lee antes de fijar el definitivo.
             self._set("super_admin", "", "")
