@@ -361,6 +361,21 @@ class Usuario(models.Model):
     )
     activo = models.BooleanField(default=True)
 
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        # Desactivarlo también le impide entrar.
+        if self.cuenta_id and self.cuenta.is_active != self.activo:
+            self.cuenta.is_active = self.activo
+            self.cuenta.save(update_fields=["is_active"])
+
+    def delete(self, *args, **kwargs):
+        # Sin su Usuario, la cuenta quedaría suelta (y podría seguir entrando).
+        cuenta = self.cuenta if self.cuenta_id and not self.cuenta.is_superuser else None
+        resultado = super().delete(*args, **kwargs)
+        if cuenta:
+            cuenta.delete()
+        return resultado
+
     def __str__(self):
         return str(self.persona)
 

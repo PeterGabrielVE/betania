@@ -7,11 +7,9 @@ import UserDropdown from "@/components/header/UserDropdown";
 import { useSidebar } from "@/context/SidebarContext";
 import { cn } from "@/utils";
 import { useState } from "react";
-import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 
 const AppHeader: React.FC = () => {
-  const { t } = useTranslation("header");
   const [isApplicationMenuOpen, setApplicationMenuOpen] = useState(false);
 
   const { isMobileOpen, toggleSidebar, toggleMobileSidebar } = useSidebar();
@@ -37,7 +35,7 @@ const AppHeader: React.FC = () => {
               isMobileOpen ? "bg-gray-100 dark:bg-white/3" : ""
             }`}
             onClick={handleToggle}
-            aria-label={t("toggleSidebar")}
+            aria-label="Mostrar u ocultar el menú"
           >
             {isMobileOpen ? (
               <svg

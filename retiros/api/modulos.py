@@ -229,10 +229,15 @@ MODULOS = [
     Modulo(
         "usuarios", Usuario, "Usuarios", "usuario", PERSONAS,
         campos=["persona", "activo"],
-        lista=["persona", "activo"],
-        buscar=["persona__nombre"],
+        lista=["persona", "cuenta_acceso", "activo"],
+        buscar=["persona__nombre", "cuenta__username"],
         orden=["persona__nombre"],
-        relacionados=["persona"],
+        relacionados=["persona", "cuenta"],
+        extras={
+            # El nombre con que entra; la cuenta se crea con el botón de la llave.
+            "cuenta_acceso": Extra("Cuenta", "texto",
+                                   lambda o: o.cuenta.username if o.cuenta_id else ""),
+        },
     ),
     Modulo(
         "roles", AsignacionRol, "Roles", "asignación de rol", PERSONAS,

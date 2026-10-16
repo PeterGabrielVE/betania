@@ -2,7 +2,6 @@ import Logo from "@/components/common/Logo";
 import { useAuth } from "@/context/AuthContext";
 import { useSidebar } from "@/context/SidebarContext";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
 import { Link, useLocation } from "react-router";
 import {
   CalenderIcon,
@@ -43,7 +42,6 @@ const iconosGrupo: Record<string, React.ReactNode> = {
 const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered, setIsMobileOpen } =
     useSidebar();
-  const { t } = useTranslation();
   const location = useLocation();
   const { modulos } = useAuth();
 
@@ -176,9 +174,7 @@ const AppSidebar: React.FC = () => {
               </span>
 
               {(isExpanded || isHovered || isMobileOpen) && (
-                <span className="menu-item-text">
-                  {nav.key ? t(`sidebar.items.${nav.key}`) : nav.name}
-                </span>
+                <span className="menu-item-text">{nav.name}</span>
               )}
               {nav.new && (isExpanded || isHovered || isMobileOpen) && (
                 <span
@@ -189,7 +185,7 @@ const AppSidebar: React.FC = () => {
                       : "menu-dropdown-badge-inactive"
                   } menu-dropdown-badge`}
                 >
-                  {t("sidebar.badges.new")}
+                  nuevo
                 </span>
               )}
               {(isExpanded || isHovered || isMobileOpen) && (
@@ -222,9 +218,7 @@ const AppSidebar: React.FC = () => {
                   {nav.icon}
                 </span>
                 {(isExpanded || isHovered || isMobileOpen) && (
-                  <span className="menu-item-text">
-                    {nav.key ? t(`sidebar.items.${nav.key}`) : nav.name}
-                  </span>
+                  <span className="menu-item-text">{nav.name}</span>
                 )}
               </Link>
             )
@@ -254,9 +248,7 @@ const AppSidebar: React.FC = () => {
                           : "menu-dropdown-item-inactive"
                       }`}
                     >
-                      {subItem.key
-                        ? t(`sidebar.items.${subItem.key}`)
-                        : subItem.name}
+                      {subItem.name}
                       <span className="ms-auto flex items-center gap-1">
                         {subItem.new && (
                           <span
@@ -266,7 +258,7 @@ const AppSidebar: React.FC = () => {
                                 : "menu-dropdown-badge-inactive"
                             } menu-dropdown-badge`}
                           >
-                            {t("sidebar.badges.new")}
+                            nuevo
                           </span>
                         )}
                         {subItem.pro && (
@@ -277,7 +269,7 @@ const AppSidebar: React.FC = () => {
                                 : "menu-dropdown-badge-pro-inactive"
                             } menu-dropdown-badge-pro`}
                           >
-                            {t("sidebar.badges.pro")}
+                            pro
                           </span>
                         )}
                       </span>

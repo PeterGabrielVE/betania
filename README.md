@@ -45,11 +45,13 @@ Cuando veas que arrancó, abre:
 - **http://localhost:5173/** — el panel (React). Entra con `admin` / `admin1234`
   (los valores de `DJANGO_SUPERUSER_*` en tu `.env`). Si entras por
   http://localhost:8000/ te lleva ahí.
-- **http://localhost:8000/admin/** — el admin de Django, con el mismo usuario.
+Todo se administra desde ese panel, en español: personas, retiros, equipo,
+finanzas, catálogos, usuarios con su cuenta de acceso y roles, importar
+personas de Excel y descargar cualquier tabla en Excel o PDF. El admin de
+Django (http://localhost:8000/admin/) sigue disponible para el superusuario
+como respaldo, pero el panel no lo enlaza ni hace falta.
 
-Como superusuario obtienes el rol `super_admin`, así que ves y gestionas todo:
-parroquias, personas, retiros, inscripciones, servidores por área y finanzas.
-Los botones de Importar/Exportar Excel de Personas e Inscripciones están en el admin.
+Como superusuario obtienes el rol `super_admin`, así que ves y gestionas todo.
 
 Para detener: `Ctrl+C`, y `docker compose down` (agrega `-v` para borrar también
 la base de datos y empezar de cero).
@@ -160,7 +162,11 @@ Permisos y confidencialidad:
 - Los demás usuarios obtienen sus permisos de su rol (ver "Acceso de
   coordinación y logística" más abajo).
 
-Importar/Exportar Excel sigue estando solo en `/admin/`.
+**Importar personas** (Personas → Importar): sube un Excel o CSV (hay una
+plantilla para descargar); primero muestra cuántas son nuevas, cuántas se
+actualizan y los errores por fila, y solo guarda al confirmar. No duplica:
+casa por documento, correo o teléfono. Si el archivo no trae la parroquia, usa
+la que fija el rol de quien importa.
 
 Para desarrollar el frontend fuera de Docker (Node 20+), con el backend
 corriendo en el puerto 8000 y el servicio `frontend` detenido:
@@ -181,12 +187,15 @@ permisos salen del rol (`retiros/acceso.py`); no hay que marcarlos uno por uno.
 | Coordinador de retiro / de parroquia | Todo el retiro: ficha de cada caminante (salud, tratamiento, comida, requerimientos, contactos), equipo y finanzas | Caminantes, equipo, charlas, tareas, **pagos** y gastos |
 | Coordinador de logística | Lo mismo | Caminantes, equipo y tareas; pagos y gastos solo los consulta |
 
-Para dar acceso a alguien, en `/admin/`:
+Para dar acceso a alguien, desde el panel:
 
-1. **Users → Add**: crea su usuario y contraseña (no hace falta marcar "staff").
-2. **Usuarios → Add**: elige su persona y, en **Cuenta**, el usuario del paso 1.
-   En la misma pantalla, agrega su rol (p. ej. *Coordinador de logística*) y el
-   retiro.
+1. **Personas → Usuarios → Agregar usuario**: elige su persona.
+2. En su fila, la **llave**: escribe el nombre de usuario y la contraseña (o
+   «Generar» una). Al guardar se muestra para anotarla y dársela.
+3. **Personas → Roles → Agregar**: su rol (p. ej. *Coordinador de logística*)
+   y el retiro o la parroquia.
+
+Desactivar al usuario le impide entrar; borrarlo borra también su cuenta.
 
 El rol también fija lo que se ve: un coordinador de parroquia solo ve los
 retiros de su parroquia, y uno de retiro o de logística, además, solo los de su

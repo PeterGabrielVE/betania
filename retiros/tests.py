@@ -1175,3 +1175,94 @@ class ControlPagosTests(Base):
 
         self.client.force_login(User.objects.create_user("nadie", password="x"))
         self.assertEqual(self.client.get(self.ruta).status_code, 403)
+
+
+class CuentasEImportacionTests(Base):
+    """Cuentas de acceso e importación de personas, sin el admin de Django."""
+
+    def setUp(self):
+        super().setUp()
+        self.ana = Usuario.objects.create(persona=self.persona("Ana Pérez", email="ana@example.com"))
+        self.ruta = f"/api/usuarios/{self.ana.pk}/cuenta/"
+
+    def test_crear_la_cuenta_y_entrar_con_ella(self):
+        datos = self.client.get(self.ruta).json()
+        self.assertEqual((datos["tiene_cuenta"], datos["email"]), (False, "ana@example.com"))
+        r = self.post(self.ruta, {"username": "ana", "password": "corta"})
+        self.assertIn("password", r.json())  # la valida Django
+        r = self.post(self.ruta, {"username": "ana", "email": "ana@example.com",
+                                  "password": "clave-larga-2027"})
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertTrue(r.json()["tiene_cuenta"])
+        self.client.logout()
+        self.assertTrue(self.client.login(username="ana", password="clave-larga-2027"))
+
+    def test_editar_sin_cambiar_la_contrasena_y_desactivar(self):
+        self.post(self.ruta, {"username": "ana", "password": "clave-larga-2027"})
+        r = self.post(self.ruta, {"username": "ana.perez", "password": ""})
+        self.assertEqual(r.json()["username"], "ana.perez")
+        cuenta = User.objects.get(username="ana.perez")
+        self.assertTrue(cuenta.check_password("clave-larga-2027"))
+        # Desactivar al usuario le impide entrar.
+        self.client.patch(f"/api/usuarios/{self.ana.pk}/", {"activo": False},
+                          content_type="application/json")
+        cuenta.refresh_from_db()
+        self.assertFalse(cuenta.is_active)
+        self.assertIn("ana.perez", str(self.client.get("/api/usuarios/").json()))
+
+    def test_borrar_el_usuario_borra_su_cuenta(self):
+        self.post(self.ruta, {"username": "ana", "password": "clave-larga-2027"})
+        self.client.delete(f"/api/usuarios/{self.ana.pk}/")
+        self.assertFalse(User.objects.filter(username="ana").exists())
+
+    def test_no_repite_nombre_ni_lo_toca_quien_no_puede(self):
+        User.objects.create_user("ocupado", password="x")
+        r = self.post(self.ruta, {"username": "Ocupado", "password": "clave-larga-2027"})
+        self.assertIn("username", r.json())
+        self.client.force_login(User.objects.create_user("nadie", password="x"))
+        self.assertEqual(self.client.get(self.ruta).status_code, 403)
+
+    def subir(self, contenido, nombre="personas.csv", confirmar=False):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        archivo = SimpleUploadedFile(nombre, contenido.encode("utf-8"), "text/csv")
+        ruta = "/api/personas/importar/" + ("?confirmar=1" if confirmar else "")
+        return self.client.post(ruta, {"archivo": archivo})
+
+    def test_importar_con_vista_previa(self):
+        csv = ("tipo_documento,documento,nombre,telefono,parroquia\n"
+               "V,12345678,Luis Gómez,0414-1234567,San José\n"
+               "V,87654321,Rosa Díaz,,San José\n")
+        r = self.subir(csv).json()
+        self.assertEqual((r["filas"], r["nuevas"], r["guardado"]), (2, 2, False))
+        self.assertFalse(Persona.objects.filter(documento="12345678").exists())  # vista previa
+        r = self.subir(csv, confirmar=True).json()
+        self.assertTrue(r["guardado"])
+        self.assertEqual(Persona.objects.get(documento="12345678").nombre, "Luis Gómez")
+        # Volver a subirlo no duplica: las actualiza.
+        r = self.subir(csv).json()
+        self.assertEqual((r["nuevas"], r["actualizadas"] + r["sin_cambios"]), (0, 2))
+
+    def test_importar_la_plantilla_con_titulo(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        plantilla = self.post("/api/exportar/", {
+            "formato": "xlsx", "titulo": "Plantilla de personas",
+            "columnas": ["tipo_documento", "documento", "nombre", "parroquia"],
+            "filas": [["V", "11222333", "Marta Ruiz", "San José"]],
+        }).content
+        archivo = SimpleUploadedFile("plantilla.xlsx", plantilla)
+        r = self.client.post("/api/personas/importar/?confirmar=1", {"archivo": archivo}).json()
+        self.assertEqual((r["filas"], r["nuevas"], r["guardado"]), (1, 1, True), r)
+        self.assertEqual(Persona.objects.get(documento="11222333").nombre, "Marta Ruiz")
+
+    def test_importar_sin_parroquia(self):
+        csv = "documento,nombre\n12345678,Luis Gómez\n"
+        # Con una sola parroquia, se usa esa.
+        self.assertEqual(self.subir(csv).json()["nuevas"], 1)
+        Parroquia.objects.create(nombre="San Pedro", diocesis=self.parroquia.diocesis)
+        self.assertIn("parroquia", self.subir(csv).json()["detail"])
+        r = self.subir("documento,nombre,parroquia\n12345678,Luis Gómez,Otra\n").json()
+        self.assertEqual(r["errores"], [{"fila": 1, "mensaje": "No existe la parroquia «Otra»."}])
+
+    def test_importar_avisa_si_el_archivo_no_sirve(self):
+        self.assertEqual(self.subir("a,b\n1,2\n").status_code, 400)
+        self.assertEqual(self.subir("x", nombre="personas.txt").status_code, 400)

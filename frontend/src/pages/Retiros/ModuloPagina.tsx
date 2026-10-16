@@ -8,6 +8,8 @@ import {
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
 import BotonesDescarga from "@/components/modulos/BotonesDescarga";
+import DialogoCuenta from "@/components/modulos/DialogoCuenta";
+import DialogoImportar from "@/components/modulos/DialogoImportar";
 import { celda } from "@/components/modulos/celda";
 import { DialogoCancelar } from "@/components/retiros/AccionesAsistencia";
 import {
@@ -35,7 +37,13 @@ import {
 } from "@/components/ui/table";
 import { useAuth } from "@/context/AuthContext";
 import NotFound from "@/pages/OtherPage/NotFound";
-import { LockIcon, PencilIcon, TrashBinIcon } from "@/icons";
+import {
+  KeyIcon,
+  LockIcon,
+  PencilIcon,
+  TrashBinIcon,
+  UploadIcon,
+} from "@/icons";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 
@@ -63,6 +71,8 @@ type Acciones = {
   modulo: Modulo;
   onEditar: (fila: Registro) => void;
   onEliminar: (fila: Registro) => void;
+  // Usuarios: su cuenta de acceso (usuario y contraseña).
+  onCuenta?: (fila: Registro) => void;
   // Caminantes y servidores: casillas para confirmar o cancelar varios.
   seleccion?: {
     ids: Set<string>;
@@ -98,9 +108,21 @@ function BotonesFila({
   modulo,
   onEditar,
   onEliminar,
+  onCuenta,
 }: Acciones & { fila: Registro }) {
   return (
     <div className="flex items-center gap-1">
+      {onCuenta && (
+        <button
+          type="button"
+          className={`${claseIcono} hover:text-brand-500`}
+          onClick={() => onCuenta(fila)}
+          title="Cuenta de acceso (usuario y contraseña)"
+        >
+          <KeyIcon className="size-4" />
+          <span className="sr-only">Cuenta de acceso de {fila.etiqueta}</span>
+        </button>
+      )}
       {modulo.puede_cambiar && (
         <button
           type="button"
@@ -373,6 +395,9 @@ function Listado({ modulo }: { modulo: Modulo }) {
   // Filas elegidas para confirmar o cancelar varias (caminantes, servidores).
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
   const [cancelandoVarios, setCancelandoVarios] = useState(false);
+  // Usuarios: la cuenta que se está editando; Personas: importar de Excel.
+  const [cuentaDe, setCuentaDe] = useState<string | null>(null);
+  const [importando, setImportando] = useState(false);
   const editar = busqueda.get("editar");
   const volver = busqueda.get("volver");
 
@@ -537,6 +562,10 @@ function Listado({ modulo }: { modulo: Modulo }) {
         ? navigate(rutaDeEdicion(modulo.slug, fila.id, `/${modulo.slug}`))
         : setEditando(fila),
     onEliminar: eliminar,
+    onCuenta:
+      modulo.slug === "usuarios" && modulo.puede_cambiar
+        ? (fila: Registro) => setCuentaDe(fila.id)
+        : undefined,
     seleccion:
       quien && modulo.puede_cambiar
         ? {
@@ -581,6 +610,18 @@ function Listado({ modulo }: { modulo: Modulo }) {
           )}
         </p>
         <div className="flex flex-wrap items-center gap-2">
+          {modulo.slug === "personas" &&
+            modulo.puede_agregar &&
+            modulo.puede_cambiar && (
+              <button
+                type="button"
+                className={`${claseBoton} inline-flex items-center gap-2`}
+                onClick={() => setImportando(true)}
+              >
+                <UploadIcon className="size-5" aria-hidden="true" />
+                Importar
+              </button>
+            )}
           {!!datos?.count && <BotonesDescarga ruta={rutaDescarga} />}
           {modulo.puede_agregar && (
             <Button
@@ -776,6 +817,19 @@ function Listado({ modulo }: { modulo: Modulo }) {
           />
         )}
       </Modal>
+      {cuentaDe && (
+        <DialogoCuenta
+          usuarioId={cuentaDe}
+          onCerrar={() => setCuentaDe(null)}
+          onGuardado={() => setVersion((v) => v + 1)}
+        />
+      )}
+      {importando && (
+        <DialogoImportar
+          onCerrar={() => setImportando(false)}
+          onImportado={() => setVersion((v) => v + 1)}
+        />
+      )}
     </div>
   );
 }
