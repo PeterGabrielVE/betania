@@ -1021,3 +1021,83 @@ class DemoTests(TestCase):
                 objeto.full_clean()
         self.assertTrue(User.objects.get(username="demo.logistica").check_password(
             "demo-betania-123"))
+
+
+class DescargasTests(Base):
+    """Las tablas se descargan en Excel y PDF, con los filtros de la pantalla."""
+
+    def setUp(self):
+        super().setUp()
+        self.ana = Inscripcion.objects.create(retiro=self.retiro, persona=self.persona("Ana Pérez"),
+                                              estado=Inscripcion.Estado.CONFIRMADA)
+        Inscripcion.objects.create(retiro=self.retiro, persona=self.persona("Luis Gómez"))
+        Pago.objects.create(retiro=self.retiro, inscripcion=self.ana, concepto="cuota",
+                            monto=Decimal("18000"), moneda="VES", fecha=date(2027, 3, 1))
+
+    def libro(self, respuesta):
+        from io import BytesIO
+
+        from openpyxl import load_workbook
+        self.assertEqual(respuesta.status_code, 200, respuesta.content[:300])
+        return load_workbook(BytesIO(respuesta.content)).active
+
+    def test_excel_de_un_listado_con_filtros_y_busqueda(self):
+        r = self.client.get("/api/inscripciones/exportar/?formato=xlsx&estado=confirmada"
+                            "&detalle=Estado: Confirmada")
+        self.assertIn(".xlsx", r["Content-Disposition"])
+        hoja = self.libro(r)
+        self.assertEqual(hoja["A1"].value, "Caminantes")
+        self.assertEqual(hoja["A2"].value, "Estado: Confirmada")
+        encabezado = [c.value for c in hoja[4]]
+        self.assertIn("Estado", encabezado)
+        filas = [[c.value for c in fila] for fila in hoja.iter_rows(min_row=5)]
+        self.assertEqual(len(filas), 1)
+        fila = dict(zip(encabezado, filas[0]))
+        self.assertEqual(fila["Estado"], "Confirmada")
+        self.assertTrue(str(fila[encabezado[0]]).startswith("Ana Pérez"))
+
+        r = self.client.get("/api/inscripciones/exportar/?formato=xlsx&search=Luis")
+        self.assertEqual(self.libro(r).max_row, 5)
+
+    def test_los_montos_quedan_como_numeros(self):
+        hoja = self.libro(self.client.get("/api/pagos/exportar/?formato=xlsx"))
+        encabezado = [c.value for c in hoja[4]]
+        fila = {t: c for t, c in zip(encabezado, hoja[5])}
+        self.assertEqual(fila["Monto"].value, 18000)
+        self.assertIn("Bs.S", fila["Monto"].number_format)  # en la moneda del pago
+        self.assertEqual(fila["Fecha"].number_format, "dd/mm/yyyy")
+
+    def test_pdf_de_un_listado(self):
+        r = self.client.get("/api/personas/exportar/?formato=pdf")
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r.content.startswith(b"%PDF"))
+        self.assertIn("personas-", r["Content-Disposition"])
+
+    def test_exige_permiso_de_ver_y_formato_valido(self):
+        self.assertEqual(
+            self.client.get("/api/personas/exportar/?formato=doc").status_code, 400)
+        self.client.force_login(User.objects.create_user("nadie", password="x"))
+        self.assertEqual(
+            self.client.get("/api/personas/exportar/?formato=xlsx").status_code, 403)
+
+    def test_el_rol_fija_la_columna_y_la_pone_en_el_subtitulo(self):
+        cuenta = User.objects.create_user("coord", password="x")
+        usuario = Usuario.objects.create(persona=self.persona("Coord"), cuenta=cuenta)
+        AsignacionRol.objects.create(usuario=usuario, rol=Rol.COORD_RETIRO, retiro=self.retiro)
+        self.client.force_login(cuenta)
+        hoja = self.libro(self.client.get("/api/retiros/exportar/?formato=xlsx"))
+        self.assertNotIn("Parroquia", [c.value for c in hoja[4]])
+        self.assertIn("Parroquia: San José", hoja["A2"].value)
+
+    def test_tabla_armada_en_el_navegador(self):
+        tabla = {"formato": "xlsx", "titulo": "Servidores · Emaús hombres #12",
+                 "columnas": ["Servidor", "Pagado", "Duerme"],
+                 "filas": [["Ana", {"monto": 25.5, "moneda": "USD"}, "Sí"], ["Luis", None]]}
+        hoja = self.libro(self.post("/api/exportar/", tabla))
+        self.assertEqual([c.value for c in hoja[5]], ["Ana", 25.5, "Sí"])
+        self.assertEqual(hoja.max_row, 6)
+        r = self.post("/api/exportar/", {**tabla, "formato": "pdf"})
+        self.assertTrue(r.content.startswith(b"%PDF"))
+        self.assertEqual(self.post("/api/exportar/", {"formato": "xlsx"}).status_code, 400)
+        self.client.logout()
+        self.assertEqual(self.post("/api/exportar/", tabla).status_code, 403)

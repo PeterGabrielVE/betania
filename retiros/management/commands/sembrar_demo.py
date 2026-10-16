@@ -102,8 +102,8 @@ class Command(BaseCommand):
             return
         if existe:
             self.borrar()
-        call_command("sembrar_geografia", verbosity=0)
-        call_command("sembrar_areas", verbosity=0)
+        call_command("sembrar_geografia", stdout=self.stdout)
+        call_command("sembrar_areas", stdout=self.stdout)
         self.random = random.Random(12)
         self.hoy = timezone.localdate()
         self.n = 0

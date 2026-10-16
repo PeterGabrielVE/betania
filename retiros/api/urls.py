@@ -8,6 +8,7 @@ urlpatterns = [
     path("auth/logout/", sesion.cerrar_sesion),
     path("auth/preferencias/", sesion.preferencias),
     path("esquema/", vistas.esquema),
+    path("exportar/", vistas.exportar_tabla),
     path("resumen/", paneles.resumen),
     path("retiros/<uuid:pk>/panel/", paneles.panel_retiro),
     path("personas/<uuid:pk>/ficha/", paneles.ficha_persona),

@@ -7,6 +7,7 @@ import {
   claseEnlace,
   claseTarjeta,
 } from "@/components/modulos/estilos";
+import BotonesDescarga from "@/components/modulos/BotonesDescarga";
 import AccionesAsistencia from "@/components/retiros/AccionesAsistencia";
 import Actualizacion from "@/components/retiros/Actualizacion";
 import LogisticaEquipo from "@/components/retiros/LogisticaEquipo";
@@ -23,7 +24,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useDatosVivos } from "@/hooks/useDatosVivos";
 import { BoxIconLine, CalenderIcon, DollarLineIcon, GroupIcon } from "@/icons";
 import NotFound from "@/pages/OtherPage/NotFound";
-import { colorEstado, dinero, fecha } from "@/utils/formato";
+import { colorEstado, dinero, fecha, montoVista } from "@/utils/formato";
 import { Fragment, useState } from "react";
 import { Link, useParams } from "react-router";
 
@@ -230,12 +231,14 @@ function Caminantes({
   caminantes,
   opcionesPago,
   retiroId,
+  retiro,
   puedeEditar,
   onCambio,
 }: {
   caminantes: NonNullable<PanelRetiro["caminantes"]>;
   opcionesPago: PanelRetiro["opciones_pago"];
   retiroId: string;
+  retiro: string; // "Emaús hombres #12", para el título de la descarga
   puedeEditar: (slug: string) => boolean;
   onCambio: () => void; // tras confirmar o cancelar: recargar
 }) {
@@ -276,6 +279,74 @@ function Caminantes({
     : ["Caminante", "Teléfono", "Quién lo invitó", "Estado"];
   if (conPagos) titulos.push("Pago", "Pagado", "Debe");
   if (conFicha) titulos.push("");
+
+  // La descarga lleva lo que se ve y, con acceso a la ficha, también salud,
+  // comida, requerimientos y familiares (para logística).
+  const tablaDescarga = () => ({
+    titulo: `Caminantes · ${retiro}`,
+    subtitulo: [
+      elegido.valor && `Filtro: ${elegido.etiqueta}`,
+      buscado && `Búsqueda: «${texto.trim()}»`,
+    ]
+      .filter(Boolean)
+      .join(" · "),
+    columnas: [
+      "Caminante",
+      ...(conFicha ? ["Documento", "Edad", "De dónde es"] : []),
+      "Teléfono",
+      "Quién lo invitó",
+      "Estado",
+      "Motivo de la cancelación",
+      ...(conPagos ? ["Pago", "Pagado", "Debe"] : []),
+      ...(conFicha
+        ? [
+            "Condición médica",
+            "Tratamiento",
+            "Alimentación especial",
+            "Requerimientos",
+            "Talla",
+            "Familiares de contacto",
+          ]
+        : []),
+    ],
+    filas: visibles.map((f) => [
+      f.persona,
+      ...(conFicha
+        ? [
+            f.ficha?.documento ?? "",
+            f.ficha?.edad ?? null,
+            f.ficha?.procedencia ?? "",
+          ]
+        : []),
+      f.telefono || f.ficha?.telefono_casa || "",
+      f.padrino,
+      estados.get(f.estado) ?? f.estado,
+      f.motivo_cancelacion,
+      ...(conPagos
+        ? [
+            pagos.get(f.estado_pago!) ?? "",
+            montoVista(f.pagado),
+            montoVista(f.saldo),
+          ]
+        : []),
+      ...(conFicha
+        ? [
+            f.ficha?.condicion_medica ?? "",
+            f.ficha?.tratamiento ?? "",
+            f.ficha?.alimentacion ?? "",
+            f.ficha?.requerimientos ?? "",
+            f.ficha?.talla_camiseta ?? "",
+            (f.ficha?.contactos ?? [])
+              .map((c) =>
+                [c.nombre, c.relacion && `(${c.relacion})`, c.telefono]
+                  .filter(Boolean)
+                  .join(" "),
+              )
+              .join("; "),
+          ]
+        : []),
+    ]),
+  });
 
   return (
     <>
@@ -322,6 +393,9 @@ function Caminantes({
           >
             {abiertos.size ? "Cerrar fichas" : "Abrir todas las fichas"}
           </button>
+        )}
+        {visibles.length > 0 && (
+          <BotonesDescarga tabla={tablaDescarga} className="sm:ms-auto" />
         )}
       </div>
       {visibles.length === 0 ? (
@@ -445,9 +519,11 @@ function Servidores({
   servidores,
   cuota,
   opcionesPago,
+  retiro,
   onCambio,
 }: {
   servidores: NonNullable<PanelRetiro["servidores"]>;
+  retiro: string;
   cuota: number;
   opcionesPago: PanelRetiro["opciones_pago"];
   onCambio: () => void;
@@ -476,6 +552,34 @@ function Servidores({
     ...(conPagos ? ["Pagado"] : []),
     ...(conCuota ? ["Debe"] : []),
   ];
+  const tablaDescarga = () => ({
+    titulo: `Servidores · ${retiro}`,
+    subtitulo: [
+      estado &&
+        `Asistencia: ${servidores.por_estado.find((e) => e.estado === estado)?.etiqueta}`,
+      soloDeben && "Solo los que deben",
+    ]
+      .filter(Boolean)
+      .join(" · "),
+    columnas: [
+      ...titulos.slice(0, 2),
+      "Motivo de la cancelación",
+      ...titulos.slice(2),
+    ],
+    filas: visibles.map((f) => [
+      f.persona,
+      f.estado_display,
+      f.motivo_cancelacion,
+      f.areas || f.tipo,
+      f.telefono,
+      f.duerme_en_casa === null ? "" : f.duerme_en_casa ? "Sí" : "No",
+      f.turnos,
+      f.camisa,
+      ...(conCuota ? [pagos.get(f.estado_pago!) ?? ""] : []),
+      ...(conPagos ? [montoVista(f.pagado)] : []),
+      ...(conCuota ? [montoVista(f.saldo)] : []),
+    ]),
+  });
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -511,6 +615,7 @@ function Servidores({
             Solo los que deben
           </label>
         )}
+        {visibles.length > 0 && <BotonesDescarga tabla={tablaDescarga} />}
       </div>
       {visibles.length === 0 ? (
         <p className={claseVacio}>Ningún servidor coincide.</p>
@@ -795,6 +900,7 @@ export default function RetiroPanel() {
               caminantes={caminantes}
               opcionesPago={panel.opciones_pago}
               retiroId={retiro.id}
+              retiro={retiro.etiqueta}
               puedeEditar={puedeEditar}
               onCambio={actualizar}
             />
@@ -819,6 +925,7 @@ export default function RetiroPanel() {
               servidores={servidores}
               cuota={retiro.cuota_servidor}
               opcionesPago={panel.opciones_pago}
+              retiro={retiro.etiqueta}
               onCambio={actualizar}
             />
           </Seccion>

@@ -1,7 +1,7 @@
 import type { Campo, Registro } from "@/api/client";
 import Badge from "@/components/ui/badge/Badge";
+import { FilePdfIcon } from "@/icons";
 import { colorEstado, dinero, fecha } from "@/utils/formato";
-import { claseEnlace } from "./estilos";
 
 // Lo que se muestra de un campo en un listado (tabla o tarjeta).
 export function celda(campo: Campo, fila: Registro): React.ReactNode {
@@ -36,10 +36,15 @@ export function celda(campo: Campo, fila: Registro): React.ReactNode {
           : undefined,
       );
     case "enlace":
-      // Lo sirve Django (p. ej. el PDF de un retiro), no React Router.
+      // Lo sirve Django (p. ej. la lista en PDF de un retiro), no React Router.
       return (
-        <a href={valor as string} className={claseEnlace}>
-          PDF
+        <a
+          href={valor as string}
+          className="inline-flex size-8 items-center justify-center rounded-lg text-error-600 hover:bg-error-50 dark:text-error-500 dark:hover:bg-error-500/10"
+          title={`Descargar ${campo.etiqueta.toLowerCase()} en PDF`}
+          aria-label={`Descargar ${campo.etiqueta.toLowerCase()} de ${fila.etiqueta} en PDF`}
+        >
+          <FilePdfIcon className="size-5" aria-hidden="true" />
         </a>
       );
     default:

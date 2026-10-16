@@ -68,6 +68,46 @@ export async function api<T>(
   return datos as T;
 }
 
+// Descarga un archivo de la API (Excel o PDF de una tabla): GET con la ruta o
+// POST con el cuerpo. Lo guarda con el nombre que manda el servidor.
+export async function descargar(ruta: string, body?: unknown): Promise<void> {
+  const res = await fetch(`/api${ruta}`, {
+    method: body === undefined ? "GET" : "POST",
+    headers:
+      body === undefined
+        ? {}
+        : { "Content-Type": "application/json", "X-CSRFToken": csrfToken() },
+    credentials: "same-origin",
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw aError(res.status, await res.json().catch(() => null));
+  }
+  const nombre =
+    /filename="([^"]+)"/.exec(
+      res.headers.get("Content-Disposition") ?? "",
+    )?.[1] ?? "descarga";
+  const url = URL.createObjectURL(await res.blob());
+  const enlace = document.createElement("a");
+  enlace.href = url;
+  enlace.download = nombre;
+  document.body.append(enlace);
+  enlace.click();
+  enlace.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// Una tabla armada en el navegador, para /api/exportar/. Los montos van como
+// número con su moneda, así en Excel se pueden sumar.
+export type CeldaDescarga =
+  string | number | null | { monto: number; moneda: string };
+export type TablaDescarga = {
+  titulo: string;
+  subtitulo?: string;
+  columnas: string[];
+  filas: CeldaDescarga[][];
+};
+
 export type Sesion =
   | { autenticado: false }
   | {

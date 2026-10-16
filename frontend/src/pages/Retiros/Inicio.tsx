@@ -260,7 +260,7 @@ function TableroRetiro({ t }: { t: Tablero }) {
             valor={dinero(porCobrar)}
             detalle={
               conCuotaServidor
-                ? `${dinero(caminantes.por_cobrar)} caminantes · ${dinero(servidores?.por_cobrar ?? 0)} servidores`
+                ? `Caminantes ${dinero(caminantes.por_cobrar)} · Servidores ${dinero(servidores?.por_cobrar ?? 0)}`
                 : "De cuotas de caminantes"
             }
           >

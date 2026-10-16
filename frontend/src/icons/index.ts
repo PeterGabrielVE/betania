@@ -14,6 +14,8 @@ import { ReactComponent as AudioIcon } from "./audio.svg?react";
 import { ReactComponent as GridIcon } from "./grid.svg?react";
 import { ReactComponent as FileIcon } from "./file.svg?react";
 import { ReactComponent as DownloadIcon } from "./download.svg?react";
+import { ReactComponent as FileExcelIcon } from "./file-excel.svg?react";
+import { ReactComponent as FilePdfIcon } from "./file-pdf.svg?react";
 import { ReactComponent as ArrowRightIcon } from "./arrow-right.svg?react";
 import { ReactComponent as GroupIcon } from "./group.svg?react";
 import { ReactComponent as BoxIconLine } from "./box-line.svg?react";
@@ -172,6 +174,8 @@ export {
   AlertHexaIcon,
   MoreDotIcon,
   DownloadIcon,
+  FileExcelIcon,
+  FilePdfIcon,
   FileIcon,
   GridIcon,
   AudioIcon,

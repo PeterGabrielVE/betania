@@ -7,6 +7,7 @@ import {
 } from "@/api/client";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
+import BotonesDescarga from "@/components/modulos/BotonesDescarga";
 import { celda } from "@/components/modulos/celda";
 import { DialogoCancelar } from "@/components/retiros/AccionesAsistencia";
 import {
@@ -430,6 +431,26 @@ function Listado({ modulo }: { modulo: Modulo }) {
     if (filtro.valor) params.set(nombre, filtro.valor);
   }
   const ruta = `/${modulo.slug}/?${params}`;
+
+  // La descarga: lo mismo que la tabla, sin paginar, y bajo el título qué
+  // filtros tenía ("Estado: Confirmada · Búsqueda: «pérez»").
+  const rutaDescarga = (formato: string) => {
+    const p = new URLSearchParams(params);
+    p.delete("page");
+    p.delete("page_size");
+    p.set("formato", formato);
+    const detalle = libres
+      .filter((f) => filtros[f.nombre]?.valor)
+      .map((f) => {
+        const { valor, etiqueta } = filtros[f.nombre];
+        const texto =
+          etiqueta || f.opciones?.find((o) => o.valor === valor)?.etiqueta;
+        return `${f.etiqueta}: ${texto ?? valor}`;
+      });
+    if (consulta.busqueda) detalle.push(`Búsqueda: «${consulta.busqueda}»`);
+    if (detalle.length) p.set("detalle", detalle.join(" · "));
+    return `/${modulo.slug}/exportar/?${p}`;
+  };
   const clave = `${ruta}#${version}`;
 
   useEffect(() => {
@@ -559,19 +580,22 @@ function Listado({ modulo }: { modulo: Modulo }) {
             " "
           )}
         </p>
-        {modulo.puede_agregar && (
-          <Button
-            size="sm"
-            onClick={() =>
-              // Caminantes y servidores se dan de alta con su formulario por pasos.
-              ALTA_POR_PASOS[modulo.slug]
-                ? navigate(ALTA_POR_PASOS[modulo.slug])
-                : setEditando(null)
-            }
-          >
-            Agregar {modulo.singular}
-          </Button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {!!datos?.count && <BotonesDescarga ruta={rutaDescarga} />}
+          {modulo.puede_agregar && (
+            <Button
+              size="sm"
+              onClick={() =>
+                // Caminantes y servidores se dan de alta con su formulario por pasos.
+                ALTA_POR_PASOS[modulo.slug]
+                  ? navigate(ALTA_POR_PASOS[modulo.slug])
+                  : setEditando(null)
+              }
+            >
+              Agregar {modulo.singular}
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Búsqueda y filtros */}

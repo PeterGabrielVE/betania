@@ -4,6 +4,8 @@ y borrar), más el esquema con el que el frontend dibuja menú, tablas y formula
 """
 
 import copy
+import json
+from datetime import date, datetime
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, models, transaction
@@ -11,12 +13,13 @@ from django.db.models import ProtectedError
 from django.utils.functional import cached_property
 from django.utils.text import capfirst
 from rest_framework import filters, routers, serializers, status, viewsets
-from rest_framework.decorators import api_view
+from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 
 from django.conf import settings
 
 from ..acceso import ambito_fijo
+from ..exportar import FORMATOS, MAX_FILAS, Dinero, descargar
 from .sesion import _preferencias_json
 from .modulos import AYUDAS, ETIQUETAS, MODULOS, POR_MODELO
 from .permisos import PermisosModelo, ve_sensibles
@@ -90,6 +93,47 @@ def _filtro(modulo, nombre):
     return info
 
 
+def columnas_lista(modulo, user):
+    """Las columnas de la tabla de un módulo que este usuario puede ver."""
+    vista = _preferencias_json(user)["moneda_vista"]
+    columnas = [_describir(modulo, n) for n in modulo.lista
+                if n not in modulo.extras or modulo.extras[n].visible(user)]
+    if vista != settings.MONEDA:
+        for columna in columnas:
+            if columna["nombre"] == "monto_base":
+                columna["etiqueta"] = f"Equivalente en {vista}"
+    return columnas
+
+
+def _celda(columna, datos, vista, factor):
+    """Valor de una columna para la descarga, como lo muestra la tabla
+    (ver celda.tsx en el frontend)."""
+    nombre, tipo = columna["nombre"], columna["tipo"]
+    valor = datos.get(nombre)
+    if tipo == "fk":
+        return datos.get(f"{nombre}_etiqueta") or ""
+    if valor is None or valor == "":
+        return ""
+    if tipo == "opcion":
+        opciones = {o["valor"]: o["etiqueta"] for o in columna.get("opciones", [])}
+        return opciones.get(valor, valor)
+    if tipo == "bool":
+        return bool(valor)
+    if tipo == "fecha":
+        return date.fromisoformat(str(valor)[:10])
+    if tipo == "fechahora":
+        return datetime.fromisoformat(str(valor).replace("Z", "+00:00"))
+    if tipo == "decimal":
+        # El monto de un pago o gasto va en la moneda en que se hizo; lo demás,
+        # de la moneda base a la que el usuario eligió para ver.
+        if nombre == "monto":
+            return Dinero(float(valor), datos.get("moneda") or settings.MONEDA)
+        return Dinero(float(valor) * factor, vista)
+    if tipo in ("numero", "cifra"):
+        return valor
+    return str(valor)
+
+
 # --------------------------------------------------------------------------- #
 # Serializer y ViewSet de un módulo
 # --------------------------------------------------------------------------- #
@@ -155,6 +199,34 @@ class ModuloViewSet(viewsets.ModelViewSet):
                 except (ValueError, DjangoValidationError):
                     return qs.none()
         return qs
+
+    @action(detail=False, methods=["get"])
+    def exportar(self, request):
+        """Toda la tabla (con los filtros y la búsqueda de la pantalla, sin
+        paginar) en Excel o PDF: ?formato=xlsx|pdf. ?detalle= es el texto de
+        los filtros que se pone bajo el título."""
+        formato = request.query_params.get("formato", "xlsx")
+        if formato not in FORMATOS:
+            return Response({"detail": "Formato no válido."}, status=400)
+        qs = self.filter_queryset(self.get_queryset())
+        if qs.count() > MAX_FILAS:
+            return Response({"detail": (
+                f"Son más de {MAX_FILAS} registros: filtra la tabla para descargarla."
+            )}, status=400)
+        fijos = filtros_fijos(self.modulo, request.user)
+        columnas = [c for c in columnas_lista(self.modulo, request.user)
+                    if c["tipo"] != "enlace" and c["nombre"] not in fijos]
+        pref = _preferencias_json(request.user)
+        datos = self.get_serializer(qs, many=True).data
+        filas = [[_celda(c, d, pref["moneda_vista"], pref["factor"]) for c in columnas]
+                 for d in datos]
+        subtitulo = " · ".join(filter(None, [
+            *(f"{capfirst(_describir(self.modulo, n)['etiqueta'])}: {obj}"
+              for n, obj in fijos.items()),
+            request.query_params.get("detalle", "")[:300],
+        ]))
+        return descargar(request, formato, self.modulo.titulo,
+                         [c["etiqueta"] for c in columnas], filas, subtitulo)
 
     def _guardar(self, accion, *args, **kwargs):
         # Las restricciones de unicidad las valida la base de datos.
@@ -223,13 +295,11 @@ def esquema(request):
     """Módulos que el usuario puede ver, con sus campos, columnas y permisos."""
     user = request.user
     sensibles = ve_sensibles(request)
-    vista = _preferencias_json(user)["moneda_vista"]
     modulos = []
     for m in MODULOS:
         if not user.has_perm(m.permiso("view")):
             continue
         campos = [n for n in m.campos if sensibles or n not in m.sensibles]
-        lista = [n for n in m.lista if n not in m.extras or m.extras[n].visible(user)]
         fijos = {n: {"valor": obj.pk, "etiqueta": str(obj)}
                  for n, obj in filtros_fijos(m, user).items()}
 
@@ -238,11 +308,6 @@ def esquema(request):
                 info["fijo"] = fijos[info["nombre"]]
             return info
 
-        lista_desc = [_describir(m, n) for n in lista]
-        if vista != settings.MONEDA:
-            for columna in lista_desc:
-                if columna["nombre"] == "monto_base":
-                    columna["etiqueta"] = f"Equivalente en {vista}"
         modulos.append({
             "slug": m.slug,
             "titulo": m.titulo,
@@ -250,7 +315,7 @@ def esquema(request):
             "grupo": m.grupo,
             "en_menu": m.en_menu,
             "campos": [con_fijo(_describir(m, n)) for n in campos],
-            "lista": lista_desc,
+            "lista": columnas_lista(m, user),
             "filtros": [con_fijo(_filtro(m, n)) for n in m.filtros],
             "buscable": bool(m.buscar),
             "puede_agregar": user.has_perm(m.permiso("add")),
@@ -258,3 +323,36 @@ def esquema(request):
             "puede_eliminar": user.has_perm(m.permiso("delete")),
         })
     return Response(modulos)
+
+
+# --------------------------------------------------------------------------- #
+# Descarga de una tabla armada en el navegador (las del panel de un retiro)
+# --------------------------------------------------------------------------- #
+def _celda_recibida(valor):
+    """Texto, número, null o {"monto": n, "moneda": "VES"}."""
+    if isinstance(valor, dict):
+        return Dinero(float(valor.get("monto") or 0), str(valor.get("moneda") or settings.MONEDA))
+    if valor is None or isinstance(valor, (int, float)) and not isinstance(valor, bool):
+        return valor
+    return str(valor)[:500]
+
+
+@api_view(["POST"])
+def exportar_tabla(request):
+    """Devuelve como Excel o PDF la tabla que manda el navegador: {formato,
+    titulo, subtitulo, columnas: [texto], filas: [[celda]]}. Son datos que el
+    usuario ya está viendo; aquí solo se les da formato."""
+    try:
+        datos = json.loads(request.body or b"{}")
+        formato = datos.get("formato")
+        columnas = [str(c)[:100] for c in datos["columnas"]]
+        filas = [[_celda_recibida(v) for v in fila][:len(columnas)] for fila in datos["filas"]]
+    except (ValueError, KeyError, TypeError):
+        return Response({"detail": "Tabla no válida."}, status=400)
+    if formato not in FORMATOS or not columnas or len(columnas) > 40:
+        return Response({"detail": "Tabla no válida."}, status=400)
+    if len(filas) > MAX_FILAS:
+        return Response({"detail": f"La tabla tiene más de {MAX_FILAS} filas."}, status=400)
+    filas = [fila + [""] * (len(columnas) - len(fila)) for fila in filas]
+    return descargar(request, formato, str(datos.get("titulo") or "Tabla")[:150],
+                     columnas, filas, str(datos.get("subtitulo") or "")[:300])

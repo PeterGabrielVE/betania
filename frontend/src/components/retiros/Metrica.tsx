@@ -9,6 +9,15 @@ interface MetricaProps {
   children?: React.ReactNode;
 }
 
+// Las cifras largas (montos en bolívares) van más pequeñas para que quepan en
+// la tarjeta, aun con seis por fila.
+function tamanoCifra(valor: string | number) {
+  const largo = String(valor).length;
+  if (largo <= 9) return "text-title-sm";
+  if (largo <= 12) return "text-2xl";
+  return "text-xl";
+}
+
 // Tarjeta con una cifra: las del inicio y las del panel de un retiro.
 export default function Metrica({
   icono,
@@ -18,7 +27,9 @@ export default function Metrica({
   children,
 }: MetricaProps) {
   return (
-    <div className={claseTarjeta}>
+    // min-w-0: en la cuadrícula, que la tarjeta se ajuste a su columna y no la
+    // ensanche (si no, empuja las demás fuera de la pantalla).
+    <div className={`${claseTarjeta} min-w-0`}>
       <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-white/90">
         {icono}
       </div>
@@ -26,7 +37,9 @@ export default function Metrica({
         <span className="text-sm text-gray-500 dark:text-gray-400">
           {etiqueta}
         </span>
-        <h4 className="mt-2 text-title-sm font-bold text-gray-800 dark:text-white/90">
+        <h4
+          className={`mt-2 font-bold wrap-break-word text-gray-800 tabular-nums dark:text-white/90 ${tamanoCifra(valor)}`}
+        >
           {valor}
         </h4>
         {detalle && (

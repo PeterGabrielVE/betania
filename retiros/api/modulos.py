@@ -52,7 +52,7 @@ MODULOS = [
             "nombre": Extra("Retiro", "texto", str),
             "inscritos": Extra("Inscritos", "numero", anotado("inscritos")),
             "confirmados": Extra("Confirmados", "numero", anotado("confirmados")),
-            "lista_pdf": Extra("Lista", "enlace", lambda o: f"/retiros/{o.pk}/lista.pdf",
+            "lista_pdf": Extra("Confirmados", "enlace", lambda o: f"/retiros/{o.pk}/lista.pdf",
                                requiere=Inscripcion),
         },
     ),

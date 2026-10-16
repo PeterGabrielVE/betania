@@ -5,4 +5,5 @@ whitenoise>=6.6
 dj-database-url>=2.1
 django-import-export>=4.0
 weasyprint>=60
+openpyxl>=3.1
 djangorestframework>=3.15
