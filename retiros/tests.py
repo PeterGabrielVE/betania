@@ -1961,3 +1961,83 @@ class SaludTests(TestCase):
 
     def test_solo_get(self):
         self.assertEqual(self.client.post("/api/salud/").status_code, 405)
+
+
+class FotoPersonaTests(Base):
+    """Foto de perfil: se guarda recortada, sale en los listados y la sesión."""
+
+    def setUp(self):
+        super().setUp()
+        self.ana = self.persona("Ana Pérez", sexo="F")
+
+    def archivo(self, ancho=900, alto=600, formato="PNG", modo="RGBA"):
+        import io
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image
+        datos = io.BytesIO()
+        Image.new(modo, (ancho, alto), (200, 30, 30, 128) if modo == "RGBA" else "red").save(
+            datos, formato)
+        return SimpleUploadedFile(f"foto.{formato.lower()}", datos.getvalue())
+
+    def subir(self, archivo):
+        return self.client.post(f"/api/personas/{self.ana.pk}/foto/", {"foto": archivo})
+
+    def test_subir_la_recorta_y_la_sirve(self):
+        import io
+
+        from PIL import Image
+        r = self.subir(self.archivo())
+        self.assertEqual(r.status_code, 200, r.content)
+        url = r.json()["foto"]
+        self.assertTrue(url.startswith(f"/api/personas/{self.ana.pk}/foto/?v="))
+        r = self.client.get(url)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r["Content-Type"], "image/jpeg")
+        self.assertIn("immutable", r["Cache-Control"])
+        imagen = Image.open(io.BytesIO(r.content))
+        self.assertEqual((imagen.format, imagen.size), ("JPEG", (400, 400)))
+
+    def test_no_acepta_lo_que_no_es_imagen(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        r = self.subir(SimpleUploadedFile("foto.jpg", b"no soy una foto"))
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("No es una imagen válida", r.json()["foto"][0])
+        self.ana.refresh_from_db()
+        self.assertIsNone(self.ana.foto_actualizada)
+
+    def test_sale_en_listados_y_en_la_sesion(self):
+        from .models import Inscripcion, Usuario
+        self.subir(self.archivo(formato="JPEG", modo="RGB"))
+        self.ana.refresh_from_db()
+        fila = self.client.get("/api/personas/").json()["results"][0]
+        self.assertEqual((fila["foto"], fila["sexo"]), (self.ana.foto_url, "F"))
+        Inscripcion.objects.create(retiro=self.retiro, persona=self.ana)
+        fila = self.client.get("/api/inscripciones/").json()["results"][0]
+        self.assertEqual((fila["persona_foto"], fila["persona_sexo"]), (self.ana.foto_url, "F"))
+        Usuario.objects.create(persona=self.ana, cuenta=self.admin)
+        persona = self.client.get("/api/auth/sesion/").json()["persona"]
+        self.assertEqual((persona["foto"], persona["sexo"]), (self.ana.foto_url, "F"))
+        ficha = self.client.get(f"/api/personas/{self.ana.pk}/ficha/").json()["persona"]
+        self.assertEqual(ficha["foto"], self.ana.foto_url)
+
+    def test_quitarla(self):
+        self.subir(self.archivo())
+        r = self.client.delete(f"/api/personas/{self.ana.pk}/foto/")
+        self.assertEqual(r.json(), {"foto": None})
+        self.assertEqual(self.client.get(f"/api/personas/{self.ana.pk}/foto/").status_code, 404)
+
+    def test_sin_permiso_de_cambiar_no_la_sube(self):
+        from django.contrib.auth.models import Permission
+        user = User.objects.create_user("lector", password="x")
+        user.user_permissions.add(Permission.objects.get(codename="view_persona"))
+        self.client.force_login(user)
+        self.assertEqual(self.subir(self.archivo()).status_code, 403)
+
+    def test_queda_en_la_auditoria_sin_la_imagen(self):
+        from .models import Auditoria
+        self.subir(self.archivo())
+        registro = Auditoria.objects.get(modelo="persona", objeto_id=str(self.ana.pk),
+                                         cambios__has_key="foto_actualizada")
+        self.assertTrue(registro.cambios["foto_actualizada"]["despues"].startswith("Foto del "))
+        self.assertFalse(Auditoria.objects.filter(modelo="fotopersona").exists())

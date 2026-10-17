@@ -241,6 +241,10 @@ class Persona(models.Model):
         EXTRANJERO = "E", "Cédula de extranjero (E)"
         PASAPORTE = "P", "Pasaporte"
 
+    class Sexo(models.TextChoices):
+        MASCULINO = "M", "Masculino"
+        FEMENINO = "F", "Femenino"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     parroquia = models.ForeignKey(Parroquia, on_delete=models.PROTECT, related_name="personas")
     # Con lo que se identifica a la persona (y se evita duplicarla).
@@ -258,6 +262,11 @@ class Persona(models.Model):
     telefono = models.CharField(max_length=40, blank=True, db_index=True)   # clave para deduplicar
     email = models.EmailField(blank=True, db_index=True)                    # clave para deduplicar
     fecha_nacimiento = models.DateField(null=True, blank=True)
+    # Vacío en los registros viejos: el avatar por defecto es entonces neutro.
+    sexo = models.CharField(max_length=1, choices=Sexo.choices, blank=True)
+    # Cuándo se cambió la foto de perfil (la imagen va en FotoPersona); nula si
+    # no tiene. Sirve además para que el navegador no muestre una foto vieja.
+    foto_actualizada = models.DateTimeField(null=True, blank=True, editable=False)
     # De dónde es. El detalle (sector, urbanización, dirección) va en datos_sensibles.
     pais = models.ForeignKey(Pais, on_delete=models.PROTECT, null=True, blank=True,
                              related_name="personas")
@@ -281,6 +290,13 @@ class Persona(models.Model):
                 name="uniq_persona_documento",
             )
         ]
+
+    @property
+    def foto_url(self):
+        """Dirección de la foto de perfil (con la versión), o None."""
+        if not self.foto_actualizada:
+            return None
+        return f"/api/personas/{self.pk}/foto/?v={int(self.foto_actualizada.timestamp())}"
 
     @property
     def documento_completo(self):
@@ -396,6 +412,24 @@ class Persona(models.Model):
 
     def __str__(self):
         return self.nombre
+
+
+class FotoPersona(models.Model):
+    """La foto de perfil de una persona, ya recortada y reducida (ver
+    retiros/api/fotos.py). Va en la base de datos, aparte de Persona para no
+    cargarla en cada listado: así la protege el mismo RLS que a la persona y no
+    se pierde en hostings sin disco persistente."""
+    persona = models.OneToOneField(Persona, on_delete=models.CASCADE, primary_key=True,
+                                   related_name="foto")
+    imagen = models.BinaryField()
+    tipo = models.CharField(max_length=40, default="image/jpeg")
+
+    class Meta:
+        verbose_name = "foto de persona"
+        verbose_name_plural = "fotos de personas"
+
+    def __str__(self):
+        return f"Foto de {self.persona}"
 
 
 class Preferencias(models.Model):

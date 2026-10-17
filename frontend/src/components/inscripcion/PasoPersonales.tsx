@@ -1,24 +1,50 @@
 // Paso "Datos personales": quién es, cómo localizarlo y de dónde es. Igual
 // para caminantes y servidores.
+import FotoPerfil from "@/components/common/FotoPerfil";
+import { useEffect } from "react";
+import { useFormContext, useWatch } from "react-hook-form";
 import {
   AreaTexto,
   Celular,
   Grupo,
+  Opciones,
   Texto,
   Ubicacion,
   type Lugar,
 } from "./Campos";
-import { EDAD_MINIMA, ETIQUETAS_PERSONA as E } from "./esquemaPersona";
+import { EDAD_MINIMA, ETIQUETAS_PERSONA as E, SEXOS } from "./esquemaPersona";
+import type { FotoDelRegistro } from "./useRegistroPersona";
 
 export default function PasoPersonales({
   sensibles,
   paises,
+  foto,
+  sexoSugerido,
 }: {
   sensibles: boolean; // si puede ver (y pedir) los datos confidenciales
   paises: Lugar[];
+  foto: FotoDelRegistro; // la foto de perfil (se guarda con la persona)
+  // En un retiro de hombres "M", de mujeres "F": se pone si no está indicado.
+  sexoSugerido?: string;
 }) {
+  const { getValues, setValue } = useFormContext();
+  const [sexo, primerNombre, primerApellido] = useWatch({
+    name: ["sexo", "primer_nombre", "primer_apellido"],
+  }) as string[];
+  useEffect(() => {
+    if (sexoSugerido && !getValues("sexo")) {
+      setValue("sexo", sexoSugerido, { shouldDirty: true });
+    }
+  }, [sexoSugerido, getValues, setValue]);
   return (
     <div className="space-y-6">
+      <FotoPerfil
+        actual={foto.actual}
+        sexo={sexo}
+        nombre={[primerNombre, primerApellido].filter(Boolean).join(" ")}
+        cambio={foto.cambio}
+        onCambio={foto.setCambio}
+      />
       <Grupo titulo="Nombres y apellidos">
         <Texto nombre="primer_nombre" etiqueta={E.primer_nombre} obligatorio />
         <Texto nombre="segundo_nombre" etiqueta={E.segundo_nombre} />
@@ -36,6 +62,12 @@ export default function PasoPersonales({
           tipo="date"
           obligatorio
           ayuda={`Desde ${EDAD_MINIMA} años.`}
+        />
+        <Opciones
+          nombre="sexo"
+          etiqueta={E.sexo}
+          obligatorio
+          opciones={SEXOS}
         />
         {sensibles && <Texto nombre="ocupacion" etiqueta={E.ocupacion} />}
       </Grupo>

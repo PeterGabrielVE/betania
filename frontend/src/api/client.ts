@@ -211,7 +211,12 @@ export type Sesion =
       monedas: { valor: string; etiqueta: string }[];
       preferencias: Preferencias;
       // Su ficha (si la cuenta es de una persona) y sus roles con su ámbito.
-      persona: { id: string; nombre: string } | null;
+      persona: {
+        id: string;
+        nombre: string;
+        foto: string | null;
+        sexo: string; // "M", "F" o "" (sin indicar)
+      } | null;
       roles: string[];
       // Minutos sin actividad tras los que se cierra la sesión.
       inactividad_minutos: number;
@@ -597,6 +602,8 @@ export type FichaPersona = {
   persona: {
     id: string;
     nombre: string;
+    foto: string | null; // la foto de perfil
+    sexo: string; // "M", "F" o ""
     documento: string; // "V-12345678"
     fecha_nacimiento: string | null;
     edad: number | null;

@@ -24,12 +24,13 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.signals import user_logged_in, user_logged_out, user_login_failed
 from django.db.models import ForeignKey
 from django.db.models.signals import m2m_changed, post_delete, post_save, pre_save
+from django.utils import timezone
 
 _contexto = contextvars.ContextVar("auditoria", default={"usuario": None, "ip": None,
                                                           "activa": True})
 
 # Ni se audita a sí misma ni las preferencias de pantalla de cada usuario.
-EXCLUIDOS = {"auditoria", "preferencias"}
+EXCLUIDOS = {"auditoria", "preferencias", "fotopersona"}
 # Campos cuyo valor no se copia: solo se anota que cambiaron.
 CONFIDENCIALES = {"datos_sensibles", "salud_alimentacion", "contacto_emergencia", "password"}
 # Campos que cambian solos y no dicen nada.
@@ -136,6 +137,8 @@ def _valor(obj, campo):
             return str(crudo)
     if campo.choices:
         return str(dict(campo.flatchoices).get(crudo, crudo))
+    if campo.name == "foto_actualizada":
+        return "Foto del " + timezone.localtime(crudo).strftime("%d/%m/%Y %H:%M")
     return _simple(crudo)
 
 

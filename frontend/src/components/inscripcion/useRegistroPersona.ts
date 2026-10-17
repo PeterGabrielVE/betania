@@ -2,12 +2,20 @@
 // defecto), la parroquia del retiro, buscar a la persona por su documento y
 // avisar si ya está en ese retiro.
 import { api, type Pagina, type Registro } from "@/api/client";
+import { guardarFoto, type CambioFoto } from "@/components/common/fotos";
 import { useEffect, useRef, useState } from "react";
 import type { FieldValues, UseFormReturn } from "react-hook-form";
 import type { Lugar } from "./Campos";
 import { datosDePersona, normalizarDocumento } from "./esquemaPersona";
 
 export type Para = "caminante" | "servidor";
+
+// La foto de perfil en el formulario: la guardada y lo que se eligió.
+export type FotoDelRegistro = {
+  actual: string | null;
+  cambio: CambioFoto;
+  setCambio: (cambio: CambioFoto) => void;
+};
 
 // Si la persona ya está en el retiro (inscrita o en el equipo), por qué no
 // puede registrarse otra vez; null si puede.
@@ -66,6 +74,8 @@ export function useRegistroPersona<T extends FieldValues>(
   // Persona ya guardada (encontrada por documento o nombre, o creada en un
   // intento anterior).
   const [persona, setPersona] = useState<Registro | null>(null);
+  // Lo que se eligió para la foto de perfil (se guarda después de la persona).
+  const [cambioFoto, setCambioFoto] = useState<CambioFoto>({});
   const personaElegida = useRef(false);
   const [aviso, setAviso] = useState("");
   const [error, setError] = useState("");
@@ -92,6 +102,7 @@ export function useRegistroPersona<T extends FieldValues>(
     try {
       const registro = await api<Registro>(`/personas/${id}/`);
       setPersona(registro);
+      setCambioFoto({});
       personaElegida.current = true;
       const valores = { ...datosDePersona(registro), ...datosExtra(registro) };
       for (const [campo, valor] of Object.entries(valores)) {
@@ -108,6 +119,7 @@ export function useRegistroPersona<T extends FieldValues>(
   const olvidarPersona = (conservar: string[] = []) => {
     const habia = personaElegida.current;
     setPersona(null);
+    if (habia) setCambioFoto({});
     personaElegida.current = false;
     if (habia) {
       for (const [campo, valor] of Object.entries(vaciar(venezuela))) {
@@ -178,10 +190,33 @@ export function useRegistroPersona<T extends FieldValues>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Guarda la foto elegida de la persona ya guardada. Si falla, la persona
+  // queda guardada (setPersona) y al reintentar no se duplica.
+  const guardarFotoDe = async (guardada: Registro) => {
+    try {
+      const foto = await guardarFoto(guardada.id, cambioFoto);
+      if (foto !== undefined) setPersona({ ...guardada, foto });
+      setCambioFoto({});
+    } catch (e) {
+      throw new Error(
+        `Los datos de la persona se guardaron, pero no la foto: ${(e as Error).message}`,
+        { cause: e },
+      );
+    }
+  };
+
+  const foto: FotoDelRegistro = {
+    actual: (persona?.foto as string | null | undefined) ?? null,
+    cambio: cambioFoto,
+    setCambio: setCambioFoto,
+  };
+
   return {
     paises,
     venezuela,
     persona,
+    foto,
+    guardarFoto: guardarFotoDe,
     setPersona,
     aviso,
     setAviso,

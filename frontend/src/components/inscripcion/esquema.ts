@@ -48,6 +48,12 @@ export function sexoDelRetiro(etiqueta = ""): Sexo | undefined {
   if (/hombre/i.test(etiqueta)) return "hombre";
   return undefined;
 }
+// El sexo de la persona que sugiere el retiro: "M", "F" o undefined.
+export function sexoSugerido(etiqueta = ""): string | undefined {
+  const sexo = sexoDelRetiro(etiqueta);
+  return sexo === "hombre" ? "M" : sexo === "mujer" ? "F" : undefined;
+}
+
 export function relacionesFamiliar(sexo?: Sexo) {
   const pareja =
     sexo === "hombre"

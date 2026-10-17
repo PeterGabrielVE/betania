@@ -87,7 +87,9 @@ def _persona(user):
     usuario = _usuario_de(user)
     if usuario is None:
         return None
-    return {"id": usuario.persona_id, "nombre": str(usuario.persona)}
+    persona = usuario.persona
+    return {"id": persona.pk, "nombre": str(persona), "foto": persona.foto_url,
+            "sexo": persona.sexo}
 
 
 def _roles(user):

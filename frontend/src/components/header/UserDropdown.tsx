@@ -1,3 +1,4 @@
+import Avatar from "@/components/common/Avatar";
 import { useAuth } from "@/context/AuthContext";
 import { TaskIcon, UserCircleIcon, UserIcon } from "@/icons";
 import { useEffect, useState } from "react";
@@ -69,9 +70,19 @@ export default function UserDropdown() {
         aria-expanded={isOpen}
         aria-haspopup="menu"
       >
-        <span className="me-3 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-50 font-semibold text-brand-500 uppercase dark:bg-brand-500/15 dark:text-brand-400">
-          {nombre.charAt(0)}
-        </span>
+        {persona ? (
+          <Avatar
+            foto={persona.foto}
+            sexo={persona.sexo}
+            nombre={persona.nombre}
+            tamano="md"
+            className="me-3"
+          />
+        ) : (
+          <span className="me-3 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-50 font-semibold text-brand-500 uppercase dark:bg-brand-500/15 dark:text-brand-400">
+            {nombre.charAt(0)}
+          </span>
+        )}
 
         <span className="me-1 hidden max-w-40 truncate text-theme-sm font-medium sm:block">
           {nombre}

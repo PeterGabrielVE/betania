@@ -15,6 +15,7 @@ import {
   datosDePersona,
   pasosPara,
   sexoDelRetiro,
+  sexoSugerido,
   valoresIniciales,
   type Valores,
 } from "@/components/inscripcion/esquema";
@@ -218,6 +219,12 @@ export default function InscribirCaminante() {
       return;
     }
     try {
+      await registro.guardarFoto(guardada);
+    } catch (err) {
+      registro.setError((err as Error).message);
+      return;
+    }
+    try {
       // 2. Su inscripción al retiro (o los cambios, si se edita).
       const inscripcion = await api<Registro>(
         editando ? `/inscripciones/${editando}/` : "/inscripciones/",
@@ -278,7 +285,12 @@ export default function InscribirCaminante() {
       />
     ),
     personales: (
-      <PasoPersonales sensibles={sensibles} paises={registro.paises} />
+      <PasoPersonales
+        sensibles={sensibles}
+        paises={registro.paises}
+        foto={registro.foto}
+        sexoSugerido={sexoSugerido(etiquetas.retiro)}
+      />
     ),
     familia: <PasoFamilia />,
     salud: <PasoSalud />,

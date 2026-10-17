@@ -137,7 +137,7 @@ export default function EditarPersona() {
   const guardar = async (v: Valores) => {
     registro.setError("");
     try {
-      await api<Registro>(`/personas/${persona.id}/`, {
+      const guardada = await api<Registro>(`/personas/${persona.id}/`, {
         method: "PATCH",
         body: cuerpoPersona(
           v,
@@ -146,6 +146,7 @@ export default function EditarPersona() {
           sensibles ? paresFamilia(v) : [],
         ),
       });
+      await registro.guardarFoto(guardada);
       salir();
     } catch (err) {
       if (err instanceof ApiError) {
@@ -183,7 +184,11 @@ export default function EditarPersona() {
       </Grupo>
     ),
     personales: (
-      <PasoPersonales sensibles={sensibles} paises={registro.paises} />
+      <PasoPersonales
+        sensibles={sensibles}
+        paises={registro.paises}
+        foto={registro.foto}
+      />
     ),
     familia: <PasoFamilia />,
     confirmar: (

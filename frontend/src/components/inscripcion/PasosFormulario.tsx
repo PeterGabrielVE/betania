@@ -228,10 +228,13 @@ export function PasoSalud() {
   );
 }
 
-// `sexo`: el del caminante (por el tipo de retiro), para ofrecer "Esposa" o
-// "Esposo"; sin saberlo, ambos.
+// Para ofrecer "Esposa" o "Esposo": el sexo indicado en los datos personales
+// o, si no, `sexo` (el del tipo de retiro); sin saberlo, ambos.
 export function PasoContactos({ sexo }: { sexo?: Sexo }) {
-  const grupos = relacionesFamiliar(sexo);
+  const indicado = useWatch({ name: "sexo" }) as string | undefined;
+  const grupos = relacionesFamiliar(
+    indicado === "M" ? "hombre" : indicado === "F" ? "mujer" : sexo,
+  );
   return (
     <div className="space-y-6">
       <Grupo titulo="Persona a quien llamar">

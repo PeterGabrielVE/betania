@@ -83,7 +83,7 @@ MODULOS = [
         "personas", Persona, "Personas", "persona", PERSONAS,
         campos=["tipo_documento", "documento", "primer_nombre", "segundo_nombre",
                 "primer_apellido", "segundo_apellido", "parroquia", "fecha_nacimiento",
-                "telefono", "email", "pais", "estado", "ciudad", "estado_texto",
+                "sexo", "telefono", "email", "pais", "estado", "ciudad", "estado_texto",
                 "ciudad_texto", "datos_sensibles"],
         lista=["nombre", "documento_completo", "telefono", "procedencia",
                "fecha_nacimiento", "parroquia", "creado"],
@@ -105,7 +105,7 @@ MODULOS = [
         secciones={
             _DATOS: ["tipo_documento", "documento", "primer_nombre", "segundo_nombre",
                      "primer_apellido", "segundo_apellido", "parroquia", "fecha_nacimiento",
-                     "telefono", "email"],
+                     "sexo", "telefono", "email"],
             _UBICACION: ["pais", "estado", "ciudad", "estado_texto", "ciudad_texto"],
         },
         subcampos={

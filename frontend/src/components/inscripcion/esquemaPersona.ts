@@ -49,6 +49,11 @@ export const celular = texto.superRefine((v, ctx) => {
   if (mensaje) ctx.addIssue({ code: "custom", message: mensaje });
 });
 
+export const SEXOS = [
+  { valor: "M", etiqueta: "Masculino" },
+  { valor: "F", etiqueta: "Femenino" },
+];
+
 export const TIPOS_DOCUMENTO = [
   { valor: "V", etiqueta: "Cédula venezolana (V)" },
   { valor: "E", etiqueta: "Cédula de extranjero (E)" },
@@ -96,6 +101,9 @@ export const camposPersona = {
       `Debe tener al menos ${EDAD_MINIMA} años.`,
     )
     .refine((v) => edad(v) <= 100, "Revisa la fecha de nacimiento."),
+  // Para el avatar por defecto; en un retiro de hombres o de mujeres viene
+  // puesto (ver sexoDeRetiro).
+  sexo: obligatorio("Indica el sexo."),
   // Persona.telefono es el celular, el teléfono principal.
   telefono: obligatorio("Escribe el celular.").pipe(celular),
   email: correo,
@@ -166,6 +174,7 @@ export const ETIQUETAS_PERSONA: Record<keyof ValoresPersona, string> = {
   primer_apellido: "Primer apellido",
   segundo_apellido: "Segundo apellido",
   fecha_nacimiento: "Fecha de nacimiento",
+  sexo: "Sexo",
   telefono: "Celular",
   email: "Correo",
   pais: "País",
@@ -185,6 +194,7 @@ export const PASO_PERSONALES: (keyof ValoresPersona)[] = [
   "primer_apellido",
   "segundo_apellido",
   "fecha_nacimiento",
+  "sexo",
   "ocupacion",
   "telefono",
   "telefono_casa",
@@ -230,6 +240,7 @@ export function datosDePersona(persona: Registro): Partial<ValoresPersona> {
     primer_apellido: comoTexto(persona.primer_apellido),
     segundo_apellido: comoTexto(persona.segundo_apellido),
     fecha_nacimiento: comoTexto(persona.fecha_nacimiento),
+    sexo: comoTexto(persona.sexo),
     telefono: normalizarCelular(persona.telefono),
     email: comoTexto(persona.email),
     parroquia: comoTexto(persona.parroquia),
@@ -280,6 +291,7 @@ export function cuerpoPersona(
     segundo_apellido: v.segundo_apellido,
     parroquia: v.parroquia,
     fecha_nacimiento: v.fecha_nacimiento || null,
+    sexo: v.sexo,
     telefono: v.telefono,
     email: v.email,
     pais: v.pais || null,

@@ -31,6 +31,7 @@ import {
   PasoServicio,
 } from "@/components/inscripcion/PasosServidor";
 import Resumen from "@/components/inscripcion/Resumen";
+import { sexoSugerido } from "@/components/inscripcion/esquema";
 import { useAsistente } from "@/components/inscripcion/useAsistente";
 import {
   conflictoEnRetiro,
@@ -224,6 +225,12 @@ export default function RegistrarServidor() {
       errorDeApi(err, campoDePersona);
       return;
     }
+    try {
+      await registro.guardarFoto(guardada);
+    } catch (err) {
+      registro.setError((err as Error).message);
+      return;
+    }
     let participacion: Registro;
     try {
       // 2. Su lugar en el equipo del retiro (o los cambios, si se edita).
@@ -352,7 +359,12 @@ export default function RegistrarServidor() {
       />
     ),
     personales: (
-      <PasoPersonales sensibles={sensibles} paises={registro.paises} />
+      <PasoPersonales
+        sensibles={sensibles}
+        paises={registro.paises}
+        foto={registro.foto}
+        sexoSugerido={sexoSugerido(etiquetas.retiro)}
+      />
     ),
     servicio: <PasoServicio onAreas={setAreas} />,
     disponibilidad: <PasoDisponibilidad />,

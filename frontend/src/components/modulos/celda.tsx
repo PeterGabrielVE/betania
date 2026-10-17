@@ -1,15 +1,38 @@
 import type { Campo, Registro } from "@/api/client";
+import Avatar from "@/components/common/Avatar";
 import Telefono from "@/components/common/Telefono";
 import Badge from "@/components/ui/badge/Badge";
 import { FilePdfIcon } from "@/icons";
 import { colorEstado, dinero, fecha } from "@/utils/formato";
 
+// Una persona con su avatar (la foto o la silueta según el sexo).
+function conAvatar(nombre: string, foto: unknown, sexo: unknown) {
+  return (
+    <span className="flex items-center gap-2.5">
+      <Avatar
+        foto={foto as string | null}
+        sexo={sexo as string}
+        nombre={nombre}
+        tamano="xs"
+      />
+      <span className="min-w-0">{nombre}</span>
+    </span>
+  );
+}
+
 // Lo que se muestra de un campo en un listado (tabla o tarjeta).
 export function celda(campo: Campo, fila: Registro): React.ReactNode {
   const valor = fila[campo.nombre];
+  // La API manda <campo>_foto en las relaciones con una persona.
+  const fotoFk = `${campo.nombre}_foto`;
   switch (campo.tipo) {
-    case "fk":
-      return (fila[`${campo.nombre}_etiqueta`] as string) || "—";
+    case "fk": {
+      const etiqueta = (fila[`${campo.nombre}_etiqueta`] as string) || "";
+      if (!etiqueta) return "—";
+      return fotoFk in fila
+        ? conAvatar(etiqueta, fila[fotoFk], fila[`${campo.nombre}_sexo`])
+        : etiqueta;
+    }
     case "opcion": {
       if (valor === null || valor === "") return "—";
       return (
@@ -50,6 +73,9 @@ export function celda(campo: Campo, fila: Registro): React.ReactNode {
       );
     default:
       if (valor === null || valor === "" || valor === undefined) return "—";
+      // El nombre en el listado de personas, con su avatar.
+      if (campo.nombre === "nombre" && "foto" in fila)
+        return conAvatar(String(valor), fila.foto, fila.sexo);
       // Teléfonos: con su botón para copiarlo.
       if (campo.nombre === "telefono")
         return <Telefono numero={String(valor)} />;

@@ -20,6 +20,7 @@ from rest_framework.response import Response
 from django.conf import settings
 
 from ..acceso import ambito_fijo
+from ..models import Persona
 from ..exportar import FORMATOS, MAX_FILAS, Dinero, descargar
 from .sesion import _preferencias_json
 from .modulos import AYUDAS, ETIQUETAS, MODULOS, POR_MODELO
@@ -160,7 +161,14 @@ class ModuloSerializer(serializers.ModelSerializer):
         # Texto legible de cada relación, para tablas y selectores.
         for nombre in self.modulo.fks:
             tiene = getattr(obj, f"{nombre}_id") is not None
-            datos[f"{nombre}_etiqueta"] = str(getattr(obj, nombre)) if tiene else ""
+            relacionado = getattr(obj, nombre) if tiene else None
+            datos[f"{nombre}_etiqueta"] = str(relacionado) if tiene else ""
+            # Una persona va con su avatar: la foto o, sin ella, el sexo.
+            if isinstance(relacionado, Persona):
+                datos[f"{nombre}_foto"] = relacionado.foto_url
+                datos[f"{nombre}_sexo"] = relacionado.sexo
+        if isinstance(obj, Persona):
+            datos["foto"] = obj.foto_url
         for nombre, extra in self._extras.items():
             datos[nombre] = extra.calcular(obj)
         return datos

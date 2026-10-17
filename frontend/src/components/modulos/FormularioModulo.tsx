@@ -1,4 +1,6 @@
 import { api, ApiError, type Modulo, type Registro } from "@/api/client";
+import FotoPerfil from "@/components/common/FotoPerfil";
+import { guardarFoto, type CambioFoto } from "@/components/common/fotos";
 import Button from "@/components/ui/button/Button";
 import { useState } from "react";
 import CamposModulo from "./CamposModulo";
@@ -24,6 +26,13 @@ export default function FormularioModulo({
   const [errores, setErrores] = useState<Record<string, string[]>>({});
   const [general, setGeneral] = useState("");
   const [enviando, setEnviando] = useState(false);
+  // Personas: la foto de perfil, que se sube después de guardar los datos.
+  const conFoto = modulo.slug === "personas";
+  const [cambioFoto, setCambioFoto] = useState<CambioFoto>({});
+  // Lo ya creado en un intento anterior (se guardó, pero falló la foto): al
+  // reintentar se edita en vez de crear otro.
+  const [creado, setCreado] = useState<Registro | null>(null);
+  const existente = registro ?? creado;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,7 +41,7 @@ export default function FormularioModulo({
     const { cuerpo, errores: locales } = cuerpoDe(
       modulo,
       estado.valores,
-      registro,
+      existente,
     );
     setErrores(locales);
     if (Object.keys(locales).length) return;
@@ -40,9 +49,21 @@ export default function FormularioModulo({
     setEnviando(true);
     try {
       const guardado = await api<Registro>(
-        registro ? `/${modulo.slug}/${registro.id}/` : `/${modulo.slug}/`,
-        { method: registro ? "PATCH" : "POST", body: cuerpo },
+        existente ? `/${modulo.slug}/${existente.id}/` : `/${modulo.slug}/`,
+        { method: existente ? "PATCH" : "POST", body: cuerpo },
       );
+      if (conFoto) {
+        setCreado(guardado);
+        try {
+          const foto = await guardarFoto(guardado.id, cambioFoto);
+          if (foto !== undefined) guardado.foto = foto;
+        } catch (err) {
+          setGeneral(
+            `Los datos se guardaron, pero no la foto: ${(err as Error).message}`,
+          );
+          return;
+        }
+      }
       onGuardado(guardado);
     } catch (err) {
       if (err instanceof ApiError) {
@@ -61,6 +82,17 @@ export default function FormularioModulo({
       <h3 className="mb-6 text-xl font-semibold text-gray-800 dark:text-white/90">
         {registro ? "Editar" : "Agregar"} {modulo.singular}
       </h3>
+      {conFoto && (
+        <div className="mb-6">
+          <FotoPerfil
+            actual={(existente?.foto as string | null | undefined) ?? null}
+            sexo={estado.valores.sexo as string | undefined}
+            nombre={existente?.etiqueta}
+            cambio={cambioFoto}
+            onCambio={setCambioFoto}
+          />
+        </div>
+      )}
       <CamposModulo
         modulo={modulo}
         estado={estado}

@@ -727,6 +727,8 @@ def ficha_persona(request, pk):
     datos = {
         "id": persona.pk,
         "nombre": persona.nombre,
+        "foto": persona.foto_url,
+        "sexo": persona.sexo,
         "documento": persona.documento_completo,
         "fecha_nacimiento": persona.fecha_nacimiento,
         "edad": _edad(persona.fecha_nacimiento, hoy),

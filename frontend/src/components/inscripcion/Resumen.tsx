@@ -8,6 +8,7 @@ import type { Paso } from "./esquema";
 import {
   normalizarDocumento,
   OTRA_CIUDAD,
+  SEXOS,
   TIPOS_DOCUMENTO,
 } from "./esquemaPersona";
 
@@ -58,6 +59,9 @@ export default function Resumen({
     if (campo in lugares) return lugares[campo];
     if (campo === "tipo_documento") {
       return TIPOS_DOCUMENTO.find((t) => t.valor === v)?.etiqueta ?? String(v);
+    }
+    if (campo === "sexo") {
+      return SEXOS.find((s) => s.valor === v)?.etiqueta ?? String(v);
     }
     if (campo === "documento") return normalizarDocumento(String(v));
     if (campo === "fecha_nacimiento") return fecha(String(v));

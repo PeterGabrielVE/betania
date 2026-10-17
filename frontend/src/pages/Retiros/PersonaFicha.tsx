@@ -3,7 +3,11 @@ import { EsqueletoFicha } from "@/components/estados/Esqueleto";
 import { type FichaPersona } from "@/api/client";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
+import Avatar from "@/components/common/Avatar";
+import { guardarFoto, problemaFoto } from "@/components/common/fotos";
 import Telefono from "@/components/common/Telefono";
+import Tooltip from "@/components/ui/tooltip/Tooltip";
+import { CamaraIcon } from "@/icons";
 import {
   claseBoton,
   claseEnlace,
@@ -15,7 +19,7 @@ import Badge from "@/components/ui/badge/Badge";
 import { useAuth } from "@/context/AuthContext";
 import { useDatosVivos } from "@/hooks/useDatosVivos";
 import { colorEstado, dinero, fecha } from "@/utils/formato";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link, useParams } from "react-router";
 
 const claseVacio = "text-sm text-gray-500 dark:text-gray-400";
@@ -95,6 +99,84 @@ const SACRAMENTOS: [string, string][] = [
   ["uncion", "Unción"],
 ];
 
+// La foto de la ficha; quien puede editar a la persona la cambia ahí mismo.
+function FotoFicha({
+  persona,
+  puedeCambiar,
+  onCambiada,
+}: {
+  persona: FichaPersona["persona"];
+  puedeCambiar: boolean;
+  onCambiada: () => void;
+}) {
+  const entrada = useRef<HTMLInputElement>(null);
+  const [subiendo, setSubiendo] = useState(false);
+  const [error, setError] = useState("");
+  const avatar = (
+    <Avatar
+      foto={persona.foto}
+      sexo={persona.sexo}
+      nombre={persona.nombre}
+      tamano="lg"
+    />
+  );
+  if (!puedeCambiar) return avatar;
+
+  const alElegir = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const archivo = e.target.files?.[0];
+    e.target.value = "";
+    if (!archivo) return;
+    const problema = problemaFoto(archivo);
+    setError(problema ?? "");
+    if (problema) return;
+    setSubiendo(true);
+    try {
+      await guardarFoto(persona.id, { archivo });
+      onCambiada();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSubiendo(false);
+    }
+  };
+
+  return (
+    <div className="shrink-0 text-center">
+      <Tooltip texto={persona.foto ? "Cambiar foto" : "Subir foto"}>
+        {(id) => (
+          <button
+            type="button"
+            className="group relative block rounded-full focus:outline-hidden focus-visible:ring-3 focus-visible:ring-brand-500/30"
+            onClick={() => entrada.current?.click()}
+            disabled={subiendo}
+            aria-describedby={id}
+          >
+            {avatar}
+            <span className="absolute -end-0.5 -bottom-0.5 flex size-7 items-center justify-center rounded-full border-2 border-white bg-brand-500 text-white group-hover:bg-brand-600 dark:border-gray-900">
+              <CamaraIcon className="size-3.5" aria-hidden="true" />
+            </span>
+            {subiendo && (
+              <span className="absolute inset-0 animate-pulse rounded-full bg-white/50 dark:bg-gray-900/50" />
+            )}
+          </button>
+        )}
+      </Tooltip>
+      {error && (
+        <p role="alert" className="mt-1 max-w-28 text-theme-xs text-error-500">
+          {error}
+        </p>
+      )}
+      <input
+        ref={entrada}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={alElegir}
+      />
+    </div>
+  );
+}
+
 // Todo lo de una persona en una pantalla: sus datos, sus retiros como
 // caminante y como servidor (con sus áreas), a quién invitó, sus tareas y su
 // acceso al sistema.
@@ -118,13 +200,6 @@ export default function PersonaFicha() {
   const sensibles = persona.datos_sensibles;
   const texto = (clave: string) =>
     sensibles?.[clave] ? String(sensibles[clave]) : "";
-  const iniciales = persona.nombre
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0])
-    .join("")
-    .toUpperCase();
 
   return (
     <>
@@ -137,9 +212,11 @@ export default function PersonaFicha() {
       {/* Encabezado: quién es y qué se puede hacer */}
       <div className={`${claseTarjeta} mb-6`}>
         <div className="flex flex-wrap items-start gap-5">
-          <span className="flex size-16 shrink-0 items-center justify-center rounded-full bg-brand-50 text-xl font-semibold text-brand-500 dark:bg-brand-500/15 dark:text-brand-400">
-            {iniciales}
-          </span>
+          <FotoFicha
+            persona={persona}
+            puedeCambiar={puede("personas", "puede_cambiar")}
+            onCambiada={actualizar}
+          />
           <div className="min-w-0 flex-1">
             <h2 className="text-title-sm font-bold text-gray-800 dark:text-white/90">
               {persona.nombre}

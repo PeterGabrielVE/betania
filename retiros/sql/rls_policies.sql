@@ -39,6 +39,14 @@ DROP POLICY IF EXISTS persona_tenant ON retiros_persona;
 CREATE POLICY persona_tenant ON retiros_persona
   USING (parroquia_visible(parroquia_id));
 
+-- FOTO DE PERFIL: la ve quien ve a la persona.
+ALTER TABLE retiros_fotopersona ENABLE ROW LEVEL SECURITY;
+ALTER TABLE retiros_fotopersona FORCE  ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS fotopersona_tenant ON retiros_fotopersona;
+CREATE POLICY fotopersona_tenant ON retiros_fotopersona
+  USING (EXISTS (SELECT 1 FROM retiros_persona p
+                 WHERE p.id = persona_id AND parroquia_visible(p.parroquia_id)));
+
 -- RETIRO
 ALTER TABLE retiros_retiro ENABLE ROW LEVEL SECURITY;
 ALTER TABLE retiros_retiro FORCE  ROW LEVEL SECURITY;

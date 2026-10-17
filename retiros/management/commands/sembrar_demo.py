@@ -34,11 +34,11 @@ from retiros.models import (
 DIOCESIS = "Arquidiócesis de Caracas (demo)"
 PARROQUIA = "San José (demo)"
 CLAVE = "demo-betania-123"
-# Cuentas de la demo: usuario, nombre, rol y ámbito ("retiro" o "parroquia").
+# Cuentas de la demo: usuario, nombre, sexo, rol y ámbito ("retiro" o "parroquia").
 CUENTAS = [
-    ("demo.coordinador", "Alberto José Marín Paredes", RolSistema.COORD_RETIRO, "retiro"),
-    ("demo.logistica", "Beatriz Elena Sosa Rangel", RolSistema.LOGISTICA, "retiro"),
-    ("demo.tesoreria", "Gustavo Adolfo Pinto Lugo", RolSistema.TESORERIA, "parroquia"),
+    ("demo.coordinador", "Alberto José Marín Paredes", "M", RolSistema.COORD_RETIRO, "retiro"),
+    ("demo.logistica", "Beatriz Elena Sosa Rangel", "F", RolSistema.LOGISTICA, "retiro"),
+    ("demo.tesoreria", "Gustavo Adolfo Pinto Lugo", "M", RolSistema.TESORERIA, "parroquia"),
 ]
 # Bolívares por dólar para los pagos en bolívares (así no consulta el BCV).
 TASA_VES = Decimal("145.30")
@@ -58,24 +58,25 @@ ESTADOS_CAMINANTE = (["confirmada"] * 12 + ["aceptada"] * 5 + ["solicitada"] * 3
                      + ["lista_espera"] * 2 + ["cancelada"] * 2)
 MOTIVOS = ["Viaje de trabajo", "Enfermedad de un familiar", "Turno en el trabajo", ""]
 
-# Servidores del retiro: nombre, área, tipo y estado de asistencia. Los primeros
-# cinco hicieron el retiro anterior como caminantes.
+# Servidores del retiro (de hombres, así que hombres): nombre, área, tipo y
+# estado de asistencia. Los primeros cinco hicieron el retiro anterior como
+# caminantes.
 SERVIDORES = [
-    ("Ana Lucía Mora Gil", "Coordinación / Dirección", "coordinador", "confirmado"),
-    ("Carmen Rivas Toro", "Registro / Inscripciones", "servidor", "confirmado"),
-    ("Rosa María Méndez Lara", "Comedor / Mesas", "servidor", "confirmado"),
-    ("Elena Campos Urbina", "Comedor / Mesas", "servidor", "por_confirmar"),
-    ("Laura Peña Acosta", "Orden y Limpieza", "servidor", "confirmado"),
-    ("Marta Salas Villegas", "Orden y Limpieza", "servidor", "por_confirmar"),
-    ("Sofía Ríos Mejías", "Palancas / Correspondencia", "servidor", "confirmado"),
-    ("Teresa Gil Romero", "Intercesión / Capilla", "servidor", "confirmado"),
-    ("Patricia Luna Esparza", "Intercesión / Capilla", "servidor", "por_confirmar"),
-    ("Isabel Cruz Márquez", "Música / Coro", "servidor", "confirmado"),
+    ("Francisco Javier Mora Gil", "Coordinación / Dirección", "coordinador", "confirmado"),
+    ("Carlos Rivas Toro", "Registro / Inscripciones", "servidor", "confirmado"),
+    ("Ramón Méndez Lara", "Comedor / Mesas", "servidor", "confirmado"),
+    ("Ernesto Campos Urbina", "Comedor / Mesas", "servidor", "por_confirmar"),
+    ("Luis Peña Acosta", "Orden y Limpieza", "servidor", "confirmado"),
+    ("Mario Salas Villegas", "Orden y Limpieza", "servidor", "por_confirmar"),
+    ("Simón Ríos Mejías", "Palancas / Correspondencia", "servidor", "confirmado"),
+    ("Tobías Gil Romero", "Intercesión / Capilla", "servidor", "confirmado"),
+    ("Pablo Luna Esparza", "Intercesión / Capilla", "servidor", "por_confirmar"),
+    ("Ignacio Cruz Márquez", "Música / Coro", "servidor", "confirmado"),
     ("Raúl Ibarra Fuentes", "Música / Coro", "servidor", "confirmado"),
     ("Tomás Vera Cordero", "Logística / Infraestructura", "servidor", "confirmado"),
     ("Iván Paz Hidalgo", "Logística / Infraestructura", "servidor", "por_confirmar"),
     ("Hugo Lara Becerra", "Logística / Infraestructura", "servidor", "cancelado"),
-    ("Mónica Andrea Rangel Soto", None, "servidor", "por_confirmar"),
+    ("Moisés Andrés Rangel Soto", None, "servidor", "por_confirmar"),
 ]
 OPERADORAS = ["0412", "0414", "0416", "0422", "0424", "0426"]
 
@@ -128,7 +129,7 @@ class Command(BaseCommand):
         self.stdout.write("Demo anterior borrada.")
 
     # ------------------------------------------------------------------ #
-    def persona(self, nombre, nacimiento, *, extranjera=False, familia=True):
+    def persona(self, nombre, nacimiento, sexo="M", *, extranjera=False, familia=True):
         """Una persona con documento, celular y procedencia (Caracas y alrededores)."""
         self.n += 1
         r = self.random
@@ -148,10 +149,12 @@ class Command(BaseCommand):
                 "parroquia_asiste": PARROQUIA.replace(" (demo)", ""),
             })
             if civil in ("Casado", "Unión libre"):
-                datos["pareja_nombre"] = r.choice(["María", "Carolina", "Yelitza", "Andreína"])
+                datos["pareja_nombre"] = r.choice(["María", "Carolina", "Yelitza", "Andreína"]
+                                                  if sexo == "M" else
+                                                  ["José", "Luis", "Carlos", "Rafael"])
                 datos["pareja_celular"] = self.celular()
         p = Persona(parroquia=self.parroquia, nombre=nombre, fecha_nacimiento=nacimiento,
-                    telefono=self.celular(), datos_sensibles=datos,
+                    sexo=sexo, telefono=self.celular(), datos_sensibles=datos,
                     email=f"{sin_tildes(nombre.split()[0]).lower()}.{self.n}@example.com")
         if extranjera:
             p.tipo_documento = Persona.TipoDocumento.PASAPORTE
@@ -282,7 +285,7 @@ class Command(BaseCommand):
         for n, nombre in enumerate(["Yusmary Carolina Ortega Páez", "Daniela Fernández Rivas",
                                     "Gabriela Inés Morillo Cedeño", "Andreína Torres Lugo",
                                     "María Fernanda Quintero Sanz"]):
-            persona = self.persona(nombre, self.nacimiento(1975 + n * 4))
+            persona = self.persona(nombre, self.nacimiento(1975 + n * 4), "F")
             Inscripcion.objects.create(retiro=proximo, persona=persona,
                                        estado="solicitada" if n % 2 else "aceptada",
                                        consentimiento_datos=True,
@@ -321,9 +324,9 @@ class Command(BaseCommand):
 
         # Usuarios con rol, para entrar como cada uno.
         User = get_user_model()
-        for usuario, nombre, rol, ambito in CUENTAS:
+        for usuario, nombre, sexo, rol, ambito in CUENTAS:
             cuenta = User.objects.create_user(usuario, password=CLAVE)
-            persona = self.persona(nombre, self.nacimiento(1978), familia=False)
+            persona = self.persona(nombre, self.nacimiento(1978), sexo, familia=False)
             u = Usuario.objects.create(persona=persona, cuenta=cuenta)
             AsignacionRol.objects.create(
                 usuario=u, rol=Rol.objects.get(codigo=rol), **({"retiro": actual} if ambito == "retiro"

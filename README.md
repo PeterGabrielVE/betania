@@ -267,6 +267,23 @@ la puede inscribir en un retiro o registrar como servidor con sus datos ya
 cargados. Se llega desde Personas, Caminantes, Servidores y el panel de un
 retiro.
 
+## Foto de perfil y sexo
+
+Cada persona puede tener **foto de perfil**: se sube (o se toma con la cámara
+del celular) en el paso *Datos personales* al inscribir, registrar un servidor o
+editar, en el formulario de *solo la persona*, o tocando la foto en su ficha.
+Aparece en la ficha, en los listados (Personas, Caminantes, Servidores,
+Usuarios...) y en el menú del usuario. Sin foto se muestra una silueta según el
+**sexo** (masculina, femenina, o neutra si no está indicado).
+
+- El sexo es obligatorio en los formularios por pasos; en un retiro de hombres o
+  de mujeres viene puesto. A los registros que ya existían se les completó con
+  el retiro que hicieron como caminantes (si hicieron de los dos, queda vacío).
+- La foto se guarda recortada en cuadrado de 400 px, en JPEG y sin los datos
+  del teléfono (ubicación, modelo). Va en la base de datos (`FotoPersona`), así
+  la protege el mismo RLS que a la persona y no se pierde en hostings sin disco
+  persistente. Ver: `GET/POST/DELETE /api/personas/<id>/foto/`.
+
 ## Filtros de Personas, Caminantes y Servidores
 
 Además de la búsqueda y los filtros rápidos, estos listados tienen un botón
