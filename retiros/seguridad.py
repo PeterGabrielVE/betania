@@ -115,7 +115,51 @@ def _ingreso(sender, request, user, **kwargs):
     desbloquear(user.get_username())
 
 
+# --------------------------------------------------------------------------- #
+# Cierre por inactividad
+# --------------------------------------------------------------------------- #
+ACTIVIDAD = "ultima_actividad"  # clave en la sesión: segundos desde 1970
+# Las consultas que la app hace sola (actualizar el tablero cada 30 s) llevan
+# este encabezado: no cuentan como actividad del usuario.
+SEGUNDO_PLANO = "HTTP_X_SEGUNDO_PLANO"
+
+
+def inactividad():
+    """Tiempo máximo sin actividad antes de cerrar la sesión."""
+    return timedelta(minutes=getattr(settings, "SESION_INACTIVIDAD_MINUTOS", 15))
+
+
+class InactividadMiddleware:
+    """Cierra la sesión tras SESION_INACTIVIDAD_MINUTOS sin actividad del
+    usuario. La app avisa antes y deja seguir conectado; esto cubre además la
+    pestaña dormida o cerrada. Va después de AuthenticationMiddleware."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        from django.contrib.auth import logout
+
+        user = getattr(request, "user", None)
+        if user is not None and user.is_authenticated:
+            ahora = int(timezone.now().timestamp())
+            ultima = request.session.get(ACTIVIDAD)
+            if ultima and ahora - ultima > inactividad().total_seconds():
+                logout(request)  # la API responderá 401: «tu sesión terminó»
+            elif request.META.get(SEGUNDO_PLANO) != "1":
+                # Se guarda a lo sumo cada 30 s (cada guardado escribe la sesión).
+                if not ultima or ahora - ultima >= 30:
+                    request.session[ACTIVIDAD] = ahora
+        return self.get_response(request)
+
+
+def _actividad_al_entrar(sender, request, user, **kwargs):
+    if request is not None and hasattr(request, "session"):
+        request.session[ACTIVIDAD] = int(timezone.now().timestamp())
+
+
 def conectar():
     """Lo llama RetirosConfig.ready()."""
     user_login_failed.connect(_fallo, dispatch_uid="seguridad_fallo")
     user_logged_in.connect(_ingreso, dispatch_uid="seguridad_ingreso")
+    user_logged_in.connect(_actividad_al_entrar, dispatch_uid="seguridad_actividad")

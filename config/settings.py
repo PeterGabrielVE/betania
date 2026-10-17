@@ -37,6 +37,9 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # Cierra la sesión tras SESION_INACTIVIDAD_MINUTOS sin actividad (antes
+    # del RLS, para que una sesión vencida ya no tenga contexto).
+    "retiros.seguridad.InactividadMiddleware",
     # Fija el contexto de RLS por petición. Debe ir DESPUÉS de Authentication.
     "retiros.middleware.RLSContextMiddleware",
     # Quién hace cada cambio, para la auditoría.
@@ -89,8 +92,10 @@ LIMITE_INTENTOS_IP = int(os.environ.get("LIMITE_INTENTOS_IP", 20))
 VENTANA_INTENTOS_MINUTOS = int(os.environ.get("VENTANA_INTENTOS_MINUTOS", 15))
 BLOQUEO_MINUTOS = int(os.environ.get("BLOQUEO_MINUTOS", 15))
 
-# La sesión vence tras SESION_HORAS sin usar el sistema (se renueva con cada
-# petición) y al cerrar el navegador.
+# La sesión se cierra tras SESION_INACTIVIDAD_MINUTOS sin actividad del
+# usuario (la app pregunta antes si quiere seguir; retiros/seguridad.py), al
+# cerrar el navegador y, como tope, SESION_HORAS después de la última petición.
+SESION_INACTIVIDAD_MINUTOS = int(os.environ.get("SESION_INACTIVIDAD_MINUTOS", 15))
 SESSION_COOKIE_AGE = int(os.environ.get("SESION_HORAS", 8)) * 3600
 SESSION_SAVE_EVERY_REQUEST = True
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True

@@ -295,9 +295,18 @@ está en `retiros/ocr/` (las etiquetas que reconoce, en `planilla.py`).
   no se puede averiguar cuáles hay). Al quedar 2 intentos se avisa, y el
   bloqueo queda en la auditoría. En **Usuarios → llave** se ve el bloqueo y se
   puede quitar. Los límites se ajustan en el `.env` (ver `.env.example`).
-- **Sesión**: se cierra tras 8 horas sin usar el sistema y al cerrar el
-  navegador; al vencer, la app lleva a iniciar sesión y luego vuelve a la
-  misma página. Cambiar la contraseña cierra las demás sesiones abiertas.
+- **Inactividad**: tras 15 minutos sin usar el sistema (ratón, teclado,
+  toques) la sesión se cierra. A los 13 minutos aparece «¿Sigues ahí?» con la
+  cuenta regresiva y los botones *Seguir conectado* y *Cerrar sesión*. Las
+  actualizaciones automáticas del tablero no cuentan como actividad; si se
+  trabaja en un formulario largo sin guardar, la app avisa sola al servidor.
+  La actividad en una pestaña cuenta para todas, y el servidor aplica el mismo
+  límite aunque la pestaña esté dormida. Se ajusta con
+  `SESION_INACTIVIDAD_MINUTOS` en el `.env`.
+- **Sesión**: además se cierra al cerrar el navegador y, como tope, 8 horas
+  después de la última petición; al vencer, la app lleva a iniciar sesión y
+  luego vuelve a la misma página. Cambiar la contraseña cierra las demás
+  sesiones abiertas.
 - **Contraseñas**: al menos 10 caracteres, que no sean solo números, ni
   comunes, ni parecidas al usuario.
 - **Cabeceras**: el sitio no se puede incrustar en otros (contra clickjacking),

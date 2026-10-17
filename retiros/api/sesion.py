@@ -66,6 +66,9 @@ def _usuario_json(user):
         "region": settings.REGION,
         "monedas": [{"valor": v, "etiqueta": e} for v, e in Moneda.choices],
         "preferencias": _preferencias_json(user),
+        # Minutos sin actividad tras los que se cierra la sesión (la app
+        # pregunta antes si se quiere seguir conectado).
+        "inactividad_minutos": int(seguridad.inactividad().total_seconds() // 60),
     }
 
 
@@ -228,3 +231,12 @@ def cambiar_clave(request):
     user.save(update_fields=["password"])
     update_session_auth_hash(request, user)  # que no lo saque de la sesión
     return JsonResponse({"detail": "Contraseña cambiada."})
+
+
+@require_POST
+def actividad(request):
+    """«Sigo aquí»: renueva la actividad de la sesión (lo hace el middleware)."""
+    if not request.user.is_authenticated:
+        return JsonResponse({"detail": "Inicia sesión."}, status=401)
+    return JsonResponse({"inactividad_minutos": int(seguridad.inactividad().total_seconds()
+                                                    // 60)})

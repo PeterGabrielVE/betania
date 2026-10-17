@@ -2,6 +2,7 @@ import {
   api,
   ApiError,
   SESION_VENCIDA,
+  ultimaActividad,
   type Modulo,
   type Preferencias,
   type Sesion,
@@ -22,8 +23,9 @@ type Estado = {
   modulos: Modulo[];
   // Si al abrir la app el sistema no respondió (sin conexión, error 500…).
   errorInicial?: ApiError;
-  // La sesión se cerró sola (venció o cambió la contraseña en otro lado).
-  vencida?: boolean;
+  // La sesión se cerró sola: por inactividad, o venció / se cambió la
+  // contraseña en otro lado ("sesion").
+  vencida?: "sesion" | "inactividad";
 };
 
 type AuthContextType = Estado & {
@@ -33,6 +35,8 @@ type AuthContextType = Estado & {
   refrescar: () => Promise<void>;
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  // La cierra el aviso de inactividad cuando nadie responde.
+  cerrarPorInactividad: () => Promise<void>;
   // Cambia la edición y/o la moneda preferidas (se guardan en el servidor).
   cambiarPreferencias: (datos: {
     retiro?: string | null;
@@ -99,11 +103,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   // sesión (y después vuelve a la página donde estaba).
   useEffect(() => {
     const vencida = () =>
-      setEstado((e) =>
-        e.sesion?.autenticado
-          ? { sesion: { autenticado: false }, modulos: [], vencida: true }
-          : e,
-      );
+      setEstado((e) => {
+        if (!e.sesion?.autenticado) return e;
+        // Si pasó el tiempo sin actividad, fue eso (p. ej. la pestaña quedó
+        // dormida y el aviso no llegó a mostrarse).
+        const limite = e.sesion.inactividad_minutos * 60_000;
+        const inactiva = Date.now() - ultimaActividad() >= limite - 30_000;
+        return {
+          sesion: { autenticado: false },
+          modulos: [],
+          vencida: inactiva ? "inactividad" : "sesion",
+        };
+      });
     window.addEventListener(SESION_VENCIDA, vencida);
     return () => window.removeEventListener(SESION_VENCIDA, vencida);
   }, []);
@@ -131,6 +142,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     setEstado(await cargar(await api<Sesion>("/auth/sesion/")));
   }, []);
 
+  const cerrarPorInactividad = useCallback(async () => {
+    // Otra pestaña pudo cerrarla ya (y rotar el token CSRF): da igual si falla.
+    await api("/auth/logout/", { method: "POST" }).catch(() => undefined);
+    const sesion = await api<Sesion>("/auth/sesion/").catch((): Sesion => ({
+      autenticado: false,
+    }));
+    setEstado({ ...(await cargar(sesion)), vencida: "inactividad" });
+  }, []);
+
   const cambiarPreferencias = useCallback(
     async (datos: { retiro?: string | null; moneda?: string }) => {
       const sesion = await api<Sesion>("/auth/preferencias/", {
@@ -148,6 +168,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         ...estado,
         login,
         logout,
+        cerrarPorInactividad,
         cambiarPreferencias,
         reintentar,
         refrescar,

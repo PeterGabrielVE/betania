@@ -47,6 +47,37 @@ function aError(status: number, datos: unknown): ApiError {
   return new ApiError(status, `Error ${status} al consultar el servidor.`);
 }
 
+// --- Actividad, para el cierre por inactividad (hooks/useInactividad.ts) ---
+// Se guardan en localStorage para que todas las pestañas compartan la misma
+// cuenta: lo que se hace en una cuenta para todas.
+const CLAVE_ACTIVIDAD = "betania:actividad"; // la última vez que el usuario hizo algo
+const CLAVE_SERVIDOR = "betania:servidor"; // la última petición que lo contó
+const enMemoria: Record<string, number> = {};
+
+function leer(clave: string): number {
+  try {
+    const valor = Number(localStorage.getItem(clave));
+    if (valor) return valor;
+  } catch {
+    // Sin localStorage (navegación privada estricta): solo esta pestaña.
+  }
+  return enMemoria[clave] ?? 0;
+}
+
+function guardar(clave: string, valor: number) {
+  enMemoria[clave] = valor;
+  try {
+    localStorage.setItem(clave, String(valor));
+  } catch {
+    // Queda en memoria.
+  }
+}
+
+export const ultimaActividad = () => leer(CLAVE_ACTIVIDAD);
+export const marcarActividad = () => guardar(CLAVE_ACTIVIDAD, Date.now());
+export const ultimaEnServidor = () => leer(CLAVE_SERVIDOR);
+const marcarServidor = () => guardar(CLAVE_SERVIDOR, Date.now());
+
 // status 0: no hubo respuesta (sin conexión o el servidor apagado).
 export const SIN_CONEXION = 0;
 
@@ -54,11 +85,21 @@ export const SIN_CONEXION = 0;
 // cambiar la contraseña) y hay que volver a iniciarla.
 export const SESION_VENCIDA = "betania:sesion-vencida";
 
+// Encabezado de las consultas que la app hace sola (actualizar el tablero cada
+// 30 s): el servidor no las cuenta como actividad del usuario.
+const SEGUNDO_PLANO = "X-Segundo-Plano";
+
 async function pedir(ruta: string, init: RequestInit): Promise<Response> {
   try {
     const res = await fetch(ruta, init);
     if (res.status === 401 && !ruta.startsWith("/api/auth/login")) {
       window.dispatchEvent(new Event(SESION_VENCIDA));
+    } else if (
+      res.status < 500 &&
+      !new Headers(init.headers).has(SEGUNDO_PLANO)
+    ) {
+      // El servidor la contó como actividad (ver hooks/useInactividad.ts).
+      marcarServidor();
     }
     return res;
   } catch {
@@ -74,10 +115,13 @@ export async function api<T>(
   opciones: {
     method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
     body?: unknown;
+    // La pide la app sola, no el usuario: no renueva la sesión.
+    segundoPlano?: boolean;
   } = {},
 ): Promise<T> {
-  const { method = "GET", body } = opciones;
+  const { method = "GET", body, segundoPlano } = opciones;
   const headers: Record<string, string> = { Accept: "application/json" };
+  if (segundoPlano) headers[SEGUNDO_PLANO] = "1";
   if (method !== "GET") {
     headers["Content-Type"] = "application/json";
     headers["X-CSRFToken"] = csrfToken();
@@ -169,6 +213,8 @@ export type Sesion =
       // Su ficha (si la cuenta es de una persona) y sus roles con su ámbito.
       persona: { id: string; nombre: string } | null;
       roles: string[];
+      // Minutos sin actividad tras los que se cierra la sesión.
+      inactividad_minutos: number;
     };
 
 // Lo que el usuario eligió en el encabezado (ver retiros/api/sesion.py).

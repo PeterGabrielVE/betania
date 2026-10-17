@@ -49,8 +49,10 @@ export default function SignInForm() {
               role="status"
               className="mb-5 rounded-lg bg-warning-50 px-4 py-3 text-sm text-warning-700 dark:bg-warning-500/15 dark:text-warning-400"
             >
-              Tu sesión terminó (venció o se cambió la contraseña). Vuelve a
-              iniciar sesión para seguir donde estabas.
+              {vencida === "inactividad"
+                ? "Se cerró tu sesión por inactividad."
+                : "Tu sesión terminó (venció o se cambió la contraseña)."}{" "}
+              Vuelve a iniciar sesión para seguir donde estabas.
             </p>
           )}
           <form onSubmit={handleSubmit}>

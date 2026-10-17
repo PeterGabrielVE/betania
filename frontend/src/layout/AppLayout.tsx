@@ -1,6 +1,7 @@
 import { useAuth } from "@/context/AuthContext";
 import { SidebarProvider, useSidebar } from "@/context/SidebarContext";
 import { cn } from "@/utils";
+import AvisoInactividad from "@/components/auth/AvisoInactividad";
 import ErrorBoundary from "@/components/estados/ErrorBoundary";
 import { Outlet, useLocation } from "react-router";
 import AppHeader from "./AppHeader";
@@ -21,6 +22,8 @@ const LayoutContent: React.FC = () => {
     <div className="min-h-screen xl:flex">
       <AppSidebar />
       <Backdrop />
+      {/* Pregunta si seguir conectado antes de cerrar por inactividad. */}
+      <AvisoInactividad />
 
       <div
         className={cn(

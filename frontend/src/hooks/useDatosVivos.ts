@@ -16,9 +16,10 @@ export function useDatosVivos<T>(ruta: string) {
   }>({});
   const [consultando, setConsultando] = useState(false);
 
+  // segundoPlano: la repite la app sola (no cuenta como actividad del usuario).
   const cargar = useCallback(
-    (vigente: () => boolean = () => true) =>
-      api<T>(ruta)
+    (vigente: () => boolean = () => true, segundoPlano = false) =>
+      api<T>(ruta, { segundoPlano })
         .then((datos) => {
           if (vigente()) setEstado({ ruta, datos, hora: new Date() });
         })
@@ -38,7 +39,7 @@ export function useDatosVivos<T>(ruta: string) {
     const vigente = () => activo;
     cargar(vigente);
     const actualizar = () => {
-      if (!document.hidden) cargar(vigente);
+      if (!document.hidden) cargar(vigente, true);
     };
     const intervalo = setInterval(actualizar, ACTUALIZAR_CADA_MS);
     document.addEventListener("visibilitychange", actualizar);
