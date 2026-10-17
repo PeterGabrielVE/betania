@@ -1942,3 +1942,22 @@ class InactividadTests(Base):
         self.assertEqual(r.status_code, 200)
         self.assertGreater(self.actividad(), int(timezone.now().timestamp()) - 60)
         self.assertEqual(self.client.get("/api/retiros/").status_code, 200)
+
+
+class SaludTests(TestCase):
+    """/api/salud/: lo consulta el cron que mantiene vivo el servidor."""
+
+    def test_responde_sin_sesion(self):
+        r = self.client.get("/api/salud/")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json(), {"estado": "ok"})
+        self.assertEqual(r["Cache-Control"], "no-store")
+        self.assertNotIn("sessionid", r.cookies)
+
+    def test_avisa_si_la_base_no_responde(self):
+        with mock.patch("retiros.api.salud._consultar_base", side_effect=Exception):
+            r = self.client.get("/api/salud/")
+        self.assertEqual(r.status_code, 503)
+
+    def test_solo_get(self):
+        self.assertEqual(self.client.post("/api/salud/").status_code, 405)

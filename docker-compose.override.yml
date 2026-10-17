@@ -9,7 +9,12 @@
 #
 # En producción no se usa: `docker compose -f docker-compose.yml up -d --build`.
 services:
+  # En desarrollo no se levantan solos al abrir Docker Desktop.
+  db:
+    restart: "no"
+
   web:
+    restart: "no"
     volumes:
       - .:/app
     environment:

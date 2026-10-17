@@ -1,0 +1,42 @@
+# Mantiene despierto el servidor publicado: lo consulta cada 10 minutos.
+#
+# Los hostings gratuitos (Render, Koyeb, Railway...) duermen la app tras unos
+# 15 minutos sin visitas, y la primera visita después tarda en abrir. Con esta
+# consulta periódica no llega a dormirse; además, si el servidor no responde, el
+# job falla y GitHub avisa por correo.
+#
+# Para activarlo: en GitHub, Settings > Secrets and variables > Actions >
+# Variables, crea URL_SERVIDOR con la dirección pública (p. ej.
+# https://betania.onrender.com). Sin esa variable el job no hace nada.
+name: Mantener vivo el servidor
+
+on:
+  schedule:
+    # GitHub puede atrasarlo unos minutos; 10 deja margen antes de los 15.
+    - cron: "*/10 * * * *"
+  workflow_dispatch: # para probarlo a mano desde la pestaña Actions
+
+permissions: {}
+
+concurrency:
+  group: mantener-vivo
+  cancel-in-progress: true
+
+jobs:
+  consultar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Consultar /api/salud/
+        env:
+          URL_SERVIDOR: ${{ vars.URL_SERVIDOR }}
+        run: |
+          if [ -z "$URL_SERVIDOR" ]; then
+            echo "::notice::Falta la variable URL_SERVIDOR: no hay a quién consultar."
+            exit 0
+          fi
+          # Si estaba dormido, el arranque puede tardar casi un minuto: se
+          # espera y se reintenta antes de dar el servidor por caído.
+          curl --fail --silent --show-error \
+               --max-time 90 --retry 4 --retry-delay 15 --retry-all-errors \
+               "${URL_SERVIDOR%/}/api/salud/"

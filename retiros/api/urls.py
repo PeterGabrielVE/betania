@@ -1,8 +1,10 @@
 from django.urls import include, path
 
-from . import auditoria, control_pagos, cuentas, ocr, paneles, permisos_rol, sesion, vistas
+from . import (auditoria, control_pagos, cuentas, ocr, paneles, permisos_rol, salud,
+               sesion, vistas)
 
 urlpatterns = [
+    path("salud/", salud.salud),
     path("auth/sesion/", sesion.sesion),
     path("auth/login/", sesion.iniciar_sesion),
     path("auth/logout/", sesion.cerrar_sesion),

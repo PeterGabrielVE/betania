@@ -76,6 +76,27 @@ En producción no se usa ese archivo:
 `docker compose -f docker-compose.yml up -d --build` levanta gunicorn con el
 frontend compilado dentro de la imagen, en el puerto 8000.
 
+### Mantener vivo el servidor
+
+- **Hosting gratuito que se duerme** (Render, Koyeb, Railway...): el workflow
+  `.github/workflows/mantener-vivo.yml` consulta `GET /api/salud/` cada 10
+  minutos, así la app no llega a dormirse y nadie espera el arranque en frío.
+  Para activarlo, crea en GitHub la variable `URL_SERVIDOR` (Settings > Secrets
+  and variables > Actions > Variables) con la dirección pública. Se puede
+  probar a mano desde la pestaña Actions (*Run workflow*). Si el servidor no
+  responde, el job falla y GitHub avisa por correo.
+- **Servidor propio**: `docker-compose.yml` lleva `restart: unless-stopped`, así
+  Docker vuelve a levantar la base y la app si se caen o si se reinicia el
+  equipo. En desarrollo no (lo anula `docker-compose.override.yml`).
+
+`/api/salud/` es público y liviano: responde `{"estado": "ok"}` (o 503 si la
+base de datos no responde) sin abrir sesión ni leer datos; sirve también para
+monitores externos como UptimeRobot.
+
+Ojo: GitHub pausa los workflows programados de un repositorio público tras 60
+días sin commits (se reactivan desde la pestaña Actions), y puede atrasar unos
+minutos cada ejecución.
+
 ## Frontend (React + Tailwind)
 
 Todo el front es una app React 19 + TypeScript + Vite + Tailwind CSS v4 en
