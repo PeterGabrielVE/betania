@@ -19,6 +19,7 @@ urlpatterns = [
     # Deben ir antes del router (que tomaría "importar" por un id).
     path("personas/importar/", cuentas.importar_personas),
     path("usuarios/<uuid:pk>/cuenta/", cuentas.cuenta_usuario),
+    path("usuarios/<uuid:pk>/cuenta/desbloquear/", cuentas.desbloquear_cuenta),
     path("roles/<uuid:pk>/permisos/", permisos_rol.permisos_rol),
     path("auditoria/opciones/", auditoria.opciones),
     path("ocr/planilla/", ocr.leer_planilla),

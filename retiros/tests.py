@@ -1820,3 +1820,86 @@ class SesionVencidaTests(Base):
         cuenta.save()
         self.assertEqual(self.client.get("/api/pagos/").status_code, 401)
         self.assertEqual(self.client.get("/api/auth/cuenta/").status_code, 401)
+
+
+class LimiteDeIntentosTests(Base):
+    """Bloqueo por intentos fallidos y otros refuerzos de seguridad."""
+
+    def setUp(self):
+        super().setUp()
+        self.client.logout()
+        self.ana = User.objects.create_user("ana", password="clave-larga-2027")
+        Usuario.objects.create(persona=self.persona("Ana"), cuenta=self.ana)
+
+    def entrar(self, usuario="ana", clave="clave-larga-2027", ip="10.0.0.1"):
+        return self.client.post("/api/auth/login/", {"username": usuario, "password": clave},
+                                content_type="application/json", REMOTE_ADDR=ip)
+
+    def test_cinco_fallos_bloquean_aunque_luego_acierte(self):
+        from .models import Auditoria
+        for _ in range(3):
+            r = self.entrar(clave="mala")
+        self.assertIn("Te quedan 2 intentos", r.json()["detail"])
+        self.entrar(clave="mala")
+        r = self.entrar(clave="mala")
+        self.assertEqual(r.status_code, 429)
+        r = self.entrar()  # la correcta: igual bloqueado
+        self.assertEqual(r.status_code, 429)
+        self.assertIn("15 minutos", r.json()["detail"])
+        self.assertTrue(Auditoria.objects.filter(accion="bloqueo", usuario_nombre="ana").exists())
+        # Otra cuenta desde otra IP sí puede entrar.
+        User.objects.create_user("luis", password="clave-larga-2027")
+        self.assertEqual(self.entrar("luis", ip="10.0.0.2").status_code, 200)
+
+    def test_un_usuario_que_no_existe_se_bloquea_igual(self):
+        for _ in range(5):
+            r = self.entrar("no.existe", "x")
+        self.assertEqual(r.status_code, 429)  # no revela si existe
+
+    def test_limite_por_ip(self):
+        for n in range(20):
+            self.entrar(f"usuario{n}", "x", ip="10.9.9.9")
+        self.assertEqual(self.entrar(ip="10.9.9.9").status_code, 429)
+        self.assertEqual(self.entrar(ip="10.0.0.3").status_code, 200)
+
+    def test_el_bloqueo_vence_y_entrar_limpia_los_fallos(self):
+        from datetime import timedelta
+
+        from .models import IntentoFallido
+        for _ in range(5):
+            self.entrar(clave="mala")
+        IntentoFallido.objects.update(fecha=timezone.now() - timedelta(minutes=16))
+        self.assertEqual(self.entrar().status_code, 200)
+        self.assertFalse(IntentoFallido.objects.filter(usuario="ana").exists())
+
+    def test_tambien_en_el_admin_de_django(self):
+        admin = User.objects.create_superuser("jefe", "j@example.com", "clave-larga-2027")
+        for _ in range(5):
+            self.client.post("/admin/login/", {"username": "jefe", "password": "mala"},
+                             REMOTE_ADDR="10.0.0.5")
+        self.client.post("/admin/login/", {"username": "jefe", "password": "clave-larga-2027"},
+                         REMOTE_ADDR="10.0.0.5")
+        self.assertNotIn("_auth_user_id", self.client.session)
+        self.assertTrue(admin.check_password("clave-larga-2027"))
+
+    def test_desbloquear_desde_usuarios(self):
+        for _ in range(5):
+            self.entrar(clave="mala")
+        self.client.force_login(self.admin)
+        usuario = self.ana.usuario_retiros
+        cuenta = self.client.get(f"/api/usuarios/{usuario.pk}/cuenta/").json()
+        self.assertGreater(cuenta["bloqueado_minutos"], 0)
+        r = self.post(f"/api/usuarios/{usuario.pk}/cuenta/desbloquear/", {})
+        self.assertEqual(r.json()["bloqueado_minutos"], 0)
+        self.client.logout()
+        self.assertEqual(self.entrar().status_code, 200)
+
+    def test_contrasenas_de_al_menos_10_y_cabeceras(self):
+        self.client.force_login(self.ana)
+        r = self.post("/api/auth/cuenta/clave/", {"actual": "clave-larga-2027",
+                                                  "nueva": "Corta-123"})
+        self.assertIn("nueva", r.json())
+        r = self.client.get("/api/auth/sesion/")
+        self.assertEqual(r["X-Frame-Options"], "DENY")
+        self.assertEqual(r["X-Content-Type-Options"], "nosniff")
+        self.assertEqual(r["Referrer-Policy"], "same-origin")

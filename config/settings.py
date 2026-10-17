@@ -69,22 +69,49 @@ DATABASES = {
 
 # Los permisos de coordinación y logística salen de sus roles (retiros/acceso.py).
 AUTHENTICATION_BACKENDS = [
+    # Primero: corta los intentos de un usuario o IP bloqueados (retiros/seguridad.py).
+    "retiros.seguridad.BloqueoBackend",
     "django.contrib.auth.backends.ModelBackend",
     "retiros.acceso.RolBackend",
 ]
 
 AUTH_PASSWORD_VALIDATORS = [
-    {"NAME": f"django.contrib.auth.password_validation.{nombre}"}
-    for nombre in (
-        "UserAttributeSimilarityValidator", "MinimumLengthValidator",
-        "CommonPasswordValidator", "NumericPasswordValidator",
-    )
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+     "OPTIONS": {"min_length": 10}},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
+
+# Límite de intentos de inicio de sesión (retiros/seguridad.py).
+LIMITE_INTENTOS_USUARIO = int(os.environ.get("LIMITE_INTENTOS_USUARIO", 5))
+LIMITE_INTENTOS_IP = int(os.environ.get("LIMITE_INTENTOS_IP", 20))
+VENTANA_INTENTOS_MINUTOS = int(os.environ.get("VENTANA_INTENTOS_MINUTOS", 15))
+BLOQUEO_MINUTOS = int(os.environ.get("BLOQUEO_MINUTOS", 15))
+
+# La sesión vence tras SESION_HORAS sin usar el sistema (se renueva con cada
+# petición) y al cerrar el navegador.
+SESSION_COOKIE_AGE = int(os.environ.get("SESION_HORAS", 8)) * 3600
+SESSION_SAVE_EVERY_REQUEST = True
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = CSRF_COOKIE_SAMESITE = "Lax"
 # A dónde manda @login_required: la pantalla de acceso del frontend.
 LOGIN_URL = "/signin"
 
-# Detrás de HTTPS (producción): las cookies de sesión y CSRF solo viajan cifradas.
-SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE = os.environ.get("HTTPS", "0") == "1"
+# Detrás de HTTPS (producción): las cookies de sesión y CSRF solo viajan
+# cifradas y el navegador recuerda usar siempre HTTPS (HSTS).
+HTTPS = os.environ.get("HTTPS", "0") == "1"
+SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE = HTTPS
+if HTTPS:
+    SECURE_HSTS_SECONDS = 60 * 60 * 24 * 365
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+# Siempre: sin adivinar tipos de archivo, sin incrustar el sitio en otros y
+# sin mandar la dirección completa a sitios externos.
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = "DENY"
+SECURE_REFERRER_POLICY = "same-origin"
 
 LANGUAGE_CODE = "es"
 TIME_ZONE = os.environ.get("TIME_ZONE", "America/Caracas")

@@ -1024,6 +1024,7 @@ class Auditoria(models.Model):
         INGRESO = "ingreso", "Inició sesión"
         SALIDA = "salida", "Cerró sesión"
         INGRESO_FALLIDO = "ingreso_fallido", "Intento fallido de ingreso"
+        BLOQUEO = "bloqueo", "Bloqueado por intentos fallidos"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     fecha = models.DateTimeField("fecha y hora", auto_now_add=True, db_index=True)
@@ -1053,3 +1054,22 @@ class Auditoria(models.Model):
 
     def __str__(self):
         return f"{self.usuario_nombre or 'Sistema'} · {self.get_accion_display()} · {self.objeto}"
+
+
+# --------------------------------------------------------------------------- #
+# Intentos fallidos de inicio de sesión (límite y bloqueo: seguridad.py)
+# --------------------------------------------------------------------------- #
+class IntentoFallido(models.Model):
+    """Un intento de inicio de sesión con la contraseña equivocada: el usuario
+    escrito (exista o no) y la IP. Los de más de dos días se borran solos."""
+    usuario = models.CharField(max_length=150, db_index=True)
+    ip = models.GenericIPAddressField(null=True, blank=True, db_index=True)
+    fecha = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        verbose_name = "intento fallido de ingreso"
+        verbose_name_plural = "intentos fallidos de ingreso"
+        default_permissions = ()
+
+    def __str__(self):
+        return f"{self.usuario} · {self.ip} · {self.fecha:%d/%m %H:%M}"

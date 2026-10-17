@@ -286,6 +286,27 @@ servicio externo. Lee bien la letra de molde y el texto impreso; con letra
 cursiva se equivoca más, por eso todo se revisa antes de guardar. La lógica
 está en `retiros/ocr/` (las etiquetas que reconoce, en `planilla.py`).
 
+## Seguridad del acceso
+
+- **Límite de intentos**: 5 contraseñas equivocadas para un mismo usuario (o
+  20 desde una misma IP, contra cualquier usuario) en 15 minutos bloquean el
+  acceso por 15 minutos, aunque después se escriba la correcta. Vale para el
+  panel y para el admin de Django, y también para usuarios que no existen (así
+  no se puede averiguar cuáles hay). Al quedar 2 intentos se avisa, y el
+  bloqueo queda en la auditoría. En **Usuarios → llave** se ve el bloqueo y se
+  puede quitar. Los límites se ajustan en el `.env` (ver `.env.example`).
+- **Sesión**: se cierra tras 8 horas sin usar el sistema y al cerrar el
+  navegador; al vencer, la app lleva a iniciar sesión y luego vuelve a la
+  misma página. Cambiar la contraseña cierra las demás sesiones abiertas.
+- **Contraseñas**: al menos 10 caracteres, que no sean solo números, ni
+  comunes, ni parecidas al usuario.
+- **Cabeceras**: el sitio no se puede incrustar en otros (contra clickjacking),
+  el navegador no adivina tipos de archivo y no se envía la dirección a sitios
+  externos. Con `HTTPS=1`, además, cookies solo cifradas y HSTS.
+
+Detrás de un proxy, pon `PROXY_CONFIABLE=1` para que el límite por IP use la
+IP real de cada visitante y no la del proxy (que bloquearía a todos juntos).
+
 ## Auditoría
 
 **Sistema → Auditoría** muestra quién hizo qué y cuándo, con su IP:

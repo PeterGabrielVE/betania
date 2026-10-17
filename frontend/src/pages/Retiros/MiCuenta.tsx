@@ -173,8 +173,8 @@ function Contrasena() {
         {campo("repetir", "Repite la nueva", "new-password")}
       </div>
       <p className="text-theme-xs text-gray-500 dark:text-gray-400">
-        Al menos 8 caracteres, que no sea solo números ni parecida a tu nombre o
-        usuario.
+        Al menos 10 caracteres, que no sea solo números ni parecida a tu nombre
+        o usuario.
       </p>
       <div className="flex flex-wrap items-center gap-3">
         <button

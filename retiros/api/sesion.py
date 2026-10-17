@@ -11,6 +11,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
+from .. import seguridad
 from ..acceso import asignaciones, retiros_visibles
 from ..models import Moneda, Preferencias, Retiro
 from ..tasas import TasaNoDisponible, tasa_bcv
@@ -103,17 +104,35 @@ def sesion(request):
     return JsonResponse(_usuario_json(request.user))
 
 
+def _bloqueado(segundos):
+    m = seguridad.minutos(segundos)
+    return JsonResponse({"detail": (
+        "Demasiados intentos fallidos. Por seguridad, el acceso quedó bloqueado; "
+        f"intenta de nuevo en {m} minuto{'s' if m != 1 else ''}."
+    ), "espera": segundos}, status=429)
+
+
 @require_POST
 def iniciar_sesion(request):
     try:
         datos = json.loads(request.body or b"{}")
     except ValueError:
         return JsonResponse({"detail": "JSON inválido."}, status=400)
-    user = authenticate(
-        request, username=datos.get("username", ""), password=datos.get("password", "")
-    )
+    usuario = str(datos.get("username", ""))
+    espera = seguridad.bloqueo(usuario, request)
+    if espera:
+        return _bloqueado(espera)
+    user = authenticate(request, username=usuario, password=datos.get("password", ""))
     if user is None:
-        return JsonResponse({"detail": "Usuario o contraseña incorrectos."}, status=400)
+        espera = seguridad.bloqueo(usuario, request)
+        if espera:  # este intento completó el límite
+            return _bloqueado(espera)
+        quedan = seguridad.intentos_restantes(usuario)
+        aviso = (f" Te quedan {quedan} intento{'s' if quedan != 1 else ''} antes de que "
+                 f"se bloquee por {seguridad.bloqueo_minutos()} "
+                 "minutos.") if quedan <= 2 else ""
+        return JsonResponse({"detail": f"Usuario o contraseña incorrectos.{aviso}"},
+                            status=400)
     login(request, user)
     return JsonResponse(_usuario_json(user))
 

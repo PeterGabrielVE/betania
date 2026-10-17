@@ -13,6 +13,7 @@ type Cuenta = {
   activo: boolean;
   ultimo_acceso: string | null;
   es_superusuario: boolean;
+  bloqueado_minutos: number; // por intentos fallidos (0: puede entrar)
 };
 
 const claseEtiqueta =
@@ -115,6 +116,32 @@ export default function DialogoCuenta({
           )}
         </p>
 
+        {cuenta && cuenta.bloqueado_minutos > 0 && (
+          <div className="mb-5 flex flex-wrap items-center gap-3 rounded-lg bg-warning-50 px-4 py-3 text-sm text-warning-700 dark:bg-warning-500/15 dark:text-warning-400">
+            <span className="min-w-0 flex-1">
+              Bloqueada por intentos fallidos de inicio de sesión: podrá entrar
+              en {cuenta.bloqueado_minutos} min.
+            </span>
+            <button
+              type="button"
+              className={claseBoton}
+              onClick={async () => {
+                try {
+                  setCuenta(
+                    await api<Cuenta>(
+                      `/usuarios/${usuarioId}/cuenta/desbloquear/`,
+                      { method: "POST" },
+                    ),
+                  );
+                } catch (e) {
+                  setErrores({ general: (e as Error).message });
+                }
+              }}
+            >
+              Quitar bloqueo
+            </button>
+          </div>
+        )}
         {listo ? (
           <>
             <p className="rounded-lg bg-success-50 px-4 py-3 text-sm text-success-700 dark:bg-success-500/15 dark:text-success-400">
@@ -200,7 +227,7 @@ export default function DialogoCuenta({
                   error("password")
                 ) : (
                   <p className="mt-1 text-theme-xs text-gray-500 dark:text-gray-400">
-                    Al menos 8 caracteres, que no sea solo números ni parecida
+                    Al menos 10 caracteres, que no sea solo números ni parecida
                     al nombre.
                   </p>
                 )}

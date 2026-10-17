@@ -17,6 +17,7 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 
+from .. import seguridad
 from ..acceso import ambito_fijo
 from ..models import Parroquia, Persona, Usuario
 from ..reportes import PersonaResource
@@ -37,6 +38,9 @@ def _cuenta_json(usuario):
         "activo": usuario.activo,
         "ultimo_acceso": cuenta.last_login if cuenta else None,
         "es_superusuario": bool(cuenta and cuenta.is_superuser),
+        # Minutos de bloqueo por intentos fallidos (0: puede entrar).
+        "bloqueado_minutos": (seguridad.minutos(seguridad.bloqueo(cuenta.username))
+                              if cuenta and seguridad.bloqueo(cuenta.username) else 0),
     }
 
 
@@ -90,6 +94,18 @@ def cuenta_usuario(request, pk):
             usuario.cuenta = nueva
             usuario.save(update_fields=["cuenta"])
     usuario.cuenta = nueva
+    return Response(_cuenta_json(usuario))
+
+
+@api_view(["POST"])
+def desbloquear_cuenta(request, pk):
+    """Quita el bloqueo por intentos fallidos de la cuenta de un usuario."""
+    if not request.user.has_perm(permiso(Usuario, "change")):
+        raise PermissionDenied()
+    usuario = get_object_or_404(Usuario.objects.select_related("persona", "cuenta"), pk=pk)
+    if usuario.cuenta is None:
+        return Response({"detail": "Este usuario no tiene cuenta."}, status=400)
+    seguridad.desbloquear(usuario.cuenta.username)
     return Response(_cuenta_json(usuario))
 
 

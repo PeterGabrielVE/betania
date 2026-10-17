@@ -6,6 +6,7 @@ class RetirosConfig(AppConfig):
     name = "retiros"
 
     def ready(self):
-        from . import auditoria
+        from . import auditoria, seguridad
 
         auditoria.conectar()
+        seguridad.conectar()
