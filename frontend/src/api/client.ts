@@ -231,6 +231,8 @@ export type Preferencias = {
   moneda_vista: string;
   factor: number;
   aviso: string;
+  // Secciones del tablero de inicio que eligió no ver.
+  tablero_ocultos: string[];
 };
 
 export type Pagina<T> = {

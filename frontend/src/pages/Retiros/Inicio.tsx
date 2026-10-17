@@ -8,6 +8,7 @@ import {
   claseTarjeta,
 } from "@/components/modulos/estilos";
 import Actualizacion from "@/components/retiros/Actualizacion";
+import PersonalizarTablero from "@/components/retiros/PersonalizarTablero";
 import {
   BarrasHorizontales,
   GraficaRecaudacion,
@@ -39,9 +40,18 @@ import {
 } from "@/icons";
 import { colorEstado, dinero, fecha } from "@/utils/formato";
 import { Link, useSearchParams } from "react-router";
+import { SECCIONES } from "./seccionesTablero";
 
 const claseTitulo = "text-lg font-semibold text-gray-800 dark:text-white/90";
 const claseVacio = "text-sm text-gray-500 dark:text-gray-400";
+
+// Si se ve una sección (ver seccionesTablero.ts).
+type Ver = (clave: string) => boolean;
+
+// Dos tarjetas que comparten fila: si una no se ve, la otra ocupa todo el
+// ancho (`ancho`: su clase cuando van juntas).
+const fila = (ver: Ver, otra: string, ancho: string) =>
+  ver(otra) ? ancho : "col-span-12";
 
 const diaYMes = new Intl.DateTimeFormat(undefined, {
   day: "numeric",
@@ -131,7 +141,7 @@ function AccesoRapido({
   );
 }
 
-function TableroRetiro({ t }: { t: Tablero }) {
+function TableroRetiro({ t, ver }: { t: Tablero; ver: Ver }) {
   const { modulos } = useAuth();
   const modulo = (slug: string) => modulos.find((m) => m.slug === slug);
   const puedeAgregar = (slug: string) => !!modulo(slug)?.puede_agregar;
@@ -219,95 +229,107 @@ function TableroRetiro({ t }: { t: Tablero }) {
   return (
     <div className="grid grid-cols-12 gap-4 md:gap-6">
       {/* Cifras principales */}
-      <div className="col-span-12 grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-6 xl:grid-cols-3 2xl:grid-cols-6">
-        <Metrica
-          icono={<CalenderIcon className="size-6" />}
-          etiqueta={
-            t.dias_para_inicio > 0 ? "Faltan para el retiro" : "El retiro"
-          }
-          valor={cuenta.valor}
-          detalle={cuenta.detalle}
-        />
-        {caminantes && (
+      {ver("cifras") && (
+        <div className="col-span-12 grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-6 xl:grid-cols-3 2xl:grid-cols-6">
           <Metrica
-            icono={<UserIcon className="size-6" />}
-            etiqueta="Caminantes inscritos"
-            valor={`${caminantes.inscritos} / ${retiro.cupo}`}
-            detalle={`${caminantes.disponibles} lugares disponibles`}
-          >
-            <Medidor
-              valor={caminantes.inscritos}
-              maximo={retiro.cupo}
-              descripcion="Cupo ocupado"
-            />
-          </Metrica>
-        )}
-        {caminantes && (
-          <Metrica
-            icono={<CheckCircleIcon className="size-6" />}
-            etiqueta="Asistencia confirmada"
-            valor={caminantes.confirmados}
-            detalle={`${caminantes.por_confirmar} por confirmar`}
-          >
-            <Medidor
-              valor={caminantes.confirmados}
-              maximo={caminantes.inscritos}
-              descripcion="Confirmados de los inscritos"
-            />
-          </Metrica>
-        )}
-        {servidores && (
-          <Metrica
-            icono={<GroupIcon className="size-6" />}
-            etiqueta="Servidores"
-            valor={servidores.total}
-            detalle={`${servidores.por_area.length} áreas · ${servidores.coordinadores} en coordinación`}
-          />
-        )}
-        {caminantes?.por_cobrar !== undefined && (
-          <Metrica
-            icono={<DollarLineIcon className="size-6" />}
-            etiqueta="Por cobrar"
-            valor={dinero(porCobrar)}
-            detalle={
-              conCuotaServidor
-                ? `Caminantes ${dinero(caminantes.por_cobrar)} · Servidores ${dinero(servidores?.por_cobrar ?? 0)}`
-                : "De cuotas de caminantes"
+            icono={<CalenderIcon className="size-6" />}
+            etiqueta={
+              t.dias_para_inicio > 0 ? "Faltan para el retiro" : "El retiro"
             }
-          >
-            {esperado !== undefined && (
-              <Medidor
-                valor={esperado - porCobrar}
-                maximo={esperado}
-                descripcion="Cuotas cobradas"
-              />
-            )}
-          </Metrica>
-        )}
-        {tareas && (
-          <Metrica
-            icono={<TaskIcon className="size-6" />}
-            etiqueta="Tareas pendientes"
-            valor={tareas.pendientes}
-            detalle={[
-              tareas.vencidas &&
-                `${tareas.vencidas} ${tareas.vencidas === 1 ? "vencida" : "vencidas"}`,
-              `${tareas.hechas} ${tareas.hechas === 1 ? "hecha" : "hechas"}`,
-            ]
-              .filter(Boolean)
-              .join(" · ")}
+            valor={cuenta.valor}
+            detalle={cuenta.detalle}
           />
-        )}
-      </div>
+          {caminantes && (
+            <Metrica
+              icono={<UserIcon className="size-6" />}
+              etiqueta="Caminantes inscritos"
+              valor={`${caminantes.inscritos} / ${retiro.cupo}`}
+              detalle={`${caminantes.disponibles} lugares disponibles`}
+            >
+              <Medidor
+                valor={caminantes.inscritos}
+                maximo={retiro.cupo}
+                descripcion="Cupo ocupado"
+              />
+            </Metrica>
+          )}
+          {caminantes && (
+            <Metrica
+              icono={<CheckCircleIcon className="size-6" />}
+              etiqueta="Asistencia confirmada"
+              valor={caminantes.confirmados}
+              detalle={`${caminantes.por_confirmar} por confirmar`}
+            >
+              <Medidor
+                valor={caminantes.confirmados}
+                maximo={caminantes.inscritos}
+                descripcion="Confirmados de los inscritos"
+              />
+            </Metrica>
+          )}
+          {servidores && (
+            <Metrica
+              icono={<GroupIcon className="size-6" />}
+              etiqueta="Servidores"
+              valor={servidores.total}
+              detalle={`${servidores.por_area.length} áreas · ${servidores.coordinadores} en coordinación`}
+            />
+          )}
+          {caminantes?.por_cobrar !== undefined && (
+            <Metrica
+              icono={<DollarLineIcon className="size-6" />}
+              etiqueta="Por cobrar"
+              valor={dinero(porCobrar)}
+              detalle={
+                conCuotaServidor
+                  ? `Caminantes ${dinero(caminantes.por_cobrar)} · Servidores ${dinero(servidores?.por_cobrar ?? 0)}`
+                  : "De cuotas de caminantes"
+              }
+            >
+              {esperado !== undefined && (
+                <Medidor
+                  valor={esperado - porCobrar}
+                  maximo={esperado}
+                  descripcion="Cuotas cobradas"
+                />
+              )}
+            </Metrica>
+          )}
+          {tareas && (
+            <Metrica
+              icono={<TaskIcon className="size-6" />}
+              etiqueta="Tareas pendientes"
+              valor={tareas.pendientes}
+              detalle={[
+                tareas.vencidas &&
+                  `${tareas.vencidas} ${tareas.vencidas === 1 ? "vencida" : "vencidas"}`,
+                `${tareas.hechas} ${tareas.hechas === 1 ? "hecha" : "hechas"}`,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            />
+          )}
+        </div>
+      )}
 
       {/* Caminantes: confirmados, tesorería, estados y atención especial */}
       {caminantes && (
         <>
-          <div className="col-span-12 md:col-span-5">
-            <AnilloConfirmados caminantes={caminantes} />
-          </div>
-          {caminantes.pagos && (
-            <div className="col-span-12 md:col-span-7">
+          {ver("confirmados") && (
+            <div
+              className={fila(
+                (c) => ver(c) && !!caminantes.pagos,
+                "tesoreria",
+                "col-span-12 md:col-span-5",
+              )}
+            >
+              <AnilloConfirmados caminantes={caminantes} />
+            </div>
+          )}
+          {caminantes.pagos && ver("tesoreria") && (
+            <div
+              className={fila(ver, "confirmados", "col-span-12 md:col-span-7")}
+            >
               <Tesoreria
                 retiroId={retiro.id}
                 caminantes={caminantes.pagos}
@@ -315,74 +337,81 @@ function TableroRetiro({ t }: { t: Tablero }) {
               />
             </div>
           )}
-          <div className="col-span-12">
-            <FichasPorEstado
-              retiro={retiro}
-              caminantes={caminantes}
-              servidores={servidores ?? undefined}
-            />
-          </div>
-          {(caminantes.atencion ||
-            caminantes.confirmados_pagados !== undefined) && (
+          {ver("estados") && (
             <div className="col-span-12">
-              <Indicadores retiro={retiro} caminantes={caminantes} />
+              <FichasPorEstado
+                retiro={retiro}
+                caminantes={caminantes}
+                servidores={servidores ?? undefined}
+              />
             </div>
           )}
+          {ver("indicadores") &&
+            (caminantes.atencion ||
+              caminantes.confirmados_pagados !== undefined) && (
+              <div className="col-span-12">
+                <Indicadores retiro={retiro} caminantes={caminantes} />
+              </div>
+            )}
         </>
       )}
 
       {/* Dinero */}
       {finanzas && (
         <>
-          <Tarjeta
-            titulo="Recaudación acumulada"
-            enlace={{ a: "/pagos", texto: "Ver pagos" }}
-            className="col-span-12 xl:col-span-8"
-          >
-            <GraficaRecaudacion
-              puntos={finanzas.recaudacion}
-              esperado={esperado}
-            />
-          </Tarjeta>
-          <Tarjeta
-            titulo={`Balance · ${dinero(finanzas.balance)}`}
-            enlace={{ a: "/gastos", texto: "Ver gastos" }}
-            className="col-span-12 xl:col-span-4"
-          >
-            <dl className="mb-5 grid grid-cols-2 gap-4">
-              <div>
-                <dt className={claseVacio}>Ingresos</dt>
-                <dd className="mt-1 text-xl font-semibold text-gray-800 dark:text-white/90">
-                  {dinero(finanzas.ingresos)}
-                </dd>
-              </div>
-              <div>
-                <dt className={claseVacio}>Gastos</dt>
-                <dd className="mt-1 text-xl font-semibold text-gray-800 dark:text-white/90">
-                  {dinero(finanzas.egresos)}
-                </dd>
-              </div>
-            </dl>
-            <h4 className="mb-2 text-theme-sm font-medium text-gray-800 dark:text-white/90">
-              Gastos por categoría
-            </h4>
-            <BarrasHorizontales
-              filas={finanzas.por_categoria.map((c) => ({
-                etiqueta: c.etiqueta,
-                total: c.total,
-              }))}
-              formato={(n) => dinero(n)}
-            />
-          </Tarjeta>
+          {ver("recaudacion") && (
+            <Tarjeta
+              titulo="Recaudación acumulada"
+              enlace={{ a: "/pagos", texto: "Ver pagos" }}
+              className={fila(ver, "balance", "col-span-12 xl:col-span-8")}
+            >
+              <GraficaRecaudacion
+                puntos={finanzas.recaudacion}
+                esperado={esperado}
+              />
+            </Tarjeta>
+          )}
+          {ver("balance") && (
+            <Tarjeta
+              titulo={`Balance · ${dinero(finanzas.balance)}`}
+              enlace={{ a: "/gastos", texto: "Ver gastos" }}
+              className={fila(ver, "recaudacion", "col-span-12 xl:col-span-4")}
+            >
+              <dl className="mb-5 grid grid-cols-2 gap-4">
+                <div>
+                  <dt className={claseVacio}>Ingresos</dt>
+                  <dd className="mt-1 text-xl font-semibold text-gray-800 dark:text-white/90">
+                    {dinero(finanzas.ingresos)}
+                  </dd>
+                </div>
+                <div>
+                  <dt className={claseVacio}>Gastos</dt>
+                  <dd className="mt-1 text-xl font-semibold text-gray-800 dark:text-white/90">
+                    {dinero(finanzas.egresos)}
+                  </dd>
+                </div>
+              </dl>
+              <h4 className="mb-2 text-theme-sm font-medium text-gray-800 dark:text-white/90">
+                Gastos por categoría
+              </h4>
+              <BarrasHorizontales
+                filas={finanzas.por_categoria.map((c) => ({
+                  etiqueta: c.etiqueta,
+                  total: c.total,
+                }))}
+                formato={(n) => dinero(n)}
+              />
+            </Tarjeta>
+          )}
         </>
       )}
 
       {/* Equipo y pendientes */}
-      {servidores && (
+      {servidores && ver("servidores_area") && (
         <Tarjeta
           titulo="Servidores por área"
           enlace={{ a: "/participaciones", texto: "Ver servidores" }}
-          className="col-span-12 xl:col-span-5"
+          className={fila(ver, "pendientes", "col-span-12 xl:col-span-5")}
         >
           <BarrasHorizontales
             filas={[
@@ -395,179 +424,200 @@ function TableroRetiro({ t }: { t: Tablero }) {
           />
         </Tarjeta>
       )}
-      <Tarjeta
-        titulo="Pendientes"
-        enlace={tareas ? { a: "/tareas", texto: "Ver tareas" } : undefined}
-        className="col-span-12 xl:col-span-7"
-      >
-        {t.alertas.length === 0 && !tareas?.proximas.length ? (
-          <p className={claseVacio}>No hay pendientes. ¡Todo al día!</p>
-        ) : (
-          <div className="grid gap-6 md:grid-cols-2">
-            {t.alertas.length > 0 && (
-              <ul className="space-y-2">
-                {t.alertas.map((a) => (
-                  <li key={a.clave}>
-                    <Link
-                      to={a.enlace}
-                      className="flex items-center gap-3 rounded-lg px-2 py-1.5 text-theme-sm text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/5"
-                    >
-                      <span className="min-w-8 rounded-md bg-warning-50 px-1.5 py-0.5 text-center font-semibold text-warning-700 tabular-nums dark:bg-warning-500/15 dark:text-warning-400">
-                        {a.total}
-                      </span>
-                      {a.texto}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {tareas && tareas.proximas.length > 0 && (
-              <ul className="divide-y divide-gray-100 dark:divide-gray-800">
-                {tareas.proximas.map((tarea) => (
-                  <li key={tarea.id} className="py-2 text-theme-sm">
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="text-gray-800 dark:text-white/90">
-                        {tarea.titulo}
-                      </span>
-                      {tarea.vencida ? (
-                        <Badge size="sm" color="error">
-                          Vencida
-                        </Badge>
-                      ) : (
-                        tarea.fecha_limite && (
-                          <span className="shrink-0 text-theme-xs text-gray-500 dark:text-gray-400">
-                            {diaYMes.format(new Date(tarea.fecha_limite))}
-                          </span>
-                        )
+      {ver("pendientes") && (
+        <Tarjeta
+          titulo="Pendientes"
+          enlace={tareas ? { a: "/tareas", texto: "Ver tareas" } : undefined}
+          className={fila(
+            (c) => ver(c) && !!servidores,
+            "servidores_area",
+            "col-span-12 xl:col-span-7",
+          )}
+        >
+          {t.alertas.length === 0 && !tareas?.proximas.length ? (
+            <p className={claseVacio}>No hay pendientes. ¡Todo al día!</p>
+          ) : (
+            <div className="grid gap-6 md:grid-cols-2">
+              {t.alertas.length > 0 && (
+                <ul className="space-y-2">
+                  {t.alertas.map((a) => (
+                    <li key={a.clave}>
+                      <Link
+                        to={a.enlace}
+                        className="flex items-center gap-3 rounded-lg px-2 py-1.5 text-theme-sm text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/5"
+                      >
+                        <span className="min-w-8 rounded-md bg-warning-50 px-1.5 py-0.5 text-center font-semibold text-warning-700 tabular-nums dark:bg-warning-500/15 dark:text-warning-400">
+                          {a.total}
+                        </span>
+                        {a.texto}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {tareas && tareas.proximas.length > 0 && (
+                <ul className="divide-y divide-gray-100 dark:divide-gray-800">
+                  {tareas.proximas.map((tarea) => (
+                    <li key={tarea.id} className="py-2 text-theme-sm">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="text-gray-800 dark:text-white/90">
+                          {tarea.titulo}
+                        </span>
+                        {tarea.vencida ? (
+                          <Badge size="sm" color="error">
+                            Vencida
+                          </Badge>
+                        ) : (
+                          tarea.fecha_limite && (
+                            <span className="shrink-0 text-theme-xs text-gray-500 dark:text-gray-400">
+                              {diaYMes.format(new Date(tarea.fecha_limite))}
+                            </span>
+                          )
+                        )}
+                      </div>
+                      {(tarea.responsable || tarea.area) && (
+                        <span className="text-theme-xs text-gray-500 dark:text-gray-400">
+                          {[tarea.responsable, tarea.area]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </span>
                       )}
-                    </div>
-                    {(tarea.responsable || tarea.area) && (
-                      <span className="text-theme-xs text-gray-500 dark:text-gray-400">
-                        {[tarea.responsable, tarea.area]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
-      </Tarjeta>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </Tarjeta>
+      )}
 
       {/* Cumpleaños y accesos */}
-      <Tarjeta titulo="Cumpleaños" className="col-span-12 xl:col-span-5">
-        {t.cumpleanos.length === 0 ? (
-          <p className={claseVacio}>
-            Nadie del retiro cumple años en los próximos 30 días ni durante el
-            retiro.
-          </p>
-        ) : (
-          <ul className="divide-y divide-gray-100 dark:divide-gray-800">
-            {t.cumpleanos.map((c) => (
-              <li
-                key={`${c.nombre}-${c.fecha}`}
-                className="flex items-center justify-between gap-3 py-2.5 text-theme-sm"
-              >
-                <div>
-                  <span className="block text-gray-800 dark:text-white/90">
-                    {c.nombre}
-                  </span>
-                  <span className="text-theme-xs text-gray-500 dark:text-gray-400">
-                    {c.rol} · cumple {c.cumple} el{" "}
-                    {diaYMes.format(new Date(c.fecha))}
-                  </span>
-                </div>
-                {c.durante_retiro ? (
-                  <Badge size="sm" color="success">
-                    Durante el retiro
-                  </Badge>
-                ) : (
-                  <span className="shrink-0 text-theme-xs text-gray-500 dark:text-gray-400">
-                    {c.en_dias === 0
-                      ? "¡Hoy!"
-                      : c.en_dias === 1
-                        ? "Mañana"
-                        : `En ${c.en_dias} días`}
-                  </span>
-                )}
-              </li>
+      {ver("cumpleanos") && (
+        <Tarjeta
+          titulo="Cumpleaños"
+          className={fila(ver, "accesos", "col-span-12 xl:col-span-5")}
+        >
+          {t.cumpleanos.length === 0 ? (
+            <p className={claseVacio}>
+              Nadie del retiro cumple años en los próximos 30 días ni durante el
+              retiro.
+            </p>
+          ) : (
+            <ul className="divide-y divide-gray-100 dark:divide-gray-800">
+              {t.cumpleanos.map((c) => (
+                <li
+                  key={`${c.nombre}-${c.fecha}`}
+                  className="flex items-center justify-between gap-3 py-2.5 text-theme-sm"
+                >
+                  <div>
+                    <span className="block text-gray-800 dark:text-white/90">
+                      {c.nombre}
+                    </span>
+                    <span className="text-theme-xs text-gray-500 dark:text-gray-400">
+                      {c.rol} · cumple {c.cumple} el{" "}
+                      {diaYMes.format(new Date(c.fecha))}
+                    </span>
+                  </div>
+                  {c.durante_retiro ? (
+                    <Badge size="sm" color="success">
+                      Durante el retiro
+                    </Badge>
+                  ) : (
+                    <span className="shrink-0 text-theme-xs text-gray-500 dark:text-gray-400">
+                      {c.en_dias === 0
+                        ? "¡Hoy!"
+                        : c.en_dias === 1
+                          ? "Mañana"
+                          : `En ${c.en_dias} días`}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Tarjeta>
+      )}
+      {ver("accesos") && (
+        <Tarjeta
+          titulo="Accesos rápidos"
+          className={fila(ver, "cumpleanos", "col-span-12 xl:col-span-7")}
+        >
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+            {accesos.map((a) => (
+              <AccesoRapido key={a.texto} {...a} />
             ))}
-          </ul>
-        )}
-      </Tarjeta>
-      <Tarjeta titulo="Accesos rápidos" className="col-span-12 xl:col-span-7">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-3">
-          {accesos.map((a) => (
-            <AccesoRapido key={a.texto} {...a} />
-          ))}
-        </div>
-      </Tarjeta>
+          </div>
+        </Tarjeta>
+      )}
     </div>
   );
 }
 
-function General({ resumen }: { resumen: Resumen }) {
+function General({ resumen, ver }: { resumen: Resumen; ver: Ver }) {
+  if (!ver("proximos") && !ver("totales")) return null;
   return (
     <div className="mt-6 grid grid-cols-12 gap-4 md:gap-6">
-      <Tarjeta
-        titulo="Próximos retiros"
-        enlace={{ a: "/retiros", texto: "Ver todos" }}
-        className="col-span-12 xl:col-span-7"
-      >
-        {resumen.proximos_retiros.length === 0 ? (
-          <p className={claseVacio}>No hay retiros próximos.</p>
-        ) : (
-          <ul className="divide-y divide-gray-100 dark:divide-gray-800">
-            {resumen.proximos_retiros.map((r) => (
-              <li
-                key={r.id}
-                className="flex flex-wrap items-center justify-between gap-3 py-3"
-              >
-                <div>
-                  <Link
-                    to={`/retiros/${r.id}`}
-                    className="block text-theme-sm font-medium text-gray-800 hover:text-brand-500 dark:text-white/90"
-                  >
-                    {r.etiqueta}
-                  </Link>
-                  <span className="block text-theme-xs text-gray-500 dark:text-gray-400">
-                    {fecha(r.fecha_inicio)} – {fecha(r.fecha_fin)} ·{" "}
-                    {r.inscritos} / {r.cupo} inscritos
-                  </span>
-                </div>
-                <Badge size="sm" color={colorEstado(r.estado)}>
-                  {r.estado_display}
-                </Badge>
-              </li>
+      {ver("proximos") && (
+        <Tarjeta
+          titulo="Próximos retiros"
+          enlace={{ a: "/retiros", texto: "Ver todos" }}
+          className={fila(ver, "totales", "col-span-12 xl:col-span-7")}
+        >
+          {resumen.proximos_retiros.length === 0 ? (
+            <p className={claseVacio}>No hay retiros próximos.</p>
+          ) : (
+            <ul className="divide-y divide-gray-100 dark:divide-gray-800">
+              {resumen.proximos_retiros.map((r) => (
+                <li
+                  key={r.id}
+                  className="flex flex-wrap items-center justify-between gap-3 py-3"
+                >
+                  <div>
+                    <Link
+                      to={`/retiros/${r.id}`}
+                      className="block text-theme-sm font-medium text-gray-800 hover:text-brand-500 dark:text-white/90"
+                    >
+                      {r.etiqueta}
+                    </Link>
+                    <span className="block text-theme-xs text-gray-500 dark:text-gray-400">
+                      {fecha(r.fecha_inicio)} – {fecha(r.fecha_fin)} ·{" "}
+                      {r.inscritos} / {r.cupo} inscritos
+                    </span>
+                  </div>
+                  <Badge size="sm" color={colorEstado(r.estado)}>
+                    {r.estado_display}
+                  </Badge>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Tarjeta>
+      )}
+      {ver("totales") && (
+        <Tarjeta
+          titulo="En todos los retiros"
+          className={fila(ver, "proximos", "col-span-12 xl:col-span-5")}
+        >
+          <dl className="grid grid-cols-2 gap-5 text-theme-sm">
+            {[
+              ["Personas registradas", resumen.personas],
+              [
+                "Retiros",
+                `${resumen.retiros} (${resumen.retiros_activos} sin finalizar)`,
+              ],
+              ["Inscripciones", resumen.inscripciones],
+              ["Balance", dinero(resumen.balance)],
+            ].map(([etiqueta, valor]) => (
+              <div key={etiqueta}>
+                <dt className="text-gray-500 dark:text-gray-400">{etiqueta}</dt>
+                <dd className="mt-1 text-lg font-semibold text-gray-800 dark:text-white/90">
+                  {valor}
+                </dd>
+              </div>
             ))}
-          </ul>
-        )}
-      </Tarjeta>
-      <Tarjeta
-        titulo="En todos los retiros"
-        className="col-span-12 xl:col-span-5"
-      >
-        <dl className="grid grid-cols-2 gap-5 text-theme-sm">
-          {[
-            ["Personas registradas", resumen.personas],
-            [
-              "Retiros",
-              `${resumen.retiros} (${resumen.retiros_activos} sin finalizar)`,
-            ],
-            ["Inscripciones", resumen.inscripciones],
-            ["Balance", dinero(resumen.balance)],
-          ].map(([etiqueta, valor]) => (
-            <div key={etiqueta}>
-              <dt className="text-gray-500 dark:text-gray-400">{etiqueta}</dt>
-              <dd className="mt-1 text-lg font-semibold text-gray-800 dark:text-white/90">
-                {valor}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      </Tarjeta>
+          </dl>
+        </Tarjeta>
+      )}
     </div>
   );
 }
@@ -575,6 +625,7 @@ function General({ resumen }: { resumen: Resumen }) {
 // Tablero del inicio: el retiro elegido (?retiro=<id>, por omisión el próximo)
 // con sus cifras, gráficas, pendientes y accesos; debajo, lo general.
 export default function Inicio() {
+  const { sesion } = useAuth();
   const [busqueda, setBusqueda] = useSearchParams();
   const elegido = busqueda.get("retiro") ?? "";
   const { datos, alDia, error, hora, consultando, actualizar } =
@@ -590,6 +641,12 @@ export default function Inicio() {
     );
   }
   const { tablero } = datos;
+  const ocultos = sesion?.autenticado
+    ? sesion.preferencias.tablero_ocultos
+    : [];
+  const ver: Ver = (clave) => !ocultos.includes(clave);
+  // Todo lo que tiene para ver, oculto.
+  const nadaVisible = SECCIONES.every((s) => !s.hay(datos) || !ver(s.clave));
 
   return (
     <>
@@ -627,6 +684,7 @@ export default function Inicio() {
               {dinero(datos.tasas_bcv.EUR, "VES")} / EUR
             </span>
           )}
+          <PersonalizarTablero resumen={datos} />
           <Actualizacion
             hora={hora}
             error={alDia ? error : undefined}
@@ -638,8 +696,16 @@ export default function Inicio() {
 
       {/* Mientras llega otro retiro, el anterior queda atenuado. */}
       <div className={alDia ? "" : "pointer-events-none opacity-60"}>
-        {tablero ? (
-          <TableroRetiro t={tablero} />
+        {nadaVisible ? (
+          <div className={claseTarjeta}>
+            <p className={claseVacio}>
+              Ocultaste todas las secciones del tablero. Usa{" "}
+              <strong className="font-medium">Personalizar</strong> para elegir
+              qué ver.
+            </p>
+          </div>
+        ) : tablero ? (
+          <TableroRetiro t={tablero} ver={ver} />
         ) : (
           <div className={claseTarjeta}>
             <p className={claseVacio}>
@@ -651,7 +717,7 @@ export default function Inicio() {
             </p>
           </div>
         )}
-        <General resumen={datos} />
+        {!nadaVisible && <General resumen={datos} ver={ver} />}
       </div>
     </>
   );

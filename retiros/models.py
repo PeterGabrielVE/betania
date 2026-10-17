@@ -444,6 +444,9 @@ class Preferencias(models.Model):
     )
     # Vacía: la moneda base.
     moneda = models.CharField(max_length=3, choices=Moneda.choices, blank=True)
+    # Secciones del tablero de inicio que no quiere ver (sus claves, ver
+    # frontend/src/pages/Retiros/seccionesTablero.ts).
+    tablero_ocultos = models.JSONField(default=list, blank=True)
 
     class Meta:
         verbose_name = "preferencias"

@@ -413,6 +413,16 @@ se puede compartir). Se actualiza solo cada 30 segundos, como el panel.
 Las tareas se gestionan en el módulo **Tareas** (menú Retiros): título, retiro,
 área, responsable, fecha límite y si ya está hecha.
 
+### Personalizar el tablero
+
+Con **Personalizar** (arriba, junto a *Actualizar*) cada usuario elige qué
+secciones del inicio ver: cifras, asistencia, tesorería, recaudación,
+pendientes, cumpleaños, accesos rápidos, próximos retiros... Solo aparecen las
+que su rol puede ver. El cambio se ve al instante y queda guardado en su cuenta
+(`Preferencias.tablero_ocultos`), así lo encuentra igual en cualquier equipo;
+*Mostrar todo* lo deja como al principio. Si se oculta una de dos tarjetas que
+van lado a lado, la otra ocupa toda la fila.
+
 ## Pruebas
 
 ```bash

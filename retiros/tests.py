@@ -660,7 +660,7 @@ class PreferenciasTests(Base):
     def test_sin_preferencias_usa_la_moneda_base(self):
         pref = self.client.get("/api/auth/sesion/").json()["preferencias"]
         self.assertEqual(pref, {"retiro": None, "moneda": "USD", "moneda_vista": "USD",
-                                "factor": 1, "aviso": ""})
+                                "factor": 1, "aviso": "", "tablero_ocultos": []})
 
     def test_elegir_edicion_y_moneda(self):
         r = self.cambiar(retiro=str(self.retiro.pk), moneda="VES")
@@ -2041,3 +2041,36 @@ class FotoPersonaTests(Base):
                                          cambios__has_key="foto_actualizada")
         self.assertTrue(registro.cambios["foto_actualizada"]["despues"].startswith("Foto del "))
         self.assertFalse(Auditoria.objects.filter(modelo="fotopersona").exists())
+
+
+class TableroPersonalizadoTests(Base):
+    """Cada usuario elige qué secciones del tablero ver."""
+
+    def patch(self, datos):
+        return self.client.patch("/api/auth/preferencias/", datos,
+                                 content_type="application/json")
+
+    def test_empieza_mostrando_todo(self):
+        pref = self.client.get("/api/auth/sesion/").json()["preferencias"]
+        self.assertEqual(pref["tablero_ocultos"], [])
+
+    def test_guarda_las_ocultas_sin_tocar_lo_demas(self):
+        self.patch({"moneda": "USD"})
+        r = self.patch({"tablero_ocultos": ["cumpleanos", "accesos", "cumpleanos"]})
+        self.assertEqual(r.status_code, 200)
+        pref = self.client.get("/api/auth/sesion/").json()["preferencias"]
+        self.assertEqual(pref["tablero_ocultos"], ["cumpleanos", "accesos"])
+        self.assertEqual(pref["moneda"], "USD")
+        self.patch({"tablero_ocultos": []})
+        pref = self.client.get("/api/auth/sesion/").json()["preferencias"]
+        self.assertEqual(pref["tablero_ocultos"], [])
+
+    def test_rechaza_lo_que_no_es_una_lista_de_claves(self):
+        for malo in ["cumpleanos", [1], ["<script>"], ["x" * 41], ["a"] * 51]:
+            self.assertEqual(self.patch({"tablero_ocultos": malo}).status_code, 400, malo)
+
+    def test_es_de_cada_usuario(self):
+        self.patch({"tablero_ocultos": ["cumpleanos"]})
+        self.client.force_login(User.objects.create_superuser("otro", "o@example.com", "x"))
+        pref = self.client.get("/api/auth/sesion/").json()["preferencias"]
+        self.assertEqual(pref["tablero_ocultos"], [])

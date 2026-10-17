@@ -37,6 +37,9 @@ type AuthContextType = Estado & {
   logout: () => Promise<void>;
   // La cierra el aviso de inactividad cuando nadie responde.
   cerrarPorInactividad: () => Promise<void>;
+  // Las secciones del tablero que no quiere ver. Se ve al instante y se
+  // guarda en el servidor (si falla, vuelve como estaba y lanza el error).
+  guardarTablero: (ocultos: string[], antes: string[]) => Promise<void>;
   // Cambia la edición y/o la moneda preferidas (se guardan en el servidor).
   cambiarPreferencias: (datos: {
     retiro?: string | null;
@@ -151,6 +154,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     setEstado({ ...(await cargar(sesion)), vencida: "inactividad" });
   }, []);
 
+  const guardarTablero = useCallback(
+    async (ocultos: string[], antes: string[]) => {
+      const poner = (lista: string[]) =>
+        setEstado((e) =>
+          e.sesion?.autenticado
+            ? {
+                ...e,
+                sesion: {
+                  ...e.sesion,
+                  preferencias: {
+                    ...e.sesion.preferencias,
+                    tablero_ocultos: lista,
+                  },
+                },
+              }
+            : e,
+        );
+      poner(ocultos);
+      try {
+        await api("/auth/preferencias/", {
+          method: "PATCH",
+          body: { tablero_ocultos: ocultos },
+        });
+      } catch (e) {
+        poner(antes);
+        throw e;
+      }
+    },
+    [],
+  );
+
   const cambiarPreferencias = useCallback(
     async (datos: { retiro?: string | null; moneda?: string }) => {
       const sesion = await api<Sesion>("/auth/preferencias/", {
@@ -169,6 +203,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         login,
         logout,
         cerrarPorInactividad,
+        guardarTablero,
         cambiarPreferencias,
         reintentar,
         refrescar,

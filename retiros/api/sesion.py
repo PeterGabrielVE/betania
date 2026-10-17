@@ -1,6 +1,7 @@
 """Sesión. Son vistas Django normales: el CsrfViewMiddleware las protege."""
 
 import json
+import re
 
 from django.conf import settings
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
@@ -44,6 +45,7 @@ def _preferencias_json(user):
         "moneda_vista": vista,
         "factor": factor,
         "aviso": aviso,
+        "tablero_ocultos": (pref.tablero_ocultos if pref else None) or [],
     }
 
 
@@ -145,7 +147,9 @@ def iniciar_sesion(request):
 @require_http_methods(["PATCH"])
 def preferencias(request):
     """Cambia la edición y/o la moneda preferidas: {"retiro": id | null,
-    "moneda": "VES" | "USD" | "EUR" | ""}. Devuelve la sesión actualizada."""
+    "moneda": "VES" | "USD" | "EUR" | ""}, y las secciones ocultas del
+    tablero: {"tablero_ocultos": ["cumpleanos", ...]}. Devuelve la sesión
+    actualizada."""
     if not request.user.is_authenticated:
         return JsonResponse({"detail": "Inicia sesión."}, status=401)
     try:
@@ -166,6 +170,13 @@ def preferencias(request):
         if datos["moneda"] not in ("", *Moneda.values):
             return JsonResponse({"moneda": ["Moneda no válida."]}, status=400)
         pref.moneda = datos["moneda"]
+    if "tablero_ocultos" in datos:
+        ocultos = datos["tablero_ocultos"]
+        if not (isinstance(ocultos, list) and len(ocultos) <= 50 and all(
+                isinstance(c, str) and re.fullmatch(r"[a-z_]{1,40}", c) for c in ocultos)):
+            return JsonResponse({"tablero_ocultos": ["Lista de secciones no válida."]},
+                                status=400)
+        pref.tablero_ocultos = list(dict.fromkeys(ocultos))
     pref.save()
     return JsonResponse(_usuario_json(request.user))
 
