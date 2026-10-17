@@ -12,6 +12,7 @@ import PersonaFicha from "./pages/Retiros/PersonaFicha";
 import RegistrarServidor from "./pages/Retiros/RegistrarServidor";
 import Auditoria from "./pages/Retiros/Auditoria";
 import ControlPagos from "./pages/Retiros/ControlPagos";
+import MiCuenta from "./pages/Retiros/MiCuenta";
 import RetiroPanel from "./pages/Retiros/RetiroPanel";
 import RolPermisos from "./pages/Retiros/RolPermisos";
 
@@ -30,6 +31,7 @@ export default function App() {
             <Route path="/control-pagos" element={<ControlPagos />} />
             <Route path="/roles/:id/permisos" element={<RolPermisos />} />
             <Route path="/auditoria" element={<Auditoria />} />
+            <Route path="/mi-cuenta" element={<MiCuenta />} />
             <Route path="/personas/:id" element={<PersonaFicha />} />
             <Route path="/personas/:id/editar" element={<EditarPersona />} />
             {/* Cualquier módulo de /api/esquema/ (retiros, personas, pagos...) */}

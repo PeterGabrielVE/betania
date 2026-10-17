@@ -75,7 +75,8 @@ class ModulosTests(Base):
         self.client.logout()
         for ruta in ("/api/retiros/", "/api/esquema/", "/api/resumen/",
                      f"/api/retiros/{self.retiro.pk}/panel/"):
-            self.assertEqual(self.client.get(ruta).status_code, 403, ruta)
+            # 401 (no 403): el frontend sabe que es la sesión, no el rol.
+            self.assertEqual(self.client.get(ruta).status_code, 401, ruta)
 
     def test_esquema_describe_los_modulos(self):
         modulos = {m["slug"]: m for m in self.client.get("/api/esquema/").json()}
@@ -484,7 +485,8 @@ class AccesoPorRolTests(Base):
         usuario = self.entrar_como(RolSistema.COORD_RETIRO)
         usuario.activo = False
         usuario.save()
-        self.assertEqual(self.client.get(self.ruta).status_code, 403)
+        # Desactivarlo cierra su sesión.
+        self.assertEqual(self.client.get(self.ruta).status_code, 401)
 
 
 class DocumentoYGeografiaTests(Base):
@@ -1106,7 +1108,7 @@ class DescargasTests(Base):
         self.assertTrue(r.content.startswith(b"%PDF"))
         self.assertEqual(self.post("/api/exportar/", {"formato": "xlsx"}).status_code, 400)
         self.client.logout()
-        self.assertEqual(self.post("/api/exportar/", tabla).status_code, 403)
+        self.assertEqual(self.post("/api/exportar/", tabla).status_code, 401)
 
 
 class ControlPagosTests(Base):
@@ -1762,3 +1764,59 @@ class AsignacionCoherenteTests(Base):
         AsignacionRol.objects.create(usuario=usuario, rol=rol, retiro=self.retiro, parroquia=otra)
         self.client.force_login(cuenta)
         self.assertEqual(self.client.get("/api/retiros/").json()["count"], 1)
+
+
+class MiCuentaTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.cuenta = User.objects.create_user("ana", password="clave-larga-2027")
+        usuario = Usuario.objects.create(persona=self.persona("Ana Pérez"), cuenta=self.cuenta)
+        AsignacionRol.objects.create(usuario=usuario, rol=rol_de(RolSistema.LOGISTICA),
+                                     retiro=self.retiro)
+        self.client.force_login(self.cuenta)
+
+    def test_la_sesion_trae_su_nombre_ficha_y_roles(self):
+        s = self.client.get("/api/auth/sesion/").json()
+        self.assertEqual(s["nombre"], "Ana Pérez")
+        self.assertEqual(s["persona"]["nombre"], "Ana Pérez")
+        self.assertEqual(s["roles"], ["Coordinador de logística · Emaús hombres #12"])
+
+    def test_cambiar_correo(self):
+        r = self.client.patch("/api/auth/cuenta/", {"email": "no es correo"},
+                              content_type="application/json")
+        self.assertEqual(r.status_code, 400)
+        r = self.client.patch("/api/auth/cuenta/", {"email": "ana@example.com"},
+                              content_type="application/json")
+        self.assertEqual(r.json()["email"], "ana@example.com")
+
+    def test_cambiar_contrasena_sin_salir(self):
+        ruta = "/api/auth/cuenta/clave/"
+        r = self.post(ruta, {"actual": "mala", "nueva": "otra-clave-2027"})
+        self.assertIn("actual", r.json())
+        r = self.post(ruta, {"actual": "clave-larga-2027", "nueva": "123"})
+        self.assertIn("nueva", r.json())
+        r = self.post(ruta, {"actual": "clave-larga-2027", "nueva": "otra-clave-larga-2027"})
+        self.assertEqual(r.status_code, 200)
+        # Sigue con sesión y la nueva sirve.
+        self.assertTrue(self.client.get("/api/auth/sesion/").json()["autenticado"])
+        self.client.logout()
+        self.assertTrue(self.client.login(username="ana", password="otra-clave-larga-2027"))
+
+    def test_mis_tareas(self):
+        persona = self.cuenta.usuario_retiros.persona
+        Tarea.objects.create(retiro=self.retiro, titulo="Mía", responsable=persona)
+        Tarea.objects.create(retiro=self.retiro, titulo="Otra")
+        r = self.client.get(f"/api/tareas/?responsable={persona.pk}").json()
+        self.assertEqual([t["titulo"] for t in r["results"]], ["Mía"])
+
+
+class SesionVencidaTests(Base):
+    def test_sin_sesion_es_401_y_sin_permiso_403(self):
+        cuenta = User.objects.create_user("ana", password="clave-larga-2027")
+        self.client.force_login(cuenta)
+        self.assertEqual(self.client.get("/api/pagos/").status_code, 403)  # sin rol
+        # Cambiar la contraseña en otra sesión cierra esta.
+        cuenta.set_password("otra-clave-larga-2027")
+        cuenta.save()
+        self.assertEqual(self.client.get("/api/pagos/").status_code, 401)
+        self.assertEqual(self.client.get("/api/auth/cuenta/").status_code, 401)

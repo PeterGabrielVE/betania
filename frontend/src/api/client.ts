@@ -50,9 +50,17 @@ function aError(status: number, datos: unknown): ApiError {
 // status 0: no hubo respuesta (sin conexión o el servidor apagado).
 export const SIN_CONEXION = 0;
 
+// Lo escucha AuthContext: la sesión venció (o se cerró en otro lado, p. ej. al
+// cambiar la contraseña) y hay que volver a iniciarla.
+export const SESION_VENCIDA = "betania:sesion-vencida";
+
 async function pedir(ruta: string, init: RequestInit): Promise<Response> {
   try {
-    return await fetch(ruta, init);
+    const res = await fetch(ruta, init);
+    if (res.status === 401 && !ruta.startsWith("/api/auth/login")) {
+      window.dispatchEvent(new Event(SESION_VENCIDA));
+    }
+    return res;
   } catch {
     throw new ApiError(
       SIN_CONEXION,
@@ -158,6 +166,9 @@ export type Sesion =
       region: string; // p. ej. "es-CO"
       monedas: { valor: string; etiqueta: string }[];
       preferencias: Preferencias;
+      // Su ficha (si la cuenta es de una persona) y sus roles con su ámbito.
+      persona: { id: string; nombre: string } | null;
+      roles: string[];
     };
 
 // Lo que el usuario eligió en el encabezado (ver retiros/api/sesion.py).

@@ -125,7 +125,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # API del frontend: misma sesión que el admin, siempre autenticada.
 REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework.authentication.SessionAuthentication"],
+    # Sesión de Django; sin sesión responde 401 (ver retiros/api/autenticacion.py).
+    "DEFAULT_AUTHENTICATION_CLASSES": ["retiros.api.autenticacion.Sesion"],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
     "DEFAULT_PAGINATION_CLASS": "retiros.api.paginacion.Paginacion",

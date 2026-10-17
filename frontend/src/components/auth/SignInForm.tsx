@@ -7,7 +7,7 @@ import { useState } from "react";
 import { Navigate, useLocation } from "react-router";
 
 export default function SignInForm() {
-  const { sesion, login } = useAuth();
+  const { sesion, vencida, login } = useAuth();
   const location = useLocation();
   const [showPassword, setShowPassword] = useState(false);
   const [username, setUsername] = useState("");
@@ -44,6 +44,15 @@ export default function SignInForm() {
               Entra con tu usuario y contraseña del sistema de retiros.
             </p>
           </div>
+          {vencida && (
+            <p
+              role="status"
+              className="mb-5 rounded-lg bg-warning-50 px-4 py-3 text-sm text-warning-700 dark:bg-warning-500/15 dark:text-warning-400"
+            >
+              Tu sesión terminó (venció o se cambió la contraseña). Vuelve a
+              iniciar sesión para seguir donde estabas.
+            </p>
+          )}
           <form onSubmit={handleSubmit}>
             <div className="space-y-6">
               <div>

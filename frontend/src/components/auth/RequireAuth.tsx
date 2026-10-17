@@ -16,7 +16,11 @@ export default function RequireAuth() {
   if (sesion === null) return <CargaInicial />;
   if (!sesion.autenticado) {
     return (
-      <Navigate to="/signin" replace state={{ desde: location.pathname }} />
+      <Navigate
+        to="/signin"
+        replace
+        state={{ desde: location.pathname + location.search }}
+      />
     );
   }
   return <Outlet />;

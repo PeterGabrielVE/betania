@@ -73,7 +73,7 @@ MODULOS = [
                 "hecha"],
         lista=["titulo", "fecha_limite", "responsable", "area", "retiro", "hecha"],
         buscar=["titulo", "responsable__nombre"],
-        filtros=["hecha", "retiro", "area"],
+        filtros=["hecha", "retiro", "area", "responsable"],
         orden=["hecha", "fecha_limite"],
         relacionados=["retiro__tipo", "area", "responsable"],
         etiquetas={"titulo": "Tarea", "hecha": "Hecha"},

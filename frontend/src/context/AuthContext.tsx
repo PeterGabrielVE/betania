@@ -1,6 +1,7 @@
 import {
   api,
   ApiError,
+  SESION_VENCIDA,
   type Modulo,
   type Preferencias,
   type Sesion,
@@ -21,10 +22,15 @@ type Estado = {
   modulos: Modulo[];
   // Si al abrir la app el sistema no respondió (sin conexión, error 500…).
   errorInicial?: ApiError;
+  // La sesión se cerró sola (venció o cambió la contraseña en otro lado).
+  vencida?: boolean;
 };
 
 type AuthContextType = Estado & {
   reintentar: () => void;
+  // Vuelve a pedir la sesión sin pasar por la pantalla de carga (p. ej. al
+  // cambiar el correo en Mi cuenta).
+  refrescar: () => Promise<void>;
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   // Cambia la edición y/o la moneda preferidas (se guardan en el servidor).
@@ -89,6 +95,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     iniciar();
   }, [iniciar]);
 
+  // Sesión vencida: se marca como cerrada y RequireAuth manda a iniciar
+  // sesión (y después vuelve a la página donde estaba).
+  useEffect(() => {
+    const vencida = () =>
+      setEstado((e) =>
+        e.sesion?.autenticado
+          ? { sesion: { autenticado: false }, modulos: [], vencida: true }
+          : e,
+      );
+    window.addEventListener(SESION_VENCIDA, vencida);
+    return () => window.removeEventListener(SESION_VENCIDA, vencida);
+  }, []);
+
+  const refrescar = useCallback(async () => {
+    setEstado(await cargar(await api<Sesion>("/auth/sesion/")));
+  }, []);
+
   const reintentar = useCallback(() => {
     setEstado({ sesion: null, modulos: [] });
     iniciar();
@@ -121,7 +144,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   return (
     <AuthContext.Provider
-      value={{ ...estado, login, logout, cambiarPreferencias, reintentar }}
+      value={{
+        ...estado,
+        login,
+        logout,
+        cambiarPreferencias,
+        reintentar,
+        refrescar,
+      }}
     >
       {children}
     </AuthContext.Provider>
