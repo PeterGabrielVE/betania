@@ -10,6 +10,8 @@ como_admin() { DATABASE_URL="$URL_ADMIN" "$@"; }
 if [ -z "$URL_ADMIN" ]; then
   echo "!! Falta DATABASE_URL: no hay base de datos a la que conectarse." >&2
   echo "!! En Railway: crea el servicio PostgreSQL y pon DATABASE_URL=\${{Postgres.DATABASE_URL}}." >&2
+  # Solo los nombres (nunca los valores), para ver qué variables sí llegan.
+  echo "!! Variables recibidas: $(env | cut -d= -f1 | sort | tr '\n' ' ')" >&2
   exit 1
 fi
 
