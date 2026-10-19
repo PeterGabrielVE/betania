@@ -100,13 +100,14 @@ el mismo proyecto. El plan Hobby cuesta unos 5 USD al mes y la app no se duerme.
    | `DJANGO_SUPERUSER_USERNAME` / `_EMAIL` / `_PASSWORD` | tu cuenta; una clave fuerte |
 
    `TIME_ZONE`, `REGION` y `MONEDA` solo si quieres otros valores que los de
-   `.env.example`. El puerto no se configura: Railway fija `PORT` y la imagen lo
-   usa.
+   `.env.example`.
 4. **Dominio.** Servicio de la app > *Settings > Networking > Generate Domain*
-   (o *Custom Domain* para uno propio). Usa ese dominio en `ALLOWED_HOSTS` y
-   `CSRF_TRUSTED_ORIGINS`.
-5. **Comprobar.** En *Settings > Deploy*, pon `/api/salud/` como
-   *Healthcheck Path*. Vuelve a desplegar (*Deploy*) y abre el dominio: en los
+   (o *Custom Domain* para uno propio), con puerto `8000`, y agrega la variable
+   `PORT=8000` para que gunicorn escuche en ese mismo puerto. Usa ese dominio en
+   `ALLOWED_HOSTS` y `CSRF_TRUSTED_ORIGINS`.
+5. **Comprobar.** `railway.json` ya fija el *Healthcheck* en `/api/salud/`
+   (Railway no da por bueno el despliegue hasta que responde). Vuelve a
+   desplegar (*Deploy*) y abre el dominio: en los
    registros (*Deployments > View logs*) deben aparecer los pasos del
    entrypoint y luego gunicorn. Entra con tu superusuario.
 6. **Después del primer arranque**, borra `DJANGO_SUPERUSER_PASSWORD` y pon
