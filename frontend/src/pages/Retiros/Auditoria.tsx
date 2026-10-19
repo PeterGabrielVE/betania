@@ -14,6 +14,8 @@ import Paginacion from "@/components/modulos/Paginacion";
 import Badge from "@/components/ui/badge/Badge";
 import { useAuth } from "@/context/AuthContext";
 import NotFound from "@/pages/OtherPage/NotFound";
+import CampoFecha from "@/components/form/CampoFecha";
+import { fechaHora } from "@/utils/formato";
 import { Fragment, useEffect, useState } from "react";
 
 type Cambio = {
@@ -54,11 +56,6 @@ const COLOR: Record<
   salida: "light",
   ingreso_fallido: "warning",
 };
-
-const fechaHora = new Intl.DateTimeFormat("es-VE", {
-  dateStyle: "medium",
-  timeStyle: "short",
-});
 
 function texto(valor: unknown): string {
   if (valor === null || valor === undefined || valor === "") return "—";
@@ -279,20 +276,18 @@ export default function Auditoria() {
           </select>
           <label className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
             Desde
-            <input
-              type="date"
+            <CampoFecha
               value={filtros.desde}
-              onChange={(e) => poner("desde", e.target.value)}
-              className={claseControl}
+              onChange={(iso) => poner("desde", iso)}
+              className={`${claseControl} w-40`}
             />
           </label>
           <label className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
             Hasta
-            <input
-              type="date"
+            <CampoFecha
               value={filtros.hasta}
-              onChange={(e) => poner("hasta", e.target.value)}
-              className={claseControl}
+              onChange={(iso) => poner("hasta", iso)}
+              className={`${claseControl} w-40`}
             />
           </label>
           {hayFiltros && (
@@ -349,7 +344,7 @@ export default function Auditoria() {
                     <Fragment key={f.id}>
                       <tr className="align-top">
                         <td className={`${claseCelda} whitespace-nowrap`}>
-                          {fechaHora.format(new Date(f.fecha))}
+                          {fechaHora(f.fecha)}
                         </td>
                         <td className={claseCelda}>
                           <span className="font-medium text-gray-800 dark:text-white/90">

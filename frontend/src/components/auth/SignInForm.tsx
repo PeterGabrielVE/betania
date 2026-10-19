@@ -1,4 +1,5 @@
 import Logo from "@/components/common/Logo";
+import PiePagina from "@/components/common/PiePagina";
 import Label from "@/components/form/Label";
 import Input from "@/components/form/input/InputField";
 import Button from "@/components/ui/button/Button";
@@ -149,6 +150,7 @@ export default function SignInForm() {
           </form>
         </div>
       </div>
+      <PiePagina className="max-sm:bg-brand-950 max-sm:pt-0 max-sm:text-white/50" />
     </div>
   );
 }

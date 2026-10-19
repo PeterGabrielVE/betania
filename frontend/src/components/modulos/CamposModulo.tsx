@@ -1,4 +1,5 @@
 import type { Modulo } from "@/api/client";
+import CampoFecha from "@/components/form/CampoFecha";
 import Label from "@/components/form/Label";
 import { claseControl } from "./estilos";
 import {
@@ -93,14 +94,20 @@ export default function CamposModulo({
             className={`${claseControl} h-auto w-full py-2.5 ${entrada.tipo === "json" ? "font-mono" : ""}`}
           />
         );
+      case "fecha":
+        return (
+          <CampoFecha
+            {...comunes}
+            value={(valor as string) ?? ""}
+            onChange={(iso) => poner(entrada.clave, iso)}
+          />
+        );
       default:
         return (
           <input
             {...comunes}
             type={
-              entrada.tipo === "fecha"
-                ? "date"
-                : ["numero", "decimal", "cifra"].includes(entrada.tipo)
+              ["numero", "decimal", "cifra"].includes(entrada.tipo)
                   ? "number"
                   : entrada.tipo === "email"
                     ? "email"

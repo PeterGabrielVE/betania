@@ -1,7 +1,7 @@
 import { api, ApiError } from "@/api/client";
 import Button from "@/components/ui/button/Button";
 import { Modal } from "@/components/ui/modal";
-import { fecha } from "@/utils/formato";
+import { fechaHora } from "@/utils/formato";
 import { useEffect, useState } from "react";
 import { claseBoton, claseControl } from "./estilos";
 
@@ -112,7 +112,7 @@ export default function DialogoCuenta({
             <>
               {cuenta.persona}
               {cuenta.tiene_cuenta &&
-                ` · último acceso: ${cuenta.ultimo_acceso ? fecha(cuenta.ultimo_acceso) : "nunca"}`}
+                ` · último acceso: ${cuenta.ultimo_acceso ? fechaHora(cuenta.ultimo_acceso) : "nunca"}`}
               {!cuenta.activo && " · usuario desactivado: no puede entrar"}
             </>
           ) : (
@@ -236,7 +236,7 @@ export default function DialogoCuenta({
                   error("password")
                 ) : (
                   <p className="mt-1 text-theme-xs text-gray-500 dark:text-gray-400">
-                    Al menos 10 caracteres, que no sea solo números ni parecida
+                    Al menos 8 caracteres, que no sea solo números ni parecida
                     al nombre.
                   </p>
                 )}

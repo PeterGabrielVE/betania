@@ -38,7 +38,7 @@ import {
   TaskIcon,
   UserIcon,
 } from "@/icons";
-import { colorEstado, dinero, fecha } from "@/utils/formato";
+import { colorEstado, diaYMes, dinero, fecha } from "@/utils/formato";
 import { Link, useSearchParams } from "react-router";
 import { SECCIONES } from "./seccionesTablero";
 
@@ -52,12 +52,6 @@ type Ver = (clave: string) => boolean;
 // ancho (`ancho`: su clase cuando van juntas).
 const fila = (ver: Ver, otra: string, ancho: string) =>
   ver(otra) ? ancho : "col-span-12";
-
-const diaYMes = new Intl.DateTimeFormat(undefined, {
-  day: "numeric",
-  month: "short",
-  timeZone: "UTC",
-});
 
 function Tarjeta({
   titulo,
@@ -470,7 +464,7 @@ function TableroRetiro({ t, ver }: { t: Tablero; ver: Ver }) {
                         ) : (
                           tarea.fecha_limite && (
                             <span className="shrink-0 text-theme-xs text-gray-500 dark:text-gray-400">
-                              {diaYMes.format(new Date(tarea.fecha_limite))}
+                              {fecha(tarea.fecha_limite)}
                             </span>
                           )
                         )}
@@ -515,7 +509,7 @@ function TableroRetiro({ t, ver }: { t: Tablero; ver: Ver }) {
                     </span>
                     <span className="text-theme-xs text-gray-500 dark:text-gray-400">
                       {c.rol} · cumple {c.cumple} el{" "}
-                      {diaYMes.format(new Date(c.fecha))}
+                      {diaYMes(c.fecha)}
                     </span>
                   </div>
                   {c.durante_retiro ? (

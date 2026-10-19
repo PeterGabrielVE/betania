@@ -13,7 +13,7 @@ import {
 } from "@/components/modulos/estilos";
 import { useAuth } from "@/context/AuthContext";
 import { EyeCloseIcon, EyeIcon } from "@/icons";
-import { fecha } from "@/utils/formato";
+import { fecha, fechaHora } from "@/utils/formato";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 
@@ -173,7 +173,7 @@ function Contrasena() {
         {campo("repetir", "Repite la nueva", "new-password")}
       </div>
       <p className="text-theme-xs text-gray-500 dark:text-gray-400">
-        Al menos 10 caracteres, que no sea solo números ni parecida a tu nombre
+        Al menos 8 caracteres, que no sea solo números ni parecida a tu nombre
         o usuario.
       </p>
       <div className="flex flex-wrap items-center gap-3">
@@ -253,7 +253,7 @@ export default function MiCuenta() {
                 Último acceso
               </dt>
               <dd className="mt-0.5 text-gray-800 dark:text-white/90">
-                {cuenta.ultimo_acceso ? fecha(cuenta.ultimo_acceso) : "—"}
+                {fechaHora(cuenta.ultimo_acceso)}
               </dd>
             </div>
             <div>

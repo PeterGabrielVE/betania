@@ -6,6 +6,7 @@ import { useFormContext, useWatch } from "react-hook-form";
 import {
   AreaTexto,
   Celular,
+  Fecha,
   Grupo,
   Opciones,
   Texto,
@@ -56,10 +57,10 @@ export default function PasoPersonales({
         <Texto nombre="segundo_apellido" etiqueta={E.segundo_apellido} />
       </Grupo>
       <Grupo>
-        <Texto
+        <Fecha
           nombre="fecha_nacimiento"
           etiqueta={E.fecha_nacimiento}
-          tipo="date"
+          pasada
           obligatorio
           ayuda={`Desde ${EDAD_MINIMA} años.`}
         />

@@ -415,7 +415,7 @@ está en `retiros/ocr/` (las etiquetas que reconoce, en `planilla.py`).
   después de la última petición; al vencer, la app lleva a iniciar sesión y
   luego vuelve a la misma página. Cambiar la contraseña cierra las demás
   sesiones abiertas.
-- **Contraseñas**: al menos 10 caracteres, que no sean solo números, ni
+- **Contraseñas**: al menos 8 caracteres, que no sean solo números, ni
   comunes, ni parecidas al usuario.
 - **Cabeceras**: el sitio no se puede incrustar en otros (contra clickjacking),
   el navegador no adivina tipos de archivo y no se envía la dirección a sitios

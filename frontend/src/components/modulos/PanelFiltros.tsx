@@ -1,4 +1,5 @@
 import type { FiltroAvanzado } from "@/api/client";
+import CampoFecha from "@/components/form/CampoFecha";
 import { CloseIcon } from "@/icons";
 import { useEffect, useState } from "react";
 import { claseBoton, claseBotonPrincipal, claseControl } from "./estilos";
@@ -38,14 +39,22 @@ function Control({
               <span className="mb-1 block text-theme-xs text-gray-500 dark:text-gray-400">
                 {texto}
               </span>
-              <input
-                type={tipo}
-                min={tipo === "number" ? 0 : undefined}
-                max={tipo === "number" ? 120 : undefined}
-                className={`${claseControl} w-full`}
-                value={valores[p] ?? ""}
-                onChange={(e) => poner({ [p]: e.target.value })}
-              />
+              {tipo === "date" ? (
+                <CampoFecha
+                  className={`${claseControl} w-full`}
+                  value={valores[p] ?? ""}
+                  onChange={(iso) => poner({ [p]: iso })}
+                />
+              ) : (
+                <input
+                  type={tipo}
+                  min={0}
+                  max={120}
+                  className={`${claseControl} w-full`}
+                  value={valores[p] ?? ""}
+                  onChange={(e) => poner({ [p]: e.target.value })}
+                />
+              )}
             </label>
           ))}
         </div>

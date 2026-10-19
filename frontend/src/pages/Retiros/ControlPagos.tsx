@@ -38,6 +38,7 @@ import {
   PieChartIcon,
   PlusIcon,
 } from "@/icons";
+import CampoFecha from "@/components/form/CampoFecha";
 import { colorEstado, dinero, fecha, montoVista } from "@/utils/formato";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router";
@@ -188,13 +189,12 @@ function DialogoAbono({
             <label htmlFor="abono-fecha" className={claseEtiqueta}>
               Fecha
             </label>
-            <input
+            <CampoFecha
               id="abono-fecha"
-              type="date"
               required
               className={`${claseControl} w-full`}
               value={valores.fecha}
-              onChange={(e) => poner("fecha", e.target.value)}
+              onChange={(iso) => poner("fecha", iso)}
             />
             {error("fecha")}
           </div>

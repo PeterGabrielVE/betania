@@ -1,5 +1,6 @@
 // Controles del formulario de inscripción, conectados a react-hook-form: cada
 // uno muestra su etiqueta, si es obligatorio y el error de zod debajo.
+import CampoFecha from "@/components/form/CampoFecha";
 import Label from "@/components/form/Label";
 import { claseControl } from "@/components/modulos/estilos";
 import SelectorRemoto from "@/components/modulos/SelectorRemoto";
@@ -97,7 +98,7 @@ export function Texto({
 }: Base & {
   // Para pasar opciones propias a register (p. ej. onBlur).
   registro?: ReturnType<UseFormRegister<FieldValues>>;
-  tipo?: "text" | "email" | "tel" | "date" | "number";
+  tipo?: "text" | "email" | "tel" | "number";
   placeholder?: string;
 }) {
   const { error, props } = useCampo(base.nombre);
@@ -107,13 +108,37 @@ export function Texto({
         type={tipo}
         placeholder={placeholder}
         min={tipo === "number" ? 0 : undefined}
-        max={
-          tipo === "date" ? new Date().toISOString().slice(0, 10) : undefined
-        }
         inputMode={tipo === "tel" ? "tel" : undefined}
         className={claseDe(error)}
         {...props}
         {...registro}
+      />
+    </Envoltura>
+  );
+}
+
+// Fecha dd/mm/aaaa (ver CampoFecha). `pasada`: no puede ser después de hoy.
+export function Fecha({ pasada, ...base }: Base & { pasada?: boolean }) {
+  const { control, formState } = useFormContext();
+  const error = !!get(formState.errors, base.nombre);
+  return (
+    <Envoltura {...base}>
+      <Controller
+        name={base.nombre}
+        control={control}
+        render={({ field }) => (
+          <CampoFecha
+            id={`insc-${base.nombre}`}
+            name={field.name}
+            aria-invalid={error}
+            aria-describedby={error ? `insc-${base.nombre}-error` : undefined}
+            className={claseDe(error)}
+            max={pasada ? new Date().toISOString().slice(0, 10) : undefined}
+            value={(field.value as string) ?? ""}
+            onChange={field.onChange}
+            onBlur={field.onBlur}
+          />
+        )}
       />
     </Envoltura>
   );

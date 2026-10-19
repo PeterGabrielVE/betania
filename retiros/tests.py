@@ -1205,6 +1205,19 @@ class CuentasEImportacionTests(Base):
         self.client.logout()
         self.assertTrue(self.client.login(username="ana", password="clave-larga-2027"))
 
+    def test_la_contrasena_lleva_al_menos_8_caracteres(self):
+        r = self.post(self.ruta, {"username": "ana", "password": "clave27"})
+        self.assertIn("8", " ".join(r.json()["password"]))
+        r = self.post(self.ruta, {"username": "ana", "password": "clave270"})
+        self.assertEqual(r.status_code, 200, r.content)
+
+    def test_la_cedula_no_es_obligatoria(self):
+        r = self.post("/api/personas/", {
+            "parroquia": str(self.parroquia.pk), "tipo_documento": "V", "documento": "",
+            "primer_nombre": "Rosa", "primer_apellido": "Díaz"})
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertEqual(Persona.objects.get(primer_nombre="Rosa").documento, "")
+
     def test_editar_sin_cambiar_la_contrasena_y_desactivar(self):
         self.post(self.ruta, {"username": "ana", "password": "clave-larga-2027"})
         r = self.post(self.ruta, {"username": "ana.perez", "password": ""})
@@ -1938,10 +1951,10 @@ class LimiteDeIntentosTests(Base):
         self.client.logout()
         self.assertEqual(self.entrar().status_code, 200)
 
-    def test_contrasenas_de_al_menos_10_y_cabeceras(self):
+    def test_contrasenas_de_al_menos_8_y_cabeceras(self):
         self.client.force_login(self.ana)
         r = self.post("/api/auth/cuenta/clave/", {"actual": "clave-larga-2027",
-                                                  "nueva": "Corta-123"})
+                                                  "nueva": "Corta-1"})
         self.assertIn("nueva", r.json())
         r = self.client.get("/api/auth/sesion/")
         self.assertEqual(r["X-Frame-Options"], "DENY")

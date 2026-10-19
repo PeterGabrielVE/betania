@@ -86,7 +86,8 @@ export const camposPersona = {
   // Sale del retiro (o de la persona ya registrada); no se muestra.
   parroquia: obligatorio("Elige el retiro para saber la parroquia."),
   tipo_documento: obligatorio("Elige el tipo de documento."),
-  documento: obligatorio("Escribe el número de documento."),
+  // Opcional (hay quien no la tiene a mano); si se escribe, se valida abajo.
+  documento: texto,
   primer_nombre: obligatorio("Escribe el primer nombre.").pipe(nombre),
   segundo_nombre: nombre,
   primer_apellido: obligatorio("Escribe el primer apellido.").pipe(nombre),

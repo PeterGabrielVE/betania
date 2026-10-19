@@ -82,12 +82,11 @@ export function PasoIdentificacion({
         <Texto
           nombre="documento"
           etiqueta={E.documento}
-          obligatorio
           placeholder="Ej.: 12345678"
           ayuda={
             edicion
-              ? undefined
-              : "Si ya está registrada, sus datos se cargan solos."
+              ? "Opcional."
+              : "Opcional. Si ya está registrada, sus datos se cargan solos."
           }
           registro={register("documento", { onBlur: onDocumento })}
         />
