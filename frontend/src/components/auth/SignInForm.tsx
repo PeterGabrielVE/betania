@@ -44,7 +44,7 @@ export default function SignInForm() {
   return (
     <div className="flex flex-1 flex-col max-sm:overflow-hidden max-sm:bg-gray-50 max-sm:dark:bg-gray-900">
       {/* Celular: cabecera azul en la esquina */}
-      <div className="w-4/5 rounded-ee-[6rem] bg-brand-500 px-6 pt-8 pb-12 sm:hidden">
+      <div className="relative z-10 w-4/5 rounded-ee-[6rem] bg-brand-500 px-6 pt-8 pb-12 sm:hidden">
         <Logo claro className="mb-8" />
         <h1 className="text-title-sm font-semibold text-white">
           Iniciar sesión
@@ -55,9 +55,14 @@ export default function SignInForm() {
       </div>
 
       {/* Celular: arcos grises de adorno */}
-      <div aria-hidden className="relative min-h-24 flex-1 sm:hidden">
-        <div className="absolute -bottom-4 left-1/2 h-64 w-[150%] -translate-x-1/2 rounded-[50%] bg-gray-100 dark:bg-white/3" />
-        <div className="absolute -bottom-10 left-1/2 h-52 w-[130%] -translate-x-1/2 rounded-[50%] bg-gray-200/70 dark:bg-white/5" />
+      {/* Los arcos se recortan a su espacio y crecen con él: en una pantalla
+          baja no tapan la cabecera. */}
+      <div
+        aria-hidden
+        className="relative min-h-28 flex-1 overflow-hidden sm:hidden"
+      >
+        <div className="absolute -bottom-4 left-1/2 h-[110%] w-[150%] -translate-x-1/2 rounded-[50%] bg-gray-100 dark:bg-white/3" />
+        <div className="absolute -bottom-10 left-1/2 h-[95%] w-[130%] -translate-x-1/2 rounded-[50%] bg-gray-200/70 dark:bg-white/5" />
       </div>
 
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center max-sm:relative max-sm:max-w-none max-sm:flex-none max-sm:bg-brand-950 max-sm:px-6 max-sm:pt-4 max-sm:pb-10">
@@ -150,7 +155,7 @@ export default function SignInForm() {
           </form>
         </div>
       </div>
-      <PiePagina className="max-sm:bg-brand-950 max-sm:pt-0 max-sm:text-white/50" />
+      <PiePagina className="max-sm:bg-brand-950 max-sm:pt-0 max-sm:pb-4 max-sm:text-white/50" />
     </div>
   );
 }

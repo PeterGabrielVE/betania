@@ -9,6 +9,8 @@ export default function PiePagina({
   claro?: boolean;
   className?: string;
 }) {
+  const anio = new Date().getFullYear();
+  const autor = <span className="font-medium">Gabagabs</span>;
   return (
     <footer
       className={cn(
@@ -17,8 +19,13 @@ export default function PiePagina({
         className,
       )}
     >
-      © {new Date().getFullYear()} Betania · Gestión de retiros. Desarrollado
-      por <span className="font-medium">Gabagabs</span>.
+      {/* En el celular, la versión corta: que quepa en una línea. */}
+      <span className="sm:hidden">
+        © {anio} Betania · Desarrollado por {autor}
+      </span>
+      <span className="max-sm:hidden">
+        © {anio} Betania · Gestión de retiros. Desarrollado por {autor}.
+      </span>
     </footer>
   );
 }
