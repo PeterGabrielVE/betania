@@ -18,8 +18,9 @@ from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 
 from .. import seguridad
-from ..acceso import ambito_fijo
-from ..models import Parroquia, Persona, Usuario
+from ..acceso import ambito_fijo, asignaciones
+from ..models import (AsignacionRol, Parroquia, Participacion, Persona, Rol, RolSistema,
+                      Usuario)
 from ..reportes import PersonaResource
 from .permisos import permiso
 
@@ -54,7 +55,15 @@ def cuenta_usuario(request, pk):
     usuario = get_object_or_404(Usuario.objects.select_related("persona", "cuenta"), pk=pk)
     if request.method == "GET":
         return Response(_cuenta_json(usuario))
+    errores = _guardar_cuenta(request, usuario)
+    if errores:
+        return Response(errores, status=400)
+    return Response(_cuenta_json(usuario))
 
+
+def _guardar_cuenta(request, usuario):
+    """Crea o cambia la cuenta de `usuario` con {username, email, password?}.
+    Devuelve los errores por campo (vacío si se guardó)."""
     cuenta = usuario.cuenta
     # A un superusuario solo lo toca otro superusuario.
     if cuenta and cuenta.is_superuser and not request.user.is_superuser:
@@ -85,7 +94,7 @@ def cuenta_usuario(request, pk):
         except ValidationError as e:
             errores["password"] = list(e.messages)
     if errores:
-        return Response(errores, status=400)
+        return errores
     if password:
         nueva.set_password(password)
     with transaction.atomic():
@@ -94,7 +103,76 @@ def cuenta_usuario(request, pk):
             usuario.cuenta = nueva
             usuario.save(update_fields=["cuenta"])
     usuario.cuenta = nueva
-    return Response(_cuenta_json(usuario))
+    return {}
+
+
+def da_acceso_a_servidores(user, retiro=None):
+    """Si puede ponerles cuenta y contraseña a los servidores: el super
+    administrador a todos; el coordinador de logística, a los de su retiro
+    (sin `retiro`: si lo es de alguno, para mostrar la llave)."""
+    if user.is_superuser:
+        return True
+    for a in asignaciones(user):
+        if a.rol.codigo == RolSistema.SUPER_ADMIN:
+            return True
+        if a.rol.codigo == RolSistema.LOGISTICA and (retiro is None
+                                                     or a.retiro_id == retiro.pk):
+            return True
+    return False
+
+
+def _rol_servidor(usuario, retiro):
+    return AsignacionRol.objects.filter(
+        usuario=usuario, rol__codigo=RolSistema.SERVIDOR, retiro=retiro).exists()
+
+
+def _cuenta_servidor_json(participacion, usuario):
+    retiro = participacion.retiro
+    if usuario is None:
+        datos = {"usuario": None, "persona": str(participacion.persona),
+                 "tiene_cuenta": False, "username": "",
+                 "email": participacion.persona.email, "activo": True,
+                 "ultimo_acceso": None, "es_superusuario": False, "bloqueado_minutos": 0}
+    else:
+        datos = _cuenta_json(usuario)
+    datos["acceso"] = (f"Tiene el rol Servidor en {retiro}."
+                       if usuario and _rol_servidor(usuario, retiro)
+                       else f"Al guardar recibe el rol Servidor en {retiro}.")
+    return datos
+
+
+@api_view(["GET", "POST"])
+def cuenta_servidor(request, pk):
+    """La cuenta de un servidor desde la lista de Servidores, en un solo paso.
+    POST {username, email, password?}: crea su Usuario si no lo tiene, crea o
+    cambia la cuenta (como cuenta_usuario) y le asigna el rol Servidor en ese
+    retiro, para que al entrar vea el retiro, las charlas y sus tareas.
+    Solo lo usan quienes da_acceso_a_servidores."""
+    if not da_acceso_a_servidores(request.user):
+        raise PermissionDenied()
+    participacion = get_object_or_404(
+        Participacion.objects.select_related("persona", "retiro__tipo")
+        .exclude(tipo=Participacion.Tipo.CAMINANTE), pk=pk)
+    if not da_acceso_a_servidores(request.user, participacion.retiro):
+        raise PermissionDenied("Solo el coordinador de logística de este retiro o el "
+                               "super administrador.")
+    usuario = (Usuario.objects.select_related("persona", "cuenta")
+               .filter(persona=participacion.persona).first())
+    if request.method == "GET":
+        return Response(_cuenta_servidor_json(participacion, usuario))
+
+    with transaction.atomic():
+        if usuario is None:
+            usuario = Usuario.objects.create(persona=participacion.persona)
+        errores = _guardar_cuenta(request, usuario)
+        if errores:
+            # Sin cuenta, el Usuario recién creado no sirve: no se guarda.
+            transaction.set_rollback(True)
+            return Response(errores, status=400)
+        AsignacionRol.objects.get_or_create(
+            usuario=usuario, rol=Rol.objects.get(codigo=RolSistema.SERVIDOR),
+            retiro=participacion.retiro)
+    return Response(_cuenta_servidor_json(participacion, usuario))
 
 
 @api_view(["POST"])

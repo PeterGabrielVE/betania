@@ -451,13 +451,17 @@ function Listado({ modulo }: { modulo: Modulo }) {
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
   const [cancelandoVarios, setCancelandoVarios] = useState(false);
   // Usuarios: la cuenta que se está editando; Personas: importar de Excel.
+  // Ruta de la API de la cuenta que se está editando (Usuarios o Servidores).
   const [cuentaDe, setCuentaDe] = useState<string | null>(null);
   const [importando, setImportando] = useState(false);
   // Leer la foto de un listado de personas (OCR).
   const [leyendoListado, setLeyendoListado] = useState(false);
   // Personas: elegir si se registra un caminante, un servidor o solo la persona.
   const [eligiendoAlta, setEligiendoAlta] = useState(false);
-  const { modulos } = useAuth();
+  const { modulos, sesion } = useAuth();
+  // La llave de Servidores: solo el super administrador y el coordinador de
+  // logística (el servidor revisa además que sea de su retiro).
+  const daAcceso = !!(sesion?.autenticado && sesion.da_acceso_servidores);
   // Panel lateral de filtros (edad, fechas, pago…) y lo aplicado en él.
   const [panelAbierto, setPanelAbierto] = useState(false);
   const [avanzados, setAvanzados] = useState<ValoresFiltros>(() =>
@@ -657,8 +661,11 @@ function Listado({ modulo }: { modulo: Modulo }) {
         : undefined,
     onCuenta:
       modulo.slug === "usuarios" && modulo.puede_cambiar
-        ? (fila: Registro) => setCuentaDe(fila.id)
-        : undefined,
+        ? (fila: Registro) => setCuentaDe(`/usuarios/${fila.id}/cuenta/`)
+        : modulo.slug === "participaciones" && daAcceso
+          ? (fila: Registro) =>
+              setCuentaDe(`/participaciones/${fila.id}/cuenta/`)
+          : undefined,
     seleccion:
       quien && modulo.puede_cambiar
         ? {
@@ -995,7 +1002,7 @@ function Listado({ modulo }: { modulo: Modulo }) {
       </Modal>
       {cuentaDe && (
         <DialogoCuenta
-          usuarioId={cuentaDe}
+          ruta={cuentaDe}
           onCerrar={() => setCuentaDe(null)}
           onGuardado={() => setVersion((v) => v + 1)}
         />

@@ -2074,3 +2074,86 @@ class TableroPersonalizadoTests(Base):
         self.client.force_login(User.objects.create_superuser("otro", "o@example.com", "x"))
         pref = self.client.get("/api/auth/sesion/").json()["preferencias"]
         self.assertEqual(pref["tablero_ocultos"], [])
+
+
+class CuentaServidorTests(Base):
+    """La llave de la lista de Servidores: usuario, cuenta y rol en un paso."""
+
+    def setUp(self):
+        super().setUp()
+        self.luis = self.persona("Luis Gómez", email="luis@example.com")
+        self.servidor = Participacion.objects.create(
+            retiro=self.retiro, persona=self.luis, tipo=Participacion.Tipo.SERVIDOR)
+        self.ruta = f"/api/participaciones/{self.servidor.pk}/cuenta/"
+
+    def test_crea_usuario_cuenta_y_rol_servidor_en_el_retiro(self):
+        datos = self.client.get(self.ruta).json()
+        self.assertEqual((datos["tiene_cuenta"], datos["usuario"], datos["email"]),
+                         (False, None, "luis@example.com"))
+        self.assertIn("Al guardar recibe el rol Servidor", datos["acceso"])
+        r = self.post(self.ruta, {"username": "luis", "email": "luis@example.com",
+                                  "password": "clave-larga-2027"})
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertIn("Tiene el rol Servidor", r.json()["acceso"])
+        usuario = Usuario.objects.get(persona=self.luis)
+        self.assertEqual(usuario.cuenta.username, "luis")
+        asignacion = AsignacionRol.objects.get(usuario=usuario)
+        self.assertEqual((asignacion.rol.codigo, asignacion.retiro_id),
+                         (RolSistema.SERVIDOR, self.retiro.pk))
+        # Cambiar la contraseña después no repite el rol.
+        r = self.post(self.ruta, {"username": "luis", "password": "otra-clave-2027"})
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(AsignacionRol.objects.filter(usuario=usuario).count(), 1)
+        self.client.logout()
+        self.assertTrue(self.client.login(username="luis", password="otra-clave-2027"))
+
+    def test_usa_el_usuario_que_ya_tenia(self):
+        usuario = Usuario.objects.create(persona=self.luis)
+        self.post(self.ruta, {"username": "luis", "password": "clave-larga-2027"})
+        self.assertEqual(Usuario.objects.filter(persona=self.luis).get(), usuario)
+
+    def test_con_errores_no_deja_nada_a_medias(self):
+        r = self.post(self.ruta, {"username": "luis", "password": "corta"})
+        self.assertIn("password", r.json())
+        self.assertFalse(Usuario.objects.filter(persona=self.luis).exists())
+        self.assertFalse(AsignacionRol.objects.exists())
+
+    def test_no_es_para_caminantes(self):
+        caminante = Participacion.objects.create(
+            retiro=self.retiro, persona=self.persona("Pedro"),
+            tipo=Participacion.Tipo.CAMINANTE)
+        r = self.client.get(f"/api/participaciones/{caminante.pk}/cuenta/")
+        self.assertEqual(r.status_code, 404)
+
+    def entrar_con(self, codigo, **ambito):
+        cuenta = User.objects.create_user(f"u{Usuario.objects.count()}", password="x")
+        usuario = Usuario.objects.create(persona=self.persona(cuenta.username), cuenta=cuenta)
+        AsignacionRol.objects.create(usuario=usuario, rol=rol_de(codigo), **ambito)
+        self.client.force_login(cuenta)
+
+    def sesion(self):
+        return self.client.get("/api/auth/sesion/").json()
+
+    def test_solo_super_admin_y_logistica_de_ese_retiro(self):
+        self.assertTrue(self.sesion()["da_acceso_servidores"])  # superusuario
+        self.entrar_con(RolSistema.SUPER_ADMIN)
+        self.assertTrue(self.sesion()["da_acceso_servidores"])
+        self.assertEqual(self.client.get(self.ruta).status_code, 200)
+
+        self.entrar_con(RolSistema.LOGISTICA, retiro=self.retiro)
+        self.assertTrue(self.sesion()["da_acceso_servidores"])
+        r = self.post(self.ruta, {"username": "luis", "password": "clave-larga-2027"})
+        self.assertEqual(r.status_code, 200, r.content)
+
+        otro = Retiro.objects.create(
+            parroquia=self.parroquia, tipo=self.retiro.tipo, edicion=13,
+            fecha_inicio=date(2027, 9, 10), fecha_fin=date(2027, 9, 12))
+        self.entrar_con(RolSistema.LOGISTICA, retiro=otro)
+        self.assertEqual(self.client.get(self.ruta).status_code, 403)
+
+        for codigo, ambito in [(RolSistema.COORD_PARROQUIA, {"parroquia": self.parroquia}),
+                               (RolSistema.COORD_RETIRO, {"retiro": self.retiro}),
+                               (RolSistema.TESORERIA, {"parroquia": self.parroquia})]:
+            self.entrar_con(codigo, **ambito)
+            self.assertFalse(self.sesion()["da_acceso_servidores"], codigo)
+            self.assertEqual(self.client.get(self.ruta).status_code, 403, codigo)

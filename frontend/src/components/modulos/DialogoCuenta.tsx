@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { claseBoton, claseControl } from "./estilos";
 
 type Cuenta = {
+  usuario: string | null; // null: el servidor aún no es usuario
   persona: string;
   tiene_cuenta: boolean;
   username: string;
@@ -14,6 +15,7 @@ type Cuenta = {
   ultimo_acceso: string | null;
   es_superusuario: boolean;
   bloqueado_minutos: number; // por intentos fallidos (0: puede entrar)
+  acceso?: string; // desde Servidores: el rol que recibe o ya tiene
 };
 
 const claseEtiqueta =
@@ -27,13 +29,15 @@ function generarClave() {
 }
 
 // La cuenta con que entra un usuario: nombre de usuario, correo y contraseña.
-// Lo que puede hacer lo dicen sus roles (módulo Roles), no esto.
+// Lo que puede hacer lo dicen sus roles (módulo Roles), no esto. `ruta` es la
+// de la API: /usuarios/<id>/cuenta/ o, desde Servidores,
+// /participaciones/<id>/cuenta/ (que además le da el rol Servidor).
 export default function DialogoCuenta({
-  usuarioId,
+  ruta,
   onCerrar,
   onGuardado,
 }: {
-  usuarioId: string;
+  ruta: string;
   onCerrar: () => void;
   onGuardado: () => void;
 }) {
@@ -50,7 +54,7 @@ export default function DialogoCuenta({
 
   useEffect(() => {
     let vigente = true;
-    api<Cuenta>(`/usuarios/${usuarioId}/cuenta/`)
+    api<Cuenta>(ruta)
       .then((c) => {
         if (!vigente) return;
         setCuenta(c);
@@ -60,7 +64,7 @@ export default function DialogoCuenta({
     return () => {
       vigente = false;
     };
-  }, [usuarioId]);
+  }, [ruta]);
 
   const poner = (campo: keyof typeof valores, valor: string) =>
     setValores((v) => ({ ...v, [campo]: valor }));
@@ -70,7 +74,7 @@ export default function DialogoCuenta({
     setGuardando(true);
     setErrores({});
     try {
-      const c = await api<Cuenta>(`/usuarios/${usuarioId}/cuenta/`, {
+      const c = await api<Cuenta>(ruta, {
         method: "POST",
         body: valores,
       });
@@ -129,7 +133,7 @@ export default function DialogoCuenta({
                 try {
                   setCuenta(
                     await api<Cuenta>(
-                      `/usuarios/${usuarioId}/cuenta/desbloquear/`,
+                      `/usuarios/${cuenta.usuario}/cuenta/desbloquear/`,
                       { method: "POST" },
                     ),
                   );
@@ -141,6 +145,11 @@ export default function DialogoCuenta({
               Quitar bloqueo
             </button>
           </div>
+        )}
+        {cuenta?.acceso && !listo && (
+          <p className="mb-5 text-theme-sm text-gray-500 dark:text-gray-400">
+            {cuenta.acceso}
+          </p>
         )}
         {listo ? (
           <>
@@ -154,7 +163,7 @@ export default function DialogoCuenta({
                   no se vuelve a mostrar)
                 </>
               )}
-              . Lo que puede hacer depende de sus roles.
+              . {cuenta?.acceso ?? "Lo que puede hacer depende de sus roles."}
             </p>
             <div className="mt-6 flex justify-end">
               <Button size="sm" onClick={onCerrar}>

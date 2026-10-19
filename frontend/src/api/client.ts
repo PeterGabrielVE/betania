@@ -206,6 +206,9 @@ export type Sesion =
       email: string;
       es_staff: boolean;
       es_superusuario: boolean;
+      // Super administrador o coordinador de logística: pone la cuenta y
+      // contraseña de los servidores (la llave en Servidores).
+      da_acceso_servidores: boolean;
       moneda: string; // ISO 4217: la moneda base
       region: string; // p. ej. "es-CO"
       monedas: { valor: string; etiqueta: string }[];

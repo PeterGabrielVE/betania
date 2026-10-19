@@ -16,6 +16,7 @@ from .. import seguridad
 from ..acceso import asignaciones, retiros_visibles
 from ..models import Moneda, Preferencias, Retiro
 from ..tasas import TasaNoDisponible, tasa_bcv
+from .cuentas import da_acceso_a_servidores
 from .permisos import permiso
 
 
@@ -63,6 +64,8 @@ def _usuario_json(user):
         "email": user.email,
         "es_staff": user.is_staff,
         "es_superusuario": user.is_superuser,
+        # La llave de Servidores (cuenta y contraseña): ver cuentas.py.
+        "da_acceso_servidores": da_acceso_a_servidores(user),
         # Con qué moneda y formato regional muestra el frontend montos y fechas.
         "moneda": settings.MONEDA,
         "region": settings.REGION,
