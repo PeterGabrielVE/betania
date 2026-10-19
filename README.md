@@ -76,9 +76,78 @@ En producción no se usa ese archivo:
 `docker compose -f docker-compose.yml up -d --build` levanta gunicorn con el
 frontend compilado dentro de la imagen, en el puerto 8000.
 
+### Publicar en Railway
+
+Railway construye la imagen con el `Dockerfile` y le da una base PostgreSQL en
+el mismo proyecto. El plan Hobby cuesta unos 5 USD al mes y la app no se duerme.
+
+1. **Proyecto.** En https://railway.com, *New Project > Deploy from GitHub
+   repo* y elige este repositorio (rama `main`). El primer despliegue fallará
+   porque todavía no hay base de datos: es normal.
+2. **Base de datos.** En el mismo proyecto, *+ Create > Database > PostgreSQL*.
+3. **Variables de la app** (servicio de la app > *Variables*):
+
+   | Variable | Valor |
+   |---|---|
+   | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` (Railway la completa) |
+   | `SECRET_KEY` | una clave larga al azar (`python -c "import secrets; print(secrets.token_urlsafe(50))"`) |
+   | `DEBUG` | `0` |
+   | `ALLOWED_HOSTS` | el dominio, p. ej. `betania.up.railway.app` |
+   | `CSRF_TRUSTED_ORIGINS` | el mismo con `https://`, p. ej. `https://betania.up.railway.app` |
+   | `HTTPS` | `1` |
+   | `PROXY_CONFIABLE` | `1` (Railway pone delante un proxy con la IP real) |
+   | `DJANGO_CREATE_SUPERUSER` | `1` |
+   | `DJANGO_SUPERUSER_USERNAME` / `_EMAIL` / `_PASSWORD` | tu cuenta; una clave fuerte |
+
+   `TIME_ZONE`, `REGION` y `MONEDA` solo si quieres otros valores que los de
+   `.env.example`. El puerto no se configura: Railway fija `PORT` y la imagen lo
+   usa.
+4. **Dominio.** Servicio de la app > *Settings > Networking > Generate Domain*
+   (o *Custom Domain* para uno propio). Usa ese dominio en `ALLOWED_HOSTS` y
+   `CSRF_TRUSTED_ORIGINS`.
+5. **Comprobar.** En *Settings > Deploy*, pon `/api/salud/` como
+   *Healthcheck Path*. Vuelve a desplegar (*Deploy*) y abre el dominio: en los
+   registros (*Deployments > View logs*) deben aparecer los pasos del
+   entrypoint y luego gunicorn. Entra con tu superusuario.
+6. **Después del primer arranque**, borra `DJANGO_SUPERUSER_PASSWORD` y pon
+   `DJANGO_CREATE_SUPERUSER=0`: la cuenta ya existe y la clave no debe quedarse
+   en las variables.
+
+**Que el RLS filtre de verdad.** El usuario `postgres` que da Railway es
+superusuario, y con él las políticas no aplican (ver "Notas importantes"). Una
+vez que la app funcione, crea un rol propio para ella. En el servicio Postgres >
+*Data* (o con `psql` y la URL de *Connect*), ejecuta, con otra clave:
+
+```sql
+CREATE ROLE betania_app LOGIN PASSWORD 'cambia-esta-clave';
+GRANT CONNECT ON DATABASE railway TO betania_app;
+GRANT USAGE ON SCHEMA public TO betania_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO betania_app;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO betania_app;
+-- Las tablas que creen las migraciones futuras también:
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO betania_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+  GRANT USAGE, SELECT ON SEQUENCES TO betania_app;
+```
+
+Luego, en las variables de la app:
+
+- `DATABASE_URL_ADMIN` = `${{Postgres.DATABASE_URL}}` (el entrypoint la usa
+  para migrar, sembrar y aplicar el RLS, que necesitan al dueño).
+- `DATABASE_URL` = la misma dirección con `betania_app` y su clave:
+  `postgresql://betania_app:CLAVE@${{Postgres.PGHOST}}:${{Postgres.PGPORT}}/${{Postgres.PGDATABASE}}`.
+
+Prueba cada rol (coordinador, tesorería...) tras el cambio. Si algo deja de
+verse, vuelve a poner `DATABASE_URL=${{Postgres.DATABASE_URL}}` mientras se
+revisa la política.
+
+Cada `git push` a `main` vuelve a desplegar; las migraciones nuevas se aplican
+solas al arrancar.
+
 ### Mantener vivo el servidor
 
-- **Hosting gratuito que se duerme** (Render, Koyeb, Railway...): el workflow
+- **Hosting gratuito que se duerme** (Render, Koyeb...): el workflow
   `.github/workflows/mantener-vivo.yml` consulta `GET /api/salud/` cada 10
   minutos, así la app no llega a dormirse y nadie espera el arranque en frío.
   Para activarlo, crea en GitHub la variable `URL_SERVIDOR` (Settings > Secrets
