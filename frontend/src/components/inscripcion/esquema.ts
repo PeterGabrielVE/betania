@@ -118,6 +118,9 @@ const basicos = {
   retiro: obligatorio("Elige el retiro."),
   estado: obligatorio("Elige el estado de la inscripción."),
   padrino: texto,
+  // Opcionales: los asigna logística, a veces después de inscribirlo.
+  cama: texto.max(10, "Máximo 10 caracteres."),
+  mesa: texto.max(10, "Máximo 10 caracteres."),
   notas: texto,
   consentimiento_datos: casilla.refine(
     (v) => v,
@@ -223,6 +226,8 @@ export const ETIQUETAS: Record<Campo, string> = {
   retiro: "Retiro",
   estado: "Estado de la inscripción",
   padrino: "Quién lo invitó",
+  cama: "Número de cama",
+  mesa: "Número de mesa",
   estado_civil: "Estado civil",
   pareja_nombre: "Nombre de la pareja",
   pareja_telefono: "Teléfono de la pareja",
@@ -275,6 +280,8 @@ export const PASOS: Paso[] = [
       "tipo_documento",
       "documento",
       "padrino",
+      "cama",
+      "mesa",
     ],
   },
   {
@@ -443,6 +450,8 @@ export function datosDeInscripcion(ins: Registro): Partial<Valores> {
     retiro: comoTexto(ins.retiro),
     estado: comoTexto(ins.estado),
     padrino: comoTexto(ins.padrino),
+    cama: comoTexto(ins.cama),
+    mesa: comoTexto(ins.mesa),
     notas: comoTexto(ins.notas),
     consentimiento_datos: Boolean(ins.consentimiento_datos),
     ...Object.fromEntries(SALUD.map((c) => [c, comoTexto(salud[c])])),
@@ -475,6 +484,8 @@ export function cuerpoInscripcion(
     persona,
     padrino: v.padrino || null,
     estado: v.estado,
+    cama: v.cama,
+    mesa: v.mesa,
     notas: v.notas,
     consentimiento_datos: v.consentimiento_datos,
     ...(conSensibles && {

@@ -659,6 +659,10 @@ class Inscripcion(models.Model):
     # Por qué canceló (solo con estado "cancelada").
     motivo_cancelacion = models.CharField("motivo de la cancelación", max_length=200,
                                           blank=True)
+    # Dónde duerme y dónde come en el retiro (los asigna logística; texto para
+    # admitir "12" o "B-3").
+    cama = models.CharField("número de cama", max_length=10, blank=True)
+    mesa = models.CharField("número de mesa", max_length=10, blank=True)
     # Confidenciales — ocultos al equipo general (ver vista en rls_policies.sql):
     salud_alimentacion = models.JSONField(default=dict, blank=True)
     contacto_emergencia = models.JSONField(default=dict, blank=True)

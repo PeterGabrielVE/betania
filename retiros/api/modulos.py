@@ -132,10 +132,10 @@ MODULOS = [
     ),
     Modulo(
         "inscripciones", Inscripcion, "Caminantes", "inscripción", PERSONAS,
-        campos=["retiro", "persona", "padrino", "estado", "motivo_cancelacion",
+        campos=["retiro", "persona", "padrino", "estado", "motivo_cancelacion", "cama", "mesa",
                 "salud_alimentacion", "contacto_emergencia", "notas", "consentimiento_datos"],
-        lista=["persona", "retiro", "padrino", "estado", "estado_pago", "total_pagado",
-               "consentimiento_datos", "creado"],
+        lista=["persona", "retiro", "padrino", "estado", "cama", "mesa", "estado_pago",
+               "total_pagado", "consentimiento_datos", "creado"],
         buscar=["persona__nombre", "padrino__nombre", "retiro__tipo__nombre"],
         filtros=["estado", "retiro"],
         avanzados=F.CAMINANTES,
@@ -155,7 +155,8 @@ MODULOS = [
         },
         etiquetas={"padrino": "Quién lo invitó al retiro", "notas": "Comentario"},
         secciones={
-            _INSCRIPCION: ["retiro", "persona", "padrino", "estado", "motivo_cancelacion"],
+            _INSCRIPCION: ["retiro", "persona", "padrino", "estado", "motivo_cancelacion",
+                           "cama", "mesa"],
             _COMENTARIOS: ["notas", "consentimiento_datos"],
         },
         subcampos={

@@ -129,6 +129,20 @@ export function PasoIdentificacion({
           onEtiqueta={onEtiqueta}
         />
       </Grupo>
+      <Grupo titulo="En el retiro">
+        <Texto
+          nombre="cama"
+          etiqueta={E.cama}
+          placeholder="Ej.: 12"
+          ayuda="Opcional. Se puede asignar después."
+        />
+        <Texto
+          nombre="mesa"
+          etiqueta={E.mesa}
+          placeholder="Ej.: 3"
+          ayuda="Opcional. Se puede asignar después."
+        />
+      </Grupo>
     </div>
   );
 }

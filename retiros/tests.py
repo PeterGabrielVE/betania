@@ -1962,6 +1962,26 @@ class LimiteDeIntentosTests(Base):
         self.assertEqual(r["Referrer-Policy"], "same-origin")
 
 
+class CamaYMesaTests(Base):
+    """Número de cama y de mesa del caminante: opcionales, por retiro."""
+
+    def test_opcionales_se_guardan_y_salen_en_la_lista(self):
+        persona = self.persona("Abel Mora")
+        r = self.post("/api/inscripciones/", {"retiro": str(self.retiro.pk),
+                                              "persona": str(persona.pk)})
+        self.assertEqual(r.status_code, 201, r.content)  # sin cama ni mesa
+        ins = Inscripcion.objects.get(persona=persona)
+        self.assertEqual((ins.cama, ins.mesa), ("", ""))
+        r = self.client.patch(f"/api/inscripciones/{ins.pk}/", {"cama": "12", "mesa": "B-3"},
+                              content_type="application/json")
+        self.assertEqual(r.status_code, 200, r.content)
+        fila = self.client.get("/api/inscripciones/").json()["results"][0]
+        self.assertEqual((fila["cama"], fila["mesa"]), ("12", "B-3"))
+        r = self.client.patch(f"/api/inscripciones/{ins.pk}/", {"cama": "x" * 11},
+                              content_type="application/json")
+        self.assertEqual(r.status_code, 400)
+
+
 class InactividadTests(Base):
     """La sesión se cierra tras 2 horas sin actividad del usuario."""
 
