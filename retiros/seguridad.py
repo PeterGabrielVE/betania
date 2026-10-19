@@ -126,7 +126,7 @@ SEGUNDO_PLANO = "HTTP_X_SEGUNDO_PLANO"
 
 def inactividad():
     """Tiempo máximo sin actividad antes de cerrar la sesión."""
-    return timedelta(minutes=getattr(settings, "SESION_INACTIVIDAD_MINUTOS", 15))
+    return timedelta(minutes=getattr(settings, "SESION_INACTIVIDAD_MINUTOS", 120))
 
 
 class InactividadMiddleware:

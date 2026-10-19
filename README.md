@@ -403,8 +403,8 @@ está en `retiros/ocr/` (las etiquetas que reconoce, en `planilla.py`).
   no se puede averiguar cuáles hay). Al quedar 2 intentos se avisa, y el
   bloqueo queda en la auditoría. En **Usuarios → llave** se ve el bloqueo y se
   puede quitar. Los límites se ajustan en el `.env` (ver `.env.example`).
-- **Inactividad**: tras 15 minutos sin usar el sistema (ratón, teclado,
-  toques) la sesión se cierra. A los 13 minutos aparece «¿Sigues ahí?» con la
+- **Inactividad**: tras 2 horas sin usar el sistema (ratón, teclado,
+  toques) la sesión se cierra. A la hora y 58 minutos aparece «¿Sigues ahí?» con la
   cuenta regresiva y los botones *Seguir conectado* y *Cerrar sesión*. Las
   actualizaciones automáticas del tablero no cuentan como actividad; si se
   trabaja en un formulario largo sin guardar, la app avisa sola al servidor.

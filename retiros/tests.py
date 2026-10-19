@@ -1963,7 +1963,7 @@ class LimiteDeIntentosTests(Base):
 
 
 class InactividadTests(Base):
-    """La sesión se cierra tras 15 minutos sin actividad del usuario."""
+    """La sesión se cierra tras 2 horas sin actividad del usuario."""
 
     def hace(self, minutos):
         from .seguridad import ACTIVIDAD
@@ -1976,25 +1976,27 @@ class InactividadTests(Base):
         return self.client.session.get(ACTIVIDAD)
 
     def test_la_sesion_trae_el_limite(self):
-        self.assertEqual(self.client.get("/api/auth/sesion/").json()["inactividad_minutos"], 15)
+        self.assertEqual(self.client.get("/api/auth/sesion/").json()["inactividad_minutos"], 120)
 
-    def test_quince_minutos_sin_actividad_cierran_la_sesion(self):
-        self.hace(16)
+    def test_dos_horas_sin_actividad_cierran_la_sesion(self):
+        self.hace(100)
+        self.assertEqual(self.client.get("/api/retiros/").status_code, 200)  # aún no
+        self.hace(121)
         self.assertEqual(self.client.get("/api/retiros/").status_code, 401)
         self.assertFalse(self.client.get("/api/auth/sesion/").json()["autenticado"])
 
     def test_lo_que_la_app_consulta_sola_no_cuenta(self):
-        self.hace(10)
+        self.hace(100)
         antes = self.actividad()
         r = self.client.get("/api/resumen/", HTTP_X_SEGUNDO_PLANO="1")
         self.assertEqual(r.status_code, 200)
         self.assertEqual(self.actividad(), antes)  # no se renovó
-        self.hace(16)
+        self.hace(121)
         r = self.client.get("/api/resumen/", HTTP_X_SEGUNDO_PLANO="1")
         self.assertEqual(r.status_code, 401)
 
     def test_seguir_conectado_renueva(self):
-        self.hace(14)
+        self.hace(119)
         r = self.client.post("/api/auth/actividad/")
         self.assertEqual(r.status_code, 200)
         self.assertGreater(self.actividad(), int(timezone.now().timestamp()) - 60)

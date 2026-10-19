@@ -95,7 +95,7 @@ BLOQUEO_MINUTOS = int(os.environ.get("BLOQUEO_MINUTOS", 15))
 # La sesión se cierra tras SESION_INACTIVIDAD_MINUTOS sin actividad del
 # usuario (la app pregunta antes si quiere seguir; retiros/seguridad.py), al
 # cerrar el navegador y, como tope, SESION_HORAS después de la última petición.
-SESION_INACTIVIDAD_MINUTOS = int(os.environ.get("SESION_INACTIVIDAD_MINUTOS", 15))
+SESION_INACTIVIDAD_MINUTOS = int(os.environ.get("SESION_INACTIVIDAD_MINUTOS", 120))
 SESSION_COOKIE_AGE = int(os.environ.get("SESION_HORAS", 8)) * 3600
 SESSION_SAVE_EVERY_REQUEST = True
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
