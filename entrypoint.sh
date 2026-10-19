@@ -7,8 +7,22 @@ set -e
 URL_ADMIN="${DATABASE_URL_ADMIN:-$DATABASE_URL}"
 como_admin() { DATABASE_URL="$URL_ADMIN" "$@"; }
 
+if [ -z "$URL_ADMIN" ]; then
+  echo "!! Falta DATABASE_URL: no hay base de datos a la que conectarse." >&2
+  echo "!! En Railway: crea el servicio PostgreSQL y pon DATABASE_URL=\${{Postgres.DATABASE_URL}}." >&2
+  exit 1
+fi
+
+# Al minuto sin respuesta se rinde y muestra por qué, en vez de esperar callado.
 echo ">> Esperando a Postgres..."
+intentos=0
 until pg_isready -d "$URL_ADMIN" >/dev/null 2>&1; do
+  intentos=$((intentos + 1))
+  if [ "$intentos" -ge 60 ]; then
+    echo "!! Postgres no responde tras 60 s:" >&2
+    pg_isready -d "$URL_ADMIN" >&2 || true
+    exit 1
+  fi
   sleep 1
 done
 
