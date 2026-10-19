@@ -597,7 +597,7 @@ class Charla(models.Model):
     )
     tema = models.CharField(max_length=200)
     orden = models.PositiveIntegerField(default=0)
-    materiales = models.JSONField(default=dict, blank=True)
+    materiales = models.TextField(blank=True)
 
     class Meta:
         ordering = ["orden"]
