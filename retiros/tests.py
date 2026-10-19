@@ -1587,14 +1587,21 @@ class PaginasDeErrorTests(Base):
         self.assertIn("Sistema no disponible", render_to_string("500.html"))
 
 
-def _imagen(lineas, ancho=2000, columnas=None):
-    """Una planilla o un listado de prueba, como PNG."""
+def _imagen(lineas, ancho=2000, columnas=None, cuadricula=False):
+    """Una planilla o un listado de prueba, como PNG. `cuadricula`: con las
+    líneas de las celdas, como una hoja de Excel."""
     import io
 
     from PIL import Image, ImageDraw, ImageFont
     fuente = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 32)
     img = Image.new("RGB", (ancho, 140 + 70 * len(lineas)), "white")
     d = ImageDraw.Draw(img)
+    if cuadricula:
+        abajo = 45 + 70 * len(lineas)
+        for i in range(len(lineas) + 1):
+            d.line((20, 45 + 70 * i, ancho - 20, 45 + 70 * i), fill="black", width=3)
+        for x in [20, *(c - 15 for c in columnas[1:]), ancho - 20]:
+            d.line((x, 45, x, abajo), fill="black", width=3)
     for i, linea in enumerate(lineas):
         if columnas:
             for x, celda in zip(columnas, linea):
@@ -1714,6 +1721,43 @@ class OCRTests(Base):
         r = self.client.post("/api/ocr/listado/importar/", datos, content_type="application/json")
         self.assertEqual((r.json()["creados"], r.json()["existentes"]), (0, 2))
         self.assertEqual(Persona.objects.filter(primer_nombre="Abel").count(), 1)
+
+    CONTROL = [
+        ["N°", "NOMBRE SERVIDOR", "EQUIPO", "MONTO $", "ABONO $", "ABONO $", "RESTA", "TOTAL"],
+        ["1", "ABEL MORA", "COCINA", "20", "", "", "20", "20"],
+        ["2", "RAMIRO ALASTRE", "MUSICA", "25", "5", "", "20", "25"],
+    ]
+    COLUMNAS_CONTROL = [50, 130, 640, 930, 1140, 1350, 1560, 1770]
+
+    def test_control_de_pago_con_cuadricula(self):
+        imagen = _imagen(self.CONTROL, ancho=1990, columnas=self.COLUMNAS_CONTROL,
+                         cuadricula=True)
+        r = self.subir("/api/ocr/listado/", imagen, "control.png")
+        self.assertEqual(r.status_code, 200, r.content)
+        filas = r.json()["filas"]
+        self.assertEqual([(f["nombre"], f.get("monto"), f.get("abono")) for f in filas],
+                         [("Abel Mora", "20", None), ("Ramiro Alastre", "25", "5")])
+        self.assertIn("monto", r.json()["columnas"])
+
+        datos = {"retiro": str(self.retiro.pk), "como": "servidores", "filas": filas}
+        r = self.client.post("/api/ocr/listado/importar/", datos, content_type="application/json")
+        self.assertEqual(r.json()["creados"], 2, r.content)
+        ramiro = Participacion.objects.get(persona__primer_nombre="Ramiro")
+        self.assertEqual(ramiro.cuota, Decimal("25"))
+        pago = Pago.objects.get(persona=ramiro.persona)
+        self.assertEqual((pago.monto, pago.concepto), (Decimal("5"), Pago.Concepto.APORTACION))
+        self.assertFalse(Pago.objects.filter(persona__primer_nombre="Abel").exists())
+
+        # La misma hoja otra vez, con un abono más: solo se registra lo nuevo.
+        filas[1]["abono"] = "15"
+        r = self.client.post("/api/ocr/listado/importar/", datos, content_type="application/json")
+        self.assertEqual(r.json()["existentes"], 2, r.content)
+        self.assertEqual(sorted(Pago.objects.filter(persona=ramiro.persona)
+                                .values_list("monto", flat=True)),
+                         [Decimal("5"), Decimal("10")])
+        r = self.client.post("/api/ocr/listado/importar/", datos, content_type="application/json")
+        self.assertEqual(Pago.objects.filter(persona=ramiro.persona).count(), 2)
+        self.assertIn("ya estaba registrado", str(r.json()["resultados"]))
 
     def test_listado_ilegible(self):
         r = self.subir("/api/ocr/listado/", _imagen(["una hoja sin tabla"]), "x.png")

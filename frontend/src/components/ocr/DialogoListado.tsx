@@ -36,6 +36,9 @@ const COLUMNAS: [string, string][] = [
   ["contacto_nombre", "Contacto"],
   ["contacto_celular", "Celular del contacto"],
   ["area", "Equipo / área"],
+  // Control de pago de servidores: lo que le toca y lo que lleva abonado.
+  ["monto", "Monto"],
+  ["abono", "Abonado"],
 ];
 
 const COLOR: Record<string, string> = {

@@ -5,6 +5,7 @@ de las filas va a la columna que tiene encima.
 """
 
 import re
+from decimal import Decimal, InvalidOperation
 
 from .catalogos import simple
 from .planilla import documento, nombre_propio, talla, telefono
@@ -23,10 +24,16 @@ COLUMNAS = [
     (r"equipo|area|servicio", "area"),
     (r"correo|e-?mail", "email"),
     (r"parentesco|relacion", "contacto_relacion"),
-    (r"monto|abono|pago|resta|total|saldo|n[°º]|^no?$|^#$", None),  # se ignoran
+    # Control de pago: lo que debe, lo que abonó (en una o varias columnas) y
+    # lo que le resta, que sirve para comprobar el abono. El total se ignora.
+    (r"monto|cuota|aporte", "monto"),
+    (r"abono", "abono"),
+    (r"resta|saldo", "resta"),
+    (r"total|n[°º]|^no?$|^#$", None),  # se ignoran
 ]
 CAMPOS = ["nombre", "documento", "telefono", "edad", "direccion", "talla", "salud",
-          "contacto_nombre", "contacto_relacion", "contacto_celular", "email", "area"]
+          "contacto_nombre", "contacto_relacion", "contacto_celular", "email", "area",
+          "monto", "abono"]
 
 
 def _campo(texto, completo=False):
@@ -108,13 +115,18 @@ def extraer(lectura):
                      {c: sum(p.confianza for p in ps) / len(ps) for c, ps in valores.items()})
         if fila:
             filas.append(fila)
-    return {"columnas": [c for c, _, _ in columnas if c], "filas": filas}
+    nombres = [c for c, _, _ in columnas if c and c != "resta"]
+    return {"columnas": list(dict.fromkeys(nombres)), "filas": filas}
 
 
 def _fila(textos, confianzas):
-    """Limpia una fila; None si no trae un nombre (renglón vacío o ruido)."""
+    """Limpia una fila; None si no trae un nombre (renglón vacío o ruido). Un
+    nombre de una sola palabra pasa si la fila trae algo más (equipo, monto):
+    suele ser nombre y apellido leídos juntos ("ABELMORA"), y se corrige al
+    revisar."""
     nombre = nombre_propio(textos.get("nombre", ""))
-    if len(nombre.split()) < 2:
+    otros = any(textos.get(c) for c in ("documento", "telefono", "area", "monto"))
+    if len(nombre.split()) < 2 and not (len(nombre) >= 3 and otros):
         return None
     fila = {"nombre": nombre}
     if textos.get("documento"):
@@ -139,5 +151,35 @@ def _fila(textos, confianzas):
             fila[campo] = textos[campo]
     if textos.get("contacto_nombre"):
         fila["contacto_nombre"] = nombre_propio(textos["contacto_nombre"])
+    fila.update(_pagos(textos))
     fila["confianza"] = round(sum(confianzas.values()) / len(confianzas)) if confianzas else 0
     return fila
+
+
+def _cifras(texto):
+    """Los montos de un texto ("20", "15,5", "20 $"); los trozos de líneas
+    ("|", "[") no cuentan."""
+    cifras = []
+    for numero in re.findall(r"\d+(?:[.,]\d{1,2})?", texto or ""):
+        try:
+            cifras.append(Decimal(numero.replace(",", ".")))
+        except InvalidOperation:
+            pass
+    return cifras
+
+
+def _pagos(textos):
+    """{"monto", "abono"} de una fila de control de pago, como texto ("20").
+    El abono es la suma de sus columnas; si RESTA cuadra con el monto, manda
+    MONTO - RESTA (una raya leída como "1" no se vuelve un abono)."""
+    resultado = {}
+    monto = next(iter(_cifras(textos.get("monto"))), None)
+    if monto:
+        resultado["monto"] = f"{monto:f}"
+    abono = sum(_cifras(textos.get("abono")), Decimal(0))
+    resta = next(iter(_cifras(textos.get("resta"))), None)
+    if monto and resta is not None and 0 <= resta <= monto:
+        abono = monto - resta
+    if abono > 0:
+        resultado["abono"] = f"{abono:f}"
+    return resultado
