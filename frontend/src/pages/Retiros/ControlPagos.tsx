@@ -12,6 +12,8 @@ import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
 import Telefono from "@/components/common/Telefono";
 import BotonesDescarga from "@/components/modulos/BotonesDescarga";
+import Paginacion from "@/components/modulos/Paginacion";
+import { usePaginas } from "@/components/modulos/usePaginas";
 import {
   claseBoton,
   claseControl,
@@ -400,6 +402,7 @@ function Tabla({
   const [texto, setTexto] = useState("");
   const [estado, setEstado] = useState("");
   const [conCancelados, setConCancelados] = useState(false);
+  const paginas = usePaginas();
   const [abonando, setAbonando] = useState<FilaControlPago | null>(null);
   const [cambiandoMonto, setCambiandoMonto] = useState<FilaControlPago | null>(
     null,
@@ -414,6 +417,10 @@ function Tabla({
         f.persona.toLowerCase().includes(buscado) ||
         (f.equipo ?? "").toLowerCase().includes(buscado)) &&
       (!estado || (estado === "debe" ? f.saldo > 0 : f.estado_pago === estado)),
+  );
+  const { pagina, desde, hayPaginas, paginacion } = paginas.de(
+    visibles,
+    `${buscado}|${estado}|${conCancelados}`,
   );
   // Tantas columnas de abono como el que más abonos tiene (al menos una).
   const columnasAbono = Math.max(1, ...visibles.map((f) => f.abonos.length));
@@ -583,13 +590,13 @@ function Tabla({
               </TableRow>
             </TableHeader>
             <TableBody className="divide-y divide-gray-100 dark:divide-white/5">
-              {visibles.map((f, n) => (
+              {pagina.map((f, n) => (
                 <TableRow
                   key={f.id}
                   className={f.cancelado ? "opacity-60" : ""}
                 >
                   <TableCell className={`${claseCelda} text-gray-400`}>
-                    {n + 1}
+                    {desde + n + 1}
                   </TableCell>
                   <TableCell
                     className={`${claseCelda} font-medium text-gray-800 dark:text-white/90`}
@@ -680,6 +687,11 @@ function Tabla({
               ))}
             </TableBody>
           </Table>
+        </div>
+      )}
+      {hayPaginas && (
+        <div className="mt-5">
+          <Paginacion {...paginacion} />
         </div>
       )}
 

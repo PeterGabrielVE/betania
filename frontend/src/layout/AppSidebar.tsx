@@ -68,6 +68,10 @@ const AppSidebar: React.FC = () => {
           ["inscripciones", "participaciones"].includes(m.slug),
         )?.slug
       : undefined;
+    // Los reportes son de caminantes o de servidores (ver retiros/api/reportes.py).
+    const conReportes = modulos.some((m) =>
+      ["inscripciones", "participaciones"].includes(m.slug),
+    );
     return [
       { icon: <GridIcon fontSize={24} />, name: "Inicio", path: "/" },
       ...grupos.map((grupo) => ({
@@ -81,6 +85,10 @@ const AppSidebar: React.FC = () => {
               ? [{ name: "Control de pagos", path: "/control-pagos" }]
               : []),
             { name: m.titulo, path: `/${m.slug}` },
+            // Los reportes, junto al listado de retiros.
+            ...(m.slug === "retiros" && conReportes
+              ? [{ name: "Reportes", path: "/reportes" }]
+              : []),
             // El formulario de caminantes (el de papel) va junto a su listado.
             ...(m.slug === "inscripciones" && puedeInscribir
               ? [{ name: "Inscribir caminante", path: "/inscribir" }]

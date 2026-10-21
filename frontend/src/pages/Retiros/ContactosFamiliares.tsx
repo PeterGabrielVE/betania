@@ -9,6 +9,8 @@ import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
 import Telefono from "@/components/common/Telefono";
 import BotonesDescarga from "@/components/modulos/BotonesDescarga";
+import Paginacion from "@/components/modulos/Paginacion";
+import { usePaginas } from "@/components/modulos/usePaginas";
 import { claseControl, claseTarjeta } from "@/components/modulos/estilos";
 import Actualizacion from "@/components/retiros/Actualizacion";
 import {
@@ -80,6 +82,11 @@ export default function ContactosFamiliares() {
     setFiltros((f) => ({ ...f, [campo]: valor }));
 
   const visibles = (datos?.filas ?? []).filter((f) => cumple(f, filtros));
+  const paginas = usePaginas();
+  const { pagina, hayPaginas, paginacion } = paginas.de(
+    visibles,
+    JSON.stringify(filtros),
+  );
 
   // Una fila por familiar (y una sin familiar para quien no tiene).
   const tablaDescarga = (): TablaDescarga => ({
@@ -221,7 +228,7 @@ export default function ContactosFamiliares() {
                     </TableRow>
                   </TableHeader>
                   <TableBody className="divide-y divide-gray-100 dark:divide-white/5">
-                    {visibles.map((f) => (
+                    {pagina.map((f) => (
                       <TableRow key={f.id}>
                         <TableCell
                           className={`${claseCelda} font-medium whitespace-nowrap text-gray-800 dark:text-white/90`}
@@ -270,6 +277,11 @@ export default function ContactosFamiliares() {
                     ))}
                   </TableBody>
                 </Table>
+              </div>
+            )}
+            {hayPaginas && (
+              <div className="mt-5">
+                <Paginacion {...paginacion} />
               </div>
             )}
           </section>

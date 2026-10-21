@@ -2272,3 +2272,68 @@ class ContactosFamiliaresTests(Base):
             codename__in=["view_retiro", "view_inscripcion", "view_participacion"]))
         self.client.force_login(user)
         self.assertEqual(self.client.get(self.ruta).status_code, 403)
+
+
+class ReportesRetiroTests(Base):
+    """Los reportes de un retiro (catálogo, tablas y permisos)."""
+
+    def setUp(self):
+        super().setUp()
+        ana = self.persona("Ana Pérez", documento="12345678", telefono="0414-1234567",
+                           fecha_nacimiento=date(1990, 3, 13),
+                           datos_sensibles={"bautismo": True})
+        luis = self.persona("Luis Gil")
+        Inscripcion.objects.create(
+            retiro=self.retiro, persona=ana, padrino=luis, cama="10",
+            estado=Inscripcion.Estado.CONFIRMADA, consentimiento_datos=True,
+            salud_alimentacion={"tratamiento": "Insulina", "talla_camiseta": "M"},
+            contacto_emergencia={"nombre": "Rosa", "celular": "0424"})
+        Inscripcion.objects.create(retiro=self.retiro, persona=self.persona("Marta"), cama="2")
+        Inscripcion.objects.create(retiro=self.retiro, persona=self.persona("Pedro"),
+                                   estado=Inscripcion.Estado.CANCELADA)
+        servidor = Participacion.objects.create(
+            retiro=self.retiro, persona=luis, tipo=Participacion.Tipo.SERVIDOR,
+            duerme_en_casa=True, cama="B-1", camisas={"azul": True}, tallas_camisa={"L": True})
+        AsignacionServicio.objects.create(
+            participacion=servidor, area=AreaServicio.objects.create(nombre="Cocina"),
+            es_coordinador=True)
+
+    def reporte(self, clave):
+        r = self.client.get(f"/api/reportes/?retiro={self.retiro.pk}&reporte={clave}")
+        self.assertEqual(r.status_code, 200, r.content)
+        return r.json()["reporte"]["filas"]
+
+    def test_catalogo_y_reportes(self):
+        datos = self.client.get("/api/reportes/").json()
+        self.assertIn("salud", [r["clave"] for r in datos["catalogo"]])
+        self.assertIsNone(datos["reporte"])
+
+        self.assertEqual([f[0] for f in self.reporte("confirmados")], ["Ana Pérez"])
+        self.assertEqual([f[0] for f in self.reporte("por_confirmar")], ["Marta"])
+        self.assertEqual(self.reporte("salud"),
+                         [["Ana Pérez", "10", "", "Insulina", "", ""]])
+        # Sin Pedro (canceló); por número de cama.
+        self.assertEqual([(f[0], f[1]) for f in self.reporte("camas")],
+                         [("2", "Marta"), ("10", "Ana Pérez"), ("B-1", "Luis Gil")])
+        self.assertIn(["Camiseta de caminante", "M", 1], self.reporte("tallas"))
+        self.assertIn(["Camisa de servidor: Azul de servicio", "Grande", 1],
+                      self.reporte("tallas"))
+        self.assertEqual(self.reporte("areas")[0][:3], ["Cocina", "Sí", "Luis Gil"])
+        self.assertEqual(self.reporte("invitaron"), [["Luis Gil", 1, "Ana Pérez"]])
+        self.assertEqual([f[0] for f in self.reporte("cumpleanos")], ["Ana Pérez"])
+        self.assertEqual(self.reporte("sacramentos")[0][:2], ["Ana Pérez", "Sí"])
+        self.assertEqual([f[0] for f in self.reporte("incompletos")], ["Marta"])
+        self.assertEqual([(f[0], f[5]) for f in self.reporte("pendientes")],
+                         [("Ana Pérez", 100.0), ("Marta", 100.0)])
+
+    def test_sin_datos_sensibles_no_salen_los_confidenciales(self):
+        user = User.objects.create_user("lector", password="x")
+        user.user_permissions.add(*Permission.objects.filter(
+            codename__in=["view_retiro", "view_inscripcion"]))
+        self.client.force_login(user)
+        claves = [r["clave"] for r in self.client.get("/api/reportes/").json()["catalogo"]]
+        self.assertIn("confirmados", claves)
+        self.assertNotIn("salud", claves)
+        self.assertNotIn("pendientes", claves)  # le falta ver los pagos
+        r = self.client.get("/api/reportes/?reporte=salud")
+        self.assertEqual(r.status_code, 404)

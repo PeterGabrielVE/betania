@@ -37,7 +37,10 @@ import {
 } from "@/components/modulos/estilos";
 import FormularioModulo from "@/components/modulos/FormularioModulo";
 import Paginacion from "@/components/modulos/Paginacion";
-import { TAMANOS_PAGINA } from "@/components/modulos/paginas";
+import {
+  guardarPorPagina,
+  porPaginaGuardado,
+} from "@/components/modulos/usePaginas";
 import SelectorRemoto from "@/components/modulos/SelectorRemoto";
 import { Modal } from "@/components/ui/modal";
 import {
@@ -70,17 +73,6 @@ const claseCelda =
 const claseFija = "sticky end-0 border-s border-gray-100 dark:border-white/5";
 const claseIcono =
   "flex size-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-white/5";
-
-const CLAVE_POR_PAGINA = "betania.porPagina";
-
-function porPaginaGuardado(): number {
-  try {
-    const n = Number(localStorage.getItem(CLAVE_POR_PAGINA));
-    return TAMANOS_PAGINA.includes(n) ? n : 25;
-  } catch {
-    return 25;
-  }
-}
 
 type Acciones = {
   modulo: Modulo;
@@ -603,11 +595,7 @@ function Listado({ modulo }: { modulo: Modulo }) {
   const cambiarPorPagina = (n: number) => {
     setPorPagina(n);
     setConsulta((c) => ({ ...c, pagina: 1 }));
-    try {
-      localStorage.setItem(CLAVE_POR_PAGINA, String(n));
-    } catch {
-      // Sin almacenamiento (modo privado): solo dura esta visita.
-    }
+    guardarPorPagina(n);
   };
 
   const eliminar = async (fila: Registro) => {

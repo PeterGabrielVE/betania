@@ -405,6 +405,25 @@ export type ContactosRetiro = {
   filas?: FilaContactos[];
 };
 
+// Reportes de un retiro (/api/reportes/?retiro=<id>&reporte=<clave>, ver
+// retiros/api/reportes.py). Los montos ("dinero") van en la moneda base.
+export type ColumnaReporte = {
+  etiqueta: string;
+  tipo: "texto" | "numero" | "dinero" | "fecha" | "telefono";
+  total: boolean; // se suma al pie
+};
+export type Reportes = {
+  catalogo: { clave: string; titulo: string; descripcion: string }[];
+  retiros: { id: string; etiqueta: string; fecha_inicio: string }[];
+  retiro: { id: string; etiqueta: string; fecha_inicio: string } | null;
+  reporte: {
+    clave: string;
+    titulo: string;
+    columnas: ColumnaReporte[];
+    filas: (string | number | null)[][];
+  } | null;
+};
+
 // Panel de un retiro (/api/retiros/<id>/panel/). Cada sección llega en null si
 // el usuario no tiene permiso para verla.
 export type PanelRetiro = {

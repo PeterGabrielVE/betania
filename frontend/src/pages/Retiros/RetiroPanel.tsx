@@ -11,6 +11,8 @@ import {
   claseTarjeta,
 } from "@/components/modulos/estilos";
 import BotonesDescarga from "@/components/modulos/BotonesDescarga";
+import Paginacion from "@/components/modulos/Paginacion";
+import { usePaginas } from "@/components/modulos/usePaginas";
 import AccionesAsistencia from "@/components/retiros/AccionesAsistencia";
 import Actualizacion from "@/components/retiros/Actualizacion";
 import LogisticaEquipo from "@/components/retiros/LogisticaEquipo";
@@ -265,6 +267,7 @@ function Caminantes({
   const [filtro, setFiltro] = useState("");
   const [texto, setTexto] = useState("");
   const [abiertos, setAbiertos] = useState<Set<string>>(new Set());
+  const paginas = usePaginas();
   const conPagos = filas.some((f) => f.estado_pago !== undefined);
   const conFicha = filas.some((f) => f.ficha !== undefined);
   const estados = new Map(por_estado.map((e) => [e.estado, e.etiqueta]));
@@ -283,6 +286,10 @@ function Caminantes({
     (f) =>
       elegido.cumple(f) &&
       (!buscado || f.persona.toLowerCase().includes(buscado)),
+  );
+  const { pagina, hayPaginas, paginacion } = paginas.de(
+    visibles,
+    `${elegido.valor}|${buscado}`,
   );
 
   const alternar = (id: string) =>
@@ -432,7 +439,7 @@ function Caminantes({
               </TableRow>
             </TableHeader>
             <TableBody className="divide-y divide-gray-100 dark:divide-white/5">
-              {visibles.map((f) => (
+              {pagina.map((f) => (
                 <Fragment key={f.id}>
                   <TableRow>
                     <TableCell
@@ -534,6 +541,11 @@ function Caminantes({
           </Table>
         </div>
       )}
+      {hayPaginas && (
+        <div className="mt-5">
+          <Paginacion {...paginacion} />
+        </div>
+      )}
     </>
   );
 }
@@ -555,6 +567,7 @@ function Servidores({
 }) {
   const [estado, setEstado] = useState("");
   const [soloDeben, setSoloDeben] = useState(false);
+  const paginas = usePaginas();
   const pagos = new Map(opcionesPago.map((o) => [o.valor, o.etiqueta]));
   if (servidores.filas.length === 0) {
     return <p className={claseVacio}>Todavía no hay servidores registrados.</p>;
@@ -566,6 +579,10 @@ function Servidores({
   const visibles = servidores.filas.filter(
     (f) =>
       (!estado || f.estado === estado) && (!soloDeben || (f.saldo ?? 0) > 0),
+  );
+  const { pagina, hayPaginas, paginacion } = paginas.de(
+    visibles,
+    `${estado}|${soloDeben}`,
   );
   const titulos = [
     "Servidor",
@@ -659,7 +676,7 @@ function Servidores({
               </TableRow>
             </TableHeader>
             <TableBody className="divide-y divide-gray-100 dark:divide-white/5">
-              {visibles.map((f) => (
+              {pagina.map((f) => (
                 <TableRow
                   key={f.id}
                   className={f.estado === "cancelado" ? "opacity-60" : ""}
@@ -733,6 +750,11 @@ function Servidores({
               ))}
             </TableBody>
           </Table>
+        </div>
+      )}
+      {hayPaginas && (
+        <div className="mt-5">
+          <Paginacion {...paginacion} />
         </div>
       )}
     </>
