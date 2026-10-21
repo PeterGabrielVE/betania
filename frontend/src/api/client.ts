@@ -385,6 +385,26 @@ export type ControlPagos = {
   servidores?: GrupoControlPago | null;
 };
 
+// Contactos familiares de un retiro (/api/contactos/?retiro=<id>, ver
+// retiros/api/contactos.py): por cada caminante y servidor.
+export type FilaContactos = {
+  id: string;
+  persona_id: string;
+  persona: string;
+  documento: string;
+  telefono: string;
+  tipo: string; // Caminante, Servidor, Coordinador general
+  cama: string;
+  estado_display: string;
+  cancelado: boolean;
+  contactos: Contacto[];
+};
+export type ContactosRetiro = {
+  retiros: { id: string; etiqueta: string; fecha_inicio: string }[];
+  retiro: { id: string; etiqueta: string; fecha_inicio: string } | null;
+  filas?: FilaContactos[];
+};
+
 // Panel de un retiro (/api/retiros/<id>/panel/). Cada sección llega en null si
 // el usuario no tiene permiso para verla.
 export type PanelRetiro = {
@@ -644,6 +664,7 @@ export type FichaPersona = {
         estado_display: string;
         motivo_cancelacion: string;
         duerme_en_casa: boolean | null;
+        cama: string;
         turnos: string;
         camisa: string;
         // Solo para quien ve datos confidenciales.

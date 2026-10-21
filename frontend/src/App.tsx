@@ -11,6 +11,7 @@ import EditarPersona from "./pages/Retiros/EditarPersona";
 import PersonaFicha from "./pages/Retiros/PersonaFicha";
 import RegistrarServidor from "./pages/Retiros/RegistrarServidor";
 import Auditoria from "./pages/Retiros/Auditoria";
+import ContactosFamiliares from "./pages/Retiros/ContactosFamiliares";
 import ControlPagos from "./pages/Retiros/ControlPagos";
 import MiCuenta from "./pages/Retiros/MiCuenta";
 import RetiroPanel from "./pages/Retiros/RetiroPanel";
@@ -29,6 +30,10 @@ export default function App() {
             <Route path="/registrar-servidor" element={<RegistrarServidor />} />
             <Route path="/retiros/:id" element={<RetiroPanel />} />
             <Route path="/control-pagos" element={<ControlPagos />} />
+            <Route
+              path="/contactos-familiares"
+              element={<ContactosFamiliares />}
+            />
             <Route path="/roles/:id/permisos" element={<RolPermisos />} />
             <Route path="/auditoria" element={<Auditoria />} />
             <Route path="/mi-cuenta" element={<MiCuenta />} />

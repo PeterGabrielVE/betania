@@ -2239,3 +2239,36 @@ class CuentaServidorTests(Base):
             self.entrar_con(codigo, **ambito)
             self.assertFalse(self.sesion()["da_acceso_servidores"], codigo)
             self.assertEqual(self.client.get(self.ruta).status_code, 403, codigo)
+
+
+class ContactosFamiliaresTests(Base):
+    """El listado de familiares de contacto de caminantes y servidores."""
+
+    def setUp(self):
+        super().setUp()
+        Inscripcion.objects.create(
+            retiro=self.retiro, persona=self.persona("Ana Pérez", documento="12345678"),
+            cama="7", contacto_emergencia={"nombre": "Rosa", "relacion": "Madre",
+                                           "celular": "0424", "nombre3": "Luz",
+                                           "telefono3": "0414"})
+        Participacion.objects.create(
+            retiro=self.retiro, persona=self.persona("Luis Gil"),
+            tipo=Participacion.Tipo.SERVIDOR, duerme_en_casa=True, cama="B-2")
+        self.ruta = f"/api/contactos/?retiro={self.retiro.pk}"
+
+    def test_caminantes_y_servidores_con_sus_familiares(self):
+        filas = self.client.get(self.ruta).json()["filas"]
+        self.assertEqual(
+            [(f["persona"], f["tipo"], f["documento"], f["cama"], f["contactos"]) for f in filas],
+            [("Ana Pérez", "Caminante", "V-12345678", "7", [
+                {"nombre": "Rosa", "relacion": "Madre", "telefono": "0424"},
+                {"nombre": "Luz", "relacion": "", "telefono": "0414"},
+            ]), ("Luis Gil", "Servidor", "", "B-2", [])],
+        )
+
+    def test_solo_para_quien_ve_datos_sensibles(self):
+        user = User.objects.create_user("lector", password="x")
+        user.user_permissions.add(*Permission.objects.filter(
+            codename__in=["view_retiro", "view_inscripcion", "view_participacion"]))
+        self.client.force_login(user)
+        self.assertEqual(self.client.get(self.ruta).status_code, 403)

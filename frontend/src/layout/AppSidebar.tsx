@@ -58,6 +58,16 @@ const AppSidebar: React.FC = () => {
       "participaciones",
       "servicios",
     ]);
+    // Los contactos familiares son confidenciales: van tras el primero de los
+    // listados de caminantes o servidores que vea.
+    const conContactos = !!modulos
+      .find((m) => m.slug === "personas")
+      ?.campos.some((c) => c.nombre === "datos_sensibles");
+    const listadoContactos = conContactos
+      ? modulos.find((m) =>
+          ["inscripciones", "participaciones"].includes(m.slug),
+        )?.slug
+      : undefined;
     return [
       { icon: <GridIcon fontSize={24} />, name: "Inicio", path: "/" },
       ...grupos.map((grupo) => ({
@@ -78,6 +88,9 @@ const AppSidebar: React.FC = () => {
             // Y el de servidores, junto a su listado.
             ...(m.slug === "participaciones" && puedeRegistrarServidor
               ? [{ name: "Registrar servidor", path: "/registrar-servidor" }]
+              : []),
+            ...(m.slug === listadoContactos
+              ? [{ name: "Contactos familiares", path: "/contactos-familiares" }]
               : []),
           ]),
       })),

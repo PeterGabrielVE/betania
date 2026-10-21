@@ -1,7 +1,7 @@
 from django.urls import include, path
 
-from . import (auditoria, control_pagos, cuentas, fotos, ocr, paneles, permisos_rol, salud,
-               sesion, vistas)
+from . import (auditoria, contactos, control_pagos, cuentas, fotos, ocr, paneles, permisos_rol,
+               salud, sesion, vistas)
 
 urlpatterns = [
     path("salud/", salud.salud),
@@ -18,6 +18,7 @@ urlpatterns = [
     path("retiros/<uuid:pk>/panel/", paneles.panel_retiro),
     path("control-pagos/", control_pagos.control_pagos),
     path("control-pagos/monto/", control_pagos.cambiar_monto),
+    path("contactos/", contactos.contactos),
     path("personas/<uuid:pk>/ficha/", paneles.ficha_persona),
     path("personas/<uuid:pk>/foto/", fotos.foto_persona),
     # Deben ir antes del router (que tomaría "importar" por un id).

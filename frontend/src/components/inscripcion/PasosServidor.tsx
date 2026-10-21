@@ -342,6 +342,7 @@ function Pregunta({
 export function PasoDisponibilidad() {
   const { register, control, setValue, trigger, formState } = useFormContext();
   const turnos = (useWatch({ control, name: "turnos" }) as string[]) ?? [];
+  const duerme = useWatch({ control, name: "duerme" }) as string;
   // Con un aviso a la vista, se recalcula al cambiar.
   const revalidar = (campo: string) => {
     if (get(formState.errors, campo)) trigger(campo);
@@ -374,6 +375,16 @@ export function PasoDisponibilidad() {
             </label>
           ))}
         </div>
+        {duerme === "si" && (
+          <div className="mt-4 max-w-xs">
+            <Texto
+              nombre="cama"
+              etiqueta={E.cama}
+              placeholder="Ej.: 12"
+              ayuda="Opcional. Se puede asignar después."
+            />
+          </div>
+        )}
       </Pregunta>
 
       <Pregunta

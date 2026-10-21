@@ -684,6 +684,7 @@ def _como_servidor(persona, con_pagos, sensibles):
             "estado_display": p.get_estado_display(),
             "motivo_cancelacion": p.motivo_cancelacion,
             "duerme_en_casa": p.duerme_en_casa,
+            "cama": p.cama,
             "turnos": p.resumen_turnos(),
             "camisa": p.resumen_camisas(),
             "areas": [

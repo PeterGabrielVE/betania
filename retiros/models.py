@@ -784,6 +784,8 @@ class Participacion(models.Model):
     # Logística del servidor para este retiro (vacío: no lo indicó).
     duerme_en_casa = models.BooleanField("dormirá en la casa de retiro", null=True,
                                          blank=True)
+    # Si duerme en la casa, dónde (como la del caminante).
+    cama = models.CharField("número de cama", max_length=10, blank=True)
     disponibilidad = models.JSONField(default=dict, blank=True)  # TURNOS_SERVICIO
     camisas = models.JSONField(default=dict, blank=True)         # CAMISAS_SERVICIO
     tallas_camisa = models.JSONField(default=dict, blank=True)   # TALLAS_CAMISA

@@ -194,8 +194,8 @@ MODULOS = [
         # inscripciones.
         "participaciones", Participacion, "Servidores", "servidor", PERSONAS,
         campos=["retiro", "persona", "tipo", "estado", "motivo_cancelacion", "duerme_en_casa",
-                "disponibilidad", "camisas", "tallas_camisa", "contacto_emergencia"],
-        lista=["persona", "documento", "telefono", "areas", "tipo", "estado", "duerme",
+                "cama", "disponibilidad", "camisas", "tallas_camisa", "contacto_emergencia"],
+        lista=["persona", "documento", "telefono", "areas", "tipo", "estado", "duerme", "cama",
                "turnos", "camisa", "retiro"],
         buscar=["persona__nombre", "persona__documento", "servicios__area__nombre",
                 "retiro__tipo__nombre"],

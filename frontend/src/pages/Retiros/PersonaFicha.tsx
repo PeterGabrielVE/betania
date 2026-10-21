@@ -439,6 +439,7 @@ export default function PersonaFicha() {
                                 (s.duerme_en_casa
                                   ? "Duerme en la casa"
                                   : "No duerme en la casa"),
+                              s.cama && `Cama ${s.cama}`,
                               s.turnos,
                               s.camisa && `Camisa: ${s.camisa}`,
                             ]

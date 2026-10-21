@@ -18,6 +18,7 @@ import {
   camposPersonaSensibles,
   ETIQUETAS_PERSONA,
   obligatorio,
+  texto,
   PASO_PERSONALES,
   reglasPersona,
   valoresPersona,
@@ -86,6 +87,7 @@ const basicos = {
       (v) => ["si", "no"].includes(v),
       "Indica si dormirá en la casa de retiro.",
     ),
+  cama: texto.max(10, "Máximo 10 caracteres."),
   turnos: z
     .array(z.string())
     .min(1, "Marca al menos un turno en que pueda servir."),
@@ -132,6 +134,7 @@ export const ETIQUETAS_SERVIDOR: Record<keyof ValoresServidor, string> = {
   areas: "Áreas de servicio",
   coordina: "Coordina",
   duerme: "Dormirá en la casa de retiro",
+  cama: "Número de cama",
   turnos: "Turnos en que puede servir",
   camisas: "Camisas que necesita",
   tallas: "Tallas",
@@ -160,7 +163,7 @@ const PASOS: Paso[] = [
     id: "disponibilidad",
     titulo: "Disponibilidad",
     descripcion: "Si duerme en la casa, cuándo puede servir y su camisa.",
-    campos: ["duerme", "turnos", "camisas", "tallas"],
+    campos: ["duerme", "cama", "turnos", "camisas", "tallas"],
   },
   {
     id: "contactos",
@@ -193,6 +196,7 @@ export function valoresServidor(retiro?: string, pais = ""): ValoresServidor {
     areas: [],
     coordina: [],
     duerme: "",
+    cama: "",
     turnos: [],
     camisas: [],
     tallas: [],
@@ -206,6 +210,8 @@ export function cuerpoDisponibilidad(v: ValoresServidor, conSensibles: boolean) 
     Object.fromEntries(claves.map((c) => [c, true]));
   return {
     duerme_en_casa: v.duerme === "si",
+    // Quien no duerme en la casa no tiene cama.
+    cama: v.duerme === "si" ? v.cama : "",
     disponibilidad: marcadas(v.turnos),
     camisas: marcadas(v.camisas),
     tallas_camisa: marcadas(v.tallas),
@@ -241,6 +247,7 @@ export function datosDeParticipacion(
     tipo: String(p.tipo),
     duerme:
       p.duerme_en_casa === true ? "si" : p.duerme_en_casa === false ? "no" : "",
+    cama: String(p.cama ?? ""),
     turnos: marcadas(p.disponibilidad),
     camisas: marcadas(p.camisas),
     tallas: marcadas(p.tallas_camisa),
