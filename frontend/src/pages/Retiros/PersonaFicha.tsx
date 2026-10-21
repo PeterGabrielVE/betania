@@ -94,8 +94,10 @@ function Pago({
 
 const SACRAMENTOS: [string, string][] = [
   ["bautismo", "Bautismo"],
+  ["primera_comunion", "Primera comunión"],
   ["confirmacion", "Confirmación"],
   ["matrimonio", "Matrimonio"],
+  ["orden_sacerdotal", "Orden sacerdotal"],
   ["uncion", "Unción"],
 ];
 

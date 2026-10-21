@@ -193,8 +193,10 @@ export function PasoFamilia() {
       </Grupo>
       <Grupo titulo="Sacramentos">
         <Casilla nombre="bautismo" etiqueta={E.bautismo} />
+        <Casilla nombre="primera_comunion" etiqueta={E.primera_comunion} />
         <Casilla nombre="confirmacion" etiqueta={E.confirmacion} />
         <Casilla nombre="matrimonio" etiqueta={E.matrimonio} />
+        <Casilla nombre="orden_sacerdotal" etiqueta={E.orden_sacerdotal} />
         <Casilla nombre="uncion" etiqueta={E.uncion} />
         <Texto nombre="parroquia_asiste" etiqueta={E.parroquia_asiste} ancho />
       </Grupo>

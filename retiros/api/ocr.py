@@ -68,8 +68,8 @@ def leer_planilla(request):
 CONFIDENCIALES = {
     "condicion_medica", "tratamiento", "regimen_alimenticio", "requerimientos",
     "talla_camiseta", "estado_civil", "hijos", "edades_hijos", "bautismo",
-    "confirmacion", "matrimonio", "uncion", "parroquia_asiste", "direccion",
-    "telefono_casa", "ocupacion",
+    "primera_comunion", "confirmacion", "matrimonio", "orden_sacerdotal", "uncion",
+    "parroquia_asiste", "direccion", "telefono_casa", "ocupacion",
 }
 
 

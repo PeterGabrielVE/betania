@@ -64,8 +64,10 @@ ETIQUETAS = [
     ("ocupacion", r"ocupacion|profesion|oficio", False),
     ("parroquia_asiste", r"parroquia(?:\s+(?:a\s+la\s+que|donde)\s+asiste)?", True),
     ("bautismo", r"bautizad[oa]|bautismo", False),
+    ("primera_comunion", r"primera\s+comunion", False),
     ("confirmacion", r"confirmad[oa]|confirmacion", False),
     ("matrimonio", r"casad[oa]\s+por\s+la\s+iglesia|matrimonio(?:\s+eclesiastico)?", False),
+    ("orden_sacerdotal", r"orden\s+sacerdotal|sacerdocio", False),
     ("uncion", r"uncion(?:\s+de\s+los\s+enfermos)?", False),
     ("condicion_medica", r"condicion\s+medica|enfermedad(?:es)?|padece(?:\s+de)?|problemas?\s+de\s+salud|patologia", False),
     ("tratamiento", r"tratamiento(?:\s+medico)?|medicamentos?|medicinas?", False),
@@ -332,7 +334,8 @@ def extraer(lectura, tipo="caminante"):
                 _poner(campos, "hijos", m.group(0), texto, conf)
             elif re.search(r"\bno\b|ningun", _plano(texto)):
                 _poner(campos, "hijos", "0", texto, conf)
-        elif clave in ("bautismo", "confirmacion", "matrimonio", "uncion"):
+        elif clave in ("bautismo", "primera_comunion", "confirmacion", "matrimonio",
+                       "orden_sacerdotal", "uncion"):
             _poner(campos, clave, si_no(texto), texto, conf)
         elif clave == "talla":
             _poner(campos, "talla_camiseta", talla(texto), texto, conf)
