@@ -1060,6 +1060,7 @@ class DescargasTests(Base):
         self.assertEqual(hoja["A2"].value, "Estado: Confirmada")
         encabezado = [c.value for c in hoja[4]]
         self.assertIn("Estado", encabezado)
+        self.assertIn("Celular", encabezado)
         filas = [[c.value for c in fila] for fila in hoja.iter_rows(min_row=5)]
         self.assertEqual(len(filas), 1)
         fila = dict(zip(encabezado, filas[0]))

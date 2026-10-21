@@ -149,7 +149,7 @@ MODULOS = [
         "inscripciones", Inscripcion, "Caminantes", "inscripción", PERSONAS,
         campos=["retiro", "persona", "padrino", "estado", "motivo_cancelacion", "cama", "mesa",
                 "salud_alimentacion", "contacto_emergencia", "notas", "consentimiento_datos"],
-        lista=["persona", "retiro", "padrino", "estado", "cama", "mesa", "estado_pago",
+        lista=["persona", "telefono", "retiro", "padrino", "estado", "cama", "mesa", "estado_pago",
                "total_pagado", "consentimiento_datos", "creado"],
         buscar=["persona__nombre", "padrino__nombre", "retiro__tipo__nombre"],
         filtros=["estado", "retiro"],
@@ -159,6 +159,7 @@ MODULOS = [
         sensibles=["salud_alimentacion", "contacto_emergencia"],
         anotaciones={"total_pagado": Sum("pagos__monto_base")},
         extras={
+            "telefono": Extra("Celular", "texto", lambda o: o.persona.telefono),
             "total_pagado": Extra("Pagado", "decimal", anotado("total_pagado"),
                                   requiere=Pago),
             "estado_pago": Extra(
