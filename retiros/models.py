@@ -641,6 +641,12 @@ def _antes(obj, *campos):
     return type(obj).objects.filter(pk=obj.pk).values(*campos).first()
 
 
+# Familiares de contacto (contacto_emergencia de Inscripcion y Participacion),
+# hasta cinco: el primero con nombre, relacion, telefono, celular y correo; los
+# demás con nombre2, relacion2, telefono2... hasta el 5.
+SUFIJOS_CONTACTO = ("", "2", "3", "4", "5")
+
+
 class Inscripcion(models.Model):
     class Estado(models.TextChoices):
         SOLICITADA = "solicitada", "Solicitada"
@@ -781,6 +787,8 @@ class Participacion(models.Model):
     disponibilidad = models.JSONField(default=dict, blank=True)  # TURNOS_SERVICIO
     camisas = models.JSONField(default=dict, blank=True)         # CAMISAS_SERVICIO
     tallas_camisa = models.JSONField(default=dict, blank=True)   # TALLAS_CAMISA
+    # Confidencial, como el de Inscripcion (SUFIJOS_CONTACTO).
+    contacto_emergencia = models.JSONField(default=dict, blank=True)
     # Lo que aporta este servidor si no es la cuota de servidor del retiro (no
     # todos pagan lo mismo: p. ej. 20 o 25 $).
     cuota = models.DecimalField("monto a pagar", max_digits=10, decimal_places=2,

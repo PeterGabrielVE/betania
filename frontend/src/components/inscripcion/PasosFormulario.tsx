@@ -9,20 +9,18 @@ import {
   Grupo,
   Opciones,
   Relacion,
-  RelacionFamiliar,
   Texto,
 } from "./Campos";
 import {
   CON_PAREJA,
   ESTADOS_CIVILES,
   ETIQUETAS as E,
-  relacionesFamiliar,
   TALLAS,
   TIPOS_DOCUMENTO,
   type Paso,
-  type Sexo,
   type Valores,
 } from "./esquema";
+import { titulosConContactos } from "./contactos";
 import Resumen from "./Resumen";
 
 type Opcion = { valor: string; etiqueta: string };
@@ -243,63 +241,6 @@ export function PasoSalud() {
   );
 }
 
-// Para ofrecer "Esposa" o "Esposo": el sexo indicado en los datos personales
-// o, si no, `sexo` (el del tipo de retiro); sin saberlo, ambos.
-export function PasoContactos({ sexo }: { sexo?: Sexo }) {
-  const indicado = useWatch({ name: "sexo" }) as string | undefined;
-  const grupos = relacionesFamiliar(
-    indicado === "M" ? "hombre" : indicado === "F" ? "mujer" : sexo,
-  );
-  return (
-    <div className="space-y-6">
-      <Grupo titulo="Persona a quien llamar">
-        <Texto
-          nombre="contacto_nombre"
-          etiqueta={E.contacto_nombre}
-          obligatorio
-        />
-        <RelacionFamiliar
-          nombre="contacto_relacion"
-          etiqueta={E.contacto_relacion}
-          obligatorio
-          grupos={grupos}
-        />
-        <Celular
-          nombre="contacto_celular"
-          etiqueta={E.contacto_celular}
-          obligatorio
-          ayuda="Celular o teléfono de casa: al menos uno."
-        />
-        <Texto
-          nombre="contacto_telefono"
-          etiqueta={E.contacto_telefono}
-          tipo="tel"
-          placeholder="Ej.: 0212-1234567"
-        />
-        <Texto
-          nombre="contacto_correo"
-          etiqueta={E.contacto_correo}
-          tipo="email"
-          ancho
-        />
-      </Grupo>
-      <Grupo titulo="Otro familiar (opcional)">
-        <Texto nombre="contacto2_nombre" etiqueta={E.contacto2_nombre} />
-        <RelacionFamiliar
-          nombre="contacto2_relacion"
-          etiqueta={E.contacto2_relacion}
-          grupos={grupos}
-        />
-        <Texto
-          nombre="contacto2_telefono"
-          etiqueta={E.contacto2_telefono}
-          tipo="tel"
-        />
-      </Grupo>
-    </div>
-  );
-}
-
 export function PasoConfirmar({
   pasos,
   etiquetas,
@@ -311,15 +252,7 @@ export function PasoConfirmar({
   estados: Opcion[];
   onIr: (indice: number) => void;
 }) {
-  // Los del segundo contacto se distinguen del primero.
-  const titulos: Record<string, string> = Object.fromEntries(
-    Object.entries(E).map(([campo, titulo]) => [
-      campo,
-      campo.startsWith("contacto2_")
-        ? `Otro familiar: ${titulo.toLowerCase()}`
-        : titulo,
-    ]),
-  );
+  const titulos = titulosConContactos(E);
   return (
     <div className="space-y-6">
       <Resumen

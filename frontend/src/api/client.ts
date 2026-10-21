@@ -329,9 +329,11 @@ export type FichaCaminante = {
   alimentacion: string;
   requerimientos: string;
   talla_camiseta: string;
-  contactos: { nombre: string; relacion: string; telefono: string }[];
+  contactos: Contacto[];
   notas: string;
 };
+// Un familiar de contacto; `telefono` puede traer dos ("0212… / 0414…").
+export type Contacto = { nombre: string; relacion: string; telefono: string };
 
 // Control de pagos (/api/control-pagos/?retiro=<id>, ver
 // retiros/api/control_pagos.py). Montos en la moneda base salvo `monto` de
@@ -644,6 +646,8 @@ export type FichaPersona = {
         duerme_en_casa: boolean | null;
         turnos: string;
         camisa: string;
+        // Solo para quien ve datos confidenciales.
+        contactos?: Contacto[];
         // Una por área: id de la asignación, id del área y si la coordina.
         areas: {
           id: string;

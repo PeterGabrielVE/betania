@@ -286,7 +286,8 @@ class PanelRetiroTests(Base):
         ana.salud_alimentacion = {"tratamiento": "Insulina", "regimen_alimenticio": "Sin sal",
                                   "requerimientos": "Silla de ruedas"}
         ana.contacto_emergencia = {"nombre": "Rosa", "relacion": "Madre", "telefono": "0412",
-                                   "celular": "0424", "nombre2": "Juan", "telefono2": "0416"}
+                                   "celular": "0424", "nombre2": "Juan", "telefono2": "0416",
+                                   "nombre5": "Luz", "relacion5": "Tía", "telefono5": "0414"}
         ana.save()
 
         ficha = self.client.get(self.ruta).json()["caminantes"]["filas"][0]["ficha"]
@@ -300,6 +301,7 @@ class PanelRetiroTests(Base):
         self.assertEqual(ficha["contactos"], [
             {"nombre": "Rosa", "relacion": "Madre", "telefono": "0412 / 0424"},
             {"nombre": "Juan", "relacion": "", "telefono": "0416"},
+            {"nombre": "Luz", "relacion": "Tía", "telefono": "0414"},
         ])
 
     def test_lo_que_debe_cada_servidor(self):

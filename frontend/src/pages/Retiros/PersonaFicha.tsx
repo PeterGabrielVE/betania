@@ -446,6 +446,23 @@ export default function PersonaFicha() {
                               .join(" · ")}
                           </p>
                         )}
+                        {!!s.contactos?.length && (
+                          <ul className="space-y-0.5 text-theme-xs text-gray-500 dark:text-gray-400">
+                            {s.contactos.map((c, i) => (
+                              <li key={i}>
+                                Familiar: {c.nombre || "Sin nombre"}
+                                {c.relacion && ` (${c.relacion})`}
+                                {c.telefono &&
+                                  c.telefono.split(" / ").map((t) => (
+                                    <span key={t}>
+                                      {" · "}
+                                      <Telefono numero={t} />
+                                    </span>
+                                  ))}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                         <Pago fila={s} />
                         {puede("participaciones", "puede_cambiar") && (
                           <Link

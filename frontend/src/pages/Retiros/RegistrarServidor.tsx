@@ -24,6 +24,7 @@ import {
   valoresServidor,
   type ValoresServidor,
 } from "@/components/inscripcion/esquemaServidor";
+import PasoContactos from "@/components/inscripcion/PasoContactos";
 import PasoPersonales from "@/components/inscripcion/PasoPersonales";
 import {
   PasoDisponibilidad,
@@ -31,7 +32,11 @@ import {
   PasoServicio,
 } from "@/components/inscripcion/PasosServidor";
 import Resumen from "@/components/inscripcion/Resumen";
-import { sexoSugerido } from "@/components/inscripcion/esquema";
+import { titulosConContactos } from "@/components/inscripcion/contactos";
+import {
+  sexoDelRetiro,
+  sexoSugerido,
+} from "@/components/inscripcion/esquema";
 import { useAsistente } from "@/components/inscripcion/useAsistente";
 import {
   conflictoEnRetiro,
@@ -242,7 +247,7 @@ export default function RegistrarServidor() {
             retiro: v.retiro,
             persona: guardada.id,
             tipo: v.tipo,
-            ...cuerpoDisponibilidad(v),
+            ...cuerpoDisponibilidad(v, sensibles),
           },
         },
       );
@@ -368,10 +373,16 @@ export default function RegistrarServidor() {
     ),
     servicio: <PasoServicio onAreas={setAreas} />,
     disponibilidad: <PasoDisponibilidad />,
+    contactos: (
+      <PasoContactos
+        sexo={sexoDelRetiro(etiquetas.retiro)}
+        obligatorio={false}
+      />
+    ),
     confirmar: (
       <Resumen
         pasos={pasos.slice(0, -1)}
-        titulos={ETIQUETAS_SERVIDOR}
+        titulos={titulosConContactos(ETIQUETAS_SERVIDOR)}
         onIr={asistente.irA}
         formatear={(campo, valor) => {
           if (campo === "retiro") return valor ? etiquetas.retiro : "";

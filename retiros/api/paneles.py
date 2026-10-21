@@ -16,7 +16,7 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
 from ..models import (
-    CAMISAS_SERVICIO, TALLAS_CAMISA, TURNOS_SERVICIO,
+    CAMISAS_SERVICIO, SUFIJOS_CONTACTO, TALLAS_CAMISA, TURNOS_SERVICIO,
     Charla, EstadoPago, Gasto, Inscripcion, Pago, Participacion, Persona, Retiro, Tarea,
 )
 from ..tasas import TasaNoDisponible, tasas_bcv
@@ -384,12 +384,10 @@ def _procedencia(persona, datos):
     return persona.procedencia or _texto(datos, "procedencia")
 
 
-def _ficha(i, retiro):
-    """Lo confidencial de un caminante: salud, alimentación y a quién llamar."""
-    persona, salud = i.persona, i.salud_alimentacion or {}
-    datos, contacto = persona.datos_sensibles or {}, i.contacto_emergencia or {}
-    contactos = []
-    for sufijo in ("", "2"):
+def _contactos(contacto):
+    """Los familiares de contacto con nombre o teléfono (SUFIJOS_CONTACTO)."""
+    contacto, contactos = contacto or {}, []
+    for sufijo in SUFIJOS_CONTACTO:
         nombre = _texto(contacto, f"nombre{sufijo}")
         telefonos = [_texto(contacto, f"telefono{sufijo}"), _texto(contacto, f"celular{sufijo}")]
         if nombre or any(telefonos):
@@ -398,6 +396,13 @@ def _ficha(i, retiro):
                 "relacion": _texto(contacto, f"relacion{sufijo}"),
                 "telefono": " / ".join(t for t in telefonos if t),
             })
+    return contactos
+
+
+def _ficha(i, retiro):
+    """Lo confidencial de un caminante: salud, alimentación y a quién llamar."""
+    persona, salud = i.persona, i.salud_alimentacion or {}
+    datos = persona.datos_sensibles or {}
     return {
         "documento": persona.documento_completo,
         "edad": _edad(persona.fecha_nacimiento, retiro.fecha_inicio),
@@ -409,7 +414,7 @@ def _ficha(i, retiro):
         "alimentacion": _texto(salud, "regimen_alimenticio"),
         "requerimientos": _texto(salud, "requerimientos"),
         "talla_camiseta": _texto(salud, "talla_camiseta"),
-        "contactos": contactos,
+        "contactos": _contactos(i.contacto_emergencia),
         "notas": i.notas,
     }
 
@@ -658,7 +663,7 @@ def _como_caminante(persona, con_pagos, sensibles):
     return filas
 
 
-def _como_servidor(persona, con_pagos):
+def _como_servidor(persona, con_pagos, sensibles):
     participaciones = (
         persona.participaciones.exclude(tipo=Participacion.Tipo.CAMINANTE)
         .select_related("retiro__tipo").prefetch_related("servicios__area")
@@ -687,6 +692,8 @@ def _como_servidor(persona, con_pagos):
                 for s in sorted(p.servicios.all(), key=lambda s: s.area.nombre)
             ],
         }
+        if sensibles:
+            fila["contactos"] = _contactos(p.contacto_emergencia)
         if con_pagos:
             total = aportado.get(p.retiro_id, 0)
             fila.update(pagado=total,
@@ -745,7 +752,7 @@ def ficha_persona(request, pk):
         "persona": datos,
         "caminante": (_como_caminante(persona, finanzas, sensibles)
                       if ve_inscripciones else None),
-        "servidor": (_como_servidor(persona, finanzas)
+        "servidor": (_como_servidor(persona, finanzas, sensibles)
                      if _ve(user, Participacion) else None),
         # A quién invitó a un retiro.
         "invito": [

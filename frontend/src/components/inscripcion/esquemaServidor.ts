@@ -1,8 +1,17 @@
 // Formulario para registrar un servidor en el equipo de un retiro: la persona
-// (esquemaPersona.ts), cómo participa (servidor o coordinador general) y en
-// qué áreas sirve (y cuáles coordina).
+// (esquemaPersona.ts), cómo participa (servidor o coordinador general), en
+// qué áreas sirve (y cuáles coordina) y sus familiares de contacto.
 import type { Registro } from "@/api/client";
 import { z } from "zod";
+import {
+  CAMPOS_CONTACTOS,
+  camposContactos,
+  cuerpoContactos,
+  datosDeContactos,
+  ETIQUETAS_CONTACTOS,
+  reglasContactos,
+  vaciosContactos,
+} from "./contactos";
 import type { Paso } from "./esquema";
 import {
   camposPersona,
@@ -84,7 +93,12 @@ const basicos = {
   tallas: z.array(z.string()),
 };
 
-const esquemaCompleto = z.object({ ...basicos, ...camposPersonaSensibles });
+// Confidenciales: los contactos van en Participacion.contacto_emergencia.
+const esquemaCompleto = z.object({
+  ...basicos,
+  ...camposPersonaSensibles,
+  ...camposContactos(false),
+});
 export type ValoresServidor = z.infer<typeof esquemaCompleto>;
 
 export function crearEsquemaServidor(
@@ -97,6 +111,7 @@ export function crearEsquemaServidor(
       const falta = (path: string, message: string) =>
         ctx.addIssue({ code: "custom", path: [path], message });
       reglasPersona(v as Partial<ValoresServidor>, falta, conEstados);
+      if (conSensibles) reglasContactos(v as Partial<ValoresServidor>, falta, false);
       // Un coordinador general puede no tener área; un servidor, al menos una.
       if (v.tipo === "servidor" && v.areas.length === 0) {
         falta("areas", "Elige al menos un área de servicio.");
@@ -111,6 +126,7 @@ export function crearEsquemaServidor(
 
 export const ETIQUETAS_SERVIDOR: Record<keyof ValoresServidor, string> = {
   ...ETIQUETAS_PERSONA,
+  ...ETIQUETAS_CONTACTOS,
   retiro: "Retiro",
   tipo: "Participa como",
   areas: "Áreas de servicio",
@@ -147,6 +163,13 @@ const PASOS: Paso[] = [
     campos: ["duerme", "turnos", "camisas", "tallas"],
   },
   {
+    id: "contactos",
+    titulo: "Contactos",
+    descripcion: "Familiares a quien llamar en una emergencia.",
+    soloSensibles: true,
+    campos: CAMPOS_CONTACTOS,
+  },
+  {
     id: "confirmar",
     titulo: "Confirmar",
     descripcion: "Revisa los datos y regístralo.",
@@ -155,7 +178,7 @@ const PASOS: Paso[] = [
 ];
 
 export function pasosServidor(conSensibles: boolean): Paso[] {
-  return PASOS.map((p) => ({
+  return PASOS.filter((p) => conSensibles || !p.soloSensibles).map((p) => ({
     ...p,
     campos: conSensibles ? p.campos : p.campos.filter((c) => c in basicos),
   }));
@@ -164,6 +187,7 @@ export function pasosServidor(conSensibles: boolean): Paso[] {
 export function valoresServidor(retiro?: string, pais = ""): ValoresServidor {
   return {
     ...valoresPersona(pais),
+    ...vaciosContactos(),
     retiro: retiro ?? "",
     tipo: "servidor",
     areas: [],
@@ -176,7 +200,8 @@ export function valoresServidor(retiro?: string, pais = ""): ValoresServidor {
 }
 
 // Lo de disponibilidad para POST /participaciones/: cada lista como {clave: true}.
-export function cuerpoDisponibilidad(v: ValoresServidor) {
+// Con `conSensibles`, también los contactos.
+export function cuerpoDisponibilidad(v: ValoresServidor, conSensibles: boolean) {
   const marcadas = (claves: string[]) =>
     Object.fromEntries(claves.map((c) => [c, true]));
   return {
@@ -184,6 +209,7 @@ export function cuerpoDisponibilidad(v: ValoresServidor) {
     disponibilidad: marcadas(v.turnos),
     camisas: marcadas(v.camisas),
     tallas_camisa: marcadas(v.tallas),
+    ...(conSensibles && { contacto_emergencia: cuerpoContactos(v) }),
   };
 }
 
@@ -218,6 +244,9 @@ export function datosDeParticipacion(
     turnos: marcadas(p.disponibilidad),
     camisas: marcadas(p.camisas),
     tallas: marcadas(p.tallas_camisa),
+    // Sin permiso para verlos no llegan (y tampoco se piden).
+    ...(p.contacto_emergencia !== undefined &&
+      datosDeContactos(p.contacto_emergencia)),
     areas: servicios.map((s) => String(s.area)),
     coordina: servicios
       .filter((s) => s.es_coordinador)

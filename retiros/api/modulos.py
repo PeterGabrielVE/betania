@@ -8,7 +8,7 @@ from django.conf import settings
 from django.db.models import Count, Q, Sum
 
 from ..models import (
-    CAMISAS_SERVICIO, TALLAS_CAMISA, TURNOS_SERVICIO,
+    CAMISAS_SERVICIO, SUFIJOS_CONTACTO, TALLAS_CAMISA, TURNOS_SERVICIO,
     AreaServicio, AsignacionRol, AsignacionServicio, Charla, Ciudad, Diocesis, Estado,
     EstadoPago, Gasto, Inscripcion, Pago, Pais, Parroquia, Participacion, Persona, Retiro, Tarea,
     Auditoria, Rol, TipoRetiro, Usuario,
@@ -24,7 +24,20 @@ SISTEMA = "Sistema"
 _DATOS, _CIVIL, _SACRAMENTOS = "Datos del caminante", "Estado civil", "Sacramentos"
 _UBICACION = "De dónde es"
 _INSCRIPCION, _SALUD, _LLAMAR = "Inscripción", "Salud", "Persona a quien llamar"
-_LLAMAR2 = "Otro familiar de contacto"
+
+# Los familiares de contacto (contacto_emergencia), como los pide el formulario.
+_CONTACTOS = [
+    sub("nombre", "Nombre", _LLAMAR),
+    sub("relacion", "Tipo de relación", _LLAMAR),
+    sub("telefono", "Teléfono", _LLAMAR),
+    sub("celular", "Celular", _LLAMAR),
+    sub("correo", "Correo", _LLAMAR, "email"),
+] + [
+    sub(f"{c}{n}", e, f"Otro familiar de contacto ({n})")
+    for n in SUFIJOS_CONTACTO[1:]
+    for c, e in (("nombre", "Nombre"), ("relacion", "Tipo de relación"),
+                 ("telefono", "Teléfono"))
+]
 _TURNOS, _CAMISA = "Turnos en que puede servir", "Camisa para servir"
 _COMENTARIOS = "Comentarios"
 
@@ -171,16 +184,7 @@ MODULOS = [
                 sub("talla_camiseta", "Talla de camiseta", _SALUD, "opcion",
                     ["S", "M", "L", "XL"]),
             ],
-            "contacto_emergencia": [
-                sub("nombre", "Nombre", _LLAMAR),
-                sub("relacion", "Tipo de relación", _LLAMAR),
-                sub("telefono", "Teléfono", _LLAMAR),
-                sub("celular", "Celular", _LLAMAR),
-                sub("correo", "Correo", _LLAMAR, "email"),
-                sub("nombre2", "Nombre", _LLAMAR2),
-                sub("relacion2", "Tipo de relación", _LLAMAR2),
-                sub("telefono2", "Teléfono", _LLAMAR2),
-            ],
+            "contacto_emergencia": _CONTACTOS,
         },
     ),
     Modulo(
@@ -189,12 +193,13 @@ MODULOS = [
         # inscripciones.
         "participaciones", Participacion, "Servidores", "servidor", PERSONAS,
         campos=["retiro", "persona", "tipo", "estado", "motivo_cancelacion", "duerme_en_casa",
-                "disponibilidad", "camisas", "tallas_camisa"],
+                "disponibilidad", "camisas", "tallas_camisa", "contacto_emergencia"],
         lista=["persona", "documento", "telefono", "areas", "tipo", "estado", "duerme",
                "turnos", "camisa", "retiro"],
         buscar=["persona__nombre", "persona__documento", "servicios__area__nombre",
                 "retiro__tipo__nombre"],
         excluir={"tipo": Participacion.Tipo.CAMINANTE},
+        sensibles=["contacto_emergencia"],
         prefetch=["servicios__area"],
         extras={
             "documento": Extra("Documento", "texto", lambda o: o.persona.documento_completo),
@@ -218,6 +223,7 @@ MODULOS = [
             "camisas": [sub(c, e, _CAMISA, "bool") for c, e in CAMISAS_SERVICIO],
             "tallas_camisa": [sub(c, f"Talla {e}", _CAMISA, "bool")
                               for c, e in TALLAS_CAMISA],
+            "contacto_emergencia": _CONTACTOS,
         },
         orden=["persona__nombre"],
         relacionados=["persona", "retiro__tipo"],

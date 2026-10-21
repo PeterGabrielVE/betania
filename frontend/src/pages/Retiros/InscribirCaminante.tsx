@@ -20,10 +20,10 @@ import {
   type Valores,
 } from "@/components/inscripcion/esquema";
 import { campoDePersona } from "@/components/inscripcion/esquemaPersona";
+import PasoContactos from "@/components/inscripcion/PasoContactos";
 import PasoPersonales from "@/components/inscripcion/PasoPersonales";
 import {
   PasoConfirmar,
-  PasoContactos,
   PasoFamilia,
   PasoIdentificacion,
   PasoSalud,

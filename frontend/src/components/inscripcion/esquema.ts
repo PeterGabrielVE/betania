@@ -23,6 +23,14 @@ import {
   texto,
   valoresPersona,
 } from "./esquemaPersona";
+import {
+  CAMPOS_CONTACTOS,
+  camposContactos,
+  cuerpoContactos,
+  datosDeContactos,
+  ETIQUETAS_CONTACTOS,
+  reglasContactos,
+} from "./contactos";
 
 export {
   EDAD_MINIMA,
@@ -157,15 +165,7 @@ const sensibles = {
   regimen_alimenticio: texto,
   requerimientos: texto,
   talla_camiseta: obligatorio("Elige la talla de camiseta."),
-  // Contactos de emergencia
-  contacto_nombre: obligatorio("Escribe a quién llamar en una emergencia."),
-  contacto_relacion: obligatorio("Elige la relación (madre, esposa…)."),
-  contacto_telefono: fijo,
-  contacto_celular: celular,
-  contacto_correo: correo,
-  contacto2_nombre: texto,
-  contacto2_relacion: texto,
-  contacto2_telefono: fijo,
+  ...camposContactos(true),
 };
 
 const esquemaCompleto = z.object({ ...basicos, ...sensibles });
@@ -196,16 +196,7 @@ function cruzadas(
   reglasPersona(v, falta, conEstados);
   if (!conSensibles) return;
   reglasFamilia(v, falta);
-  if (!v.contacto_telefono && !v.contacto_celular) {
-    falta("contacto_celular", "Escribe al menos un teléfono del contacto.");
-  }
-  // El segundo contacto es opcional, pero si se empieza hay que completarlo.
-  if (v.contacto2_relacion || v.contacto2_telefono || v.contacto2_nombre) {
-    if (!v.contacto2_nombre) falta("contacto2_nombre", "Escribe su nombre.");
-    if (!v.contacto2_telefono) {
-      falta("contacto2_telefono", "Escribe su teléfono.");
-    }
-  }
+  reglasContactos(v, falta, true);
 }
 
 // `conEstados(pais)`: si ese país tiene estados cargados (ver sembrar_geografia).
@@ -249,14 +240,7 @@ export const ETIQUETAS: Record<Campo, string> = {
   regimen_alimenticio: "Alimentación especial",
   requerimientos: "Requerimientos especiales",
   talla_camiseta: "Talla de camiseta",
-  contacto_nombre: "Nombre",
-  contacto_relacion: "Relación",
-  contacto_telefono: "Teléfono de casa",
-  contacto_celular: "Celular",
-  contacto_correo: "Correo",
-  contacto2_nombre: "Nombre",
-  contacto2_relacion: "Relación",
-  contacto2_telefono: "Teléfono",
+  ...ETIQUETAS_CONTACTOS,
   notas: "Comentario",
   consentimiento_datos: "Autoriza el uso de sus datos",
 };
@@ -334,16 +318,7 @@ export const PASOS: Paso[] = [
     titulo: "Contactos",
     descripcion: "A quién llamar en una emergencia.",
     soloSensibles: true,
-    campos: [
-      "contacto_nombre",
-      "contacto_relacion",
-      "contacto_celular",
-      "contacto_telefono",
-      "contacto_correo",
-      "contacto2_nombre",
-      "contacto2_relacion",
-      "contacto2_telefono",
-    ],
+    campos: CAMPOS_CONTACTOS,
   },
   {
     id: "confirmar",
@@ -389,17 +364,6 @@ const SALUD = [
   "requerimientos",
   "talla_camiseta",
 ] as const;
-// Campo del formulario -> clave en contacto_emergencia.
-const CONTACTO: [Campo, string][] = [
-  ["contacto_nombre", "nombre"],
-  ["contacto_relacion", "relacion"],
-  ["contacto_telefono", "telefono"],
-  ["contacto_celular", "celular"],
-  ["contacto_correo", "correo"],
-  ["contacto2_nombre", "nombre2"],
-  ["contacto2_relacion", "relacion2"],
-  ["contacto2_telefono", "telefono2"],
-];
 const BOOLEANOS = new Set<string>([
   "bautismo",
   "primera_comunion",
@@ -455,7 +419,6 @@ export function paresFamilia(v: Record<string, unknown>): [string, unknown][] {
 // Una inscripción guardada, para editarla en el formulario.
 export function datosDeInscripcion(ins: Registro): Partial<Valores> {
   const salud = (ins.salud_alimentacion ?? {}) as Record<string, unknown>;
-  const contacto = (ins.contacto_emergencia ?? {}) as Record<string, unknown>;
   return {
     retiro: comoTexto(ins.retiro),
     estado: comoTexto(ins.estado),
@@ -465,14 +428,7 @@ export function datosDeInscripcion(ins: Registro): Partial<Valores> {
     notas: comoTexto(ins.notas),
     consentimiento_datos: Boolean(ins.consentimiento_datos),
     ...Object.fromEntries(SALUD.map((c) => [c, comoTexto(salud[c])])),
-    ...Object.fromEntries(
-      CONTACTO.map(([campo, clave]) => [
-        campo,
-        campo === "contacto_celular"
-          ? normalizarCelular(contacto[clave])
-          : comoTexto(contacto[clave]),
-      ]),
-    ),
+    ...datosDeContactos(ins.contacto_emergencia),
   };
 }
 
@@ -503,10 +459,7 @@ export function cuerpoInscripcion(
         {},
         SALUD.map((c) => [c, v[c]]),
       ),
-      contacto_emergencia: json(
-        {},
-        CONTACTO.map(([campo, clave]) => [clave, v[campo]]),
-      ),
+      contacto_emergencia: cuerpoContactos(v),
     }),
   };
 }
