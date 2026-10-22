@@ -47,6 +47,7 @@ def _preferencias_json(user):
         "factor": factor,
         "aviso": aviso,
         "tablero_ocultos": (pref.tablero_ocultos if pref else None) or [],
+        "columnas": (pref.columnas if pref else None) or {},
     }
 
 
@@ -147,12 +148,43 @@ def iniciar_sesion(request):
     return JsonResponse(_usuario_json(user))
 
 
+_CLAVE_TABLA = re.compile(r"[a-z0-9_]{1,60}")
+_CLAVE_COLUMNA = re.compile(r"[a-z0-9_]{1,60}")
+
+
+def _columnas_validas(columnas):
+    """{tabla: {"ocultas": [...], "agregadas": [...]} | None}, sin repetidas;
+    None si no tiene esa forma."""
+    if not isinstance(columnas, dict) or len(columnas) > 100:
+        return None
+    limpias = {}
+    for tabla, eleccion in columnas.items():
+        if not (isinstance(tabla, str) and _CLAVE_TABLA.fullmatch(tabla)):
+            return None
+        if eleccion is None:
+            limpias[tabla] = None
+            continue
+        if not isinstance(eleccion, dict) or set(eleccion) - {"ocultas", "agregadas"}:
+            return None
+        limpia = {}
+        for lado in ("ocultas", "agregadas"):
+            lista = eleccion.get(lado, [])
+            if not (isinstance(lista, list) and len(lista) <= 60 and all(
+                    isinstance(c, str) and _CLAVE_COLUMNA.fullmatch(c) for c in lista)):
+                return None
+            limpia[lado] = list(dict.fromkeys(lista))
+        limpias[tabla] = limpia
+    return limpias
+
+
 @require_http_methods(["PATCH"])
 def preferencias(request):
     """Cambia la edición y/o la moneda preferidas: {"retiro": id | null,
     "moneda": "VES" | "USD" | "EUR" | ""}, y las secciones ocultas del
-    tablero: {"tablero_ocultos": ["cumpleanos", ...]}. Devuelve la sesión
-    actualizada."""
+    tablero: {"tablero_ocultos": ["cumpleanos", ...]}, y las columnas de una o
+    más tablas: {"columnas": {"inscripciones": {"ocultas": [...], "agregadas":
+    [...]}, "panel_caminantes": null}} (null: las de siempre). Devuelve la
+    sesión actualizada."""
     if not request.user.is_authenticated:
         return JsonResponse({"detail": "Inicia sesión."}, status=401)
     try:
@@ -180,6 +212,19 @@ def preferencias(request):
             return JsonResponse({"tablero_ocultos": ["Lista de secciones no válida."]},
                                 status=400)
         pref.tablero_ocultos = list(dict.fromkeys(ocultos))
+    if "columnas" in datos:
+        columnas = _columnas_validas(datos["columnas"])
+        if columnas is None:
+            return JsonResponse({"columnas": ["Columnas no válidas."]}, status=400)
+        actuales = dict(pref.columnas or {})
+        for tabla, eleccion in columnas.items():
+            if eleccion is None:
+                actuales.pop(tabla, None)
+            else:
+                actuales[tabla] = eleccion
+        if len(actuales) > 100:
+            return JsonResponse({"columnas": ["Demasiadas tablas."]}, status=400)
+        pref.columnas = actuales
     pref.save()
     return JsonResponse(_usuario_json(request.user))
 

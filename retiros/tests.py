@@ -662,7 +662,8 @@ class PreferenciasTests(Base):
     def test_sin_preferencias_usa_la_moneda_base(self):
         pref = self.client.get("/api/auth/sesion/").json()["preferencias"]
         self.assertEqual(pref, {"retiro": None, "moneda": "USD", "moneda_vista": "USD",
-                                "factor": 1, "aviso": "", "tablero_ocultos": []})
+                                "factor": 1, "aviso": "", "tablero_ocultos": [],
+                                "columnas": {}})
 
     def test_elegir_edicion_y_moneda(self):
         r = self.cambiar(retiro=str(self.retiro.pk), moneda="VES")
@@ -2337,3 +2338,60 @@ class ReportesRetiroTests(Base):
         self.assertNotIn("pendientes", claves)  # le falta ver los pagos
         r = self.client.get("/api/reportes/?reporte=salud")
         self.assertEqual(r.status_code, 404)
+
+
+class ColumnasPorUsuarioTests(Base):
+    """Cada usuario oculta o agrega columnas; las descargas llevan las mismas."""
+
+    def setUp(self):
+        super().setUp()
+        Inscripcion.objects.create(retiro=self.retiro, persona=self.persona("Ana Pérez"),
+                                   cama="7", notas="Llega tarde")
+
+    def cambiar(self, columnas):
+        return self.client.patch("/api/auth/preferencias/", {"columnas": columnas},
+                                 content_type="application/json")
+
+    def encabezado(self, ruta):
+        from io import BytesIO
+
+        from openpyxl import load_workbook
+        r = self.client.get(ruta)
+        self.assertEqual(r.status_code, 200, r.content[:300])
+        return [c.value for c in load_workbook(BytesIO(r.content)).active[4]]
+
+    def test_guarda_por_tabla_y_se_restablece(self):
+        r = self.cambiar({"inscripciones": {"ocultas": ["cama"], "agregadas": ["notas"]},
+                          "panel_caminantes": {"ocultas": ["edad"]}})
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.json()["preferencias"]["columnas"], {
+            "inscripciones": {"ocultas": ["cama"], "agregadas": ["notas"]},
+            "panel_caminantes": {"ocultas": ["edad"], "agregadas": []},
+        })
+        # Cambiar una tabla no toca las demás; null vuelve a las de siempre.
+        columnas = self.cambiar({"inscripciones": None}).json()["preferencias"]["columnas"]
+        self.assertEqual(list(columnas), ["panel_caminantes"])
+
+    def test_valida_la_forma(self):
+        for malo in ([], {"Tabla Mala": None}, {"t": {"ocultas": "cama"}},
+                     {"t": {"otra": []}}, {"t": {"ocultas": ["con espacio"]}}):
+            self.assertEqual(self.cambiar(malo).status_code, 400, malo)
+
+    def test_el_listado_ofrece_columnas_opcionales(self):
+        (modulo,) = [m for m in self.client.get("/api/esquema/").json()
+                     if m["slug"] == "inscripciones"]
+        opcionales = [c["nombre"] for c in modulo["lista"] if c.get("opcional")]
+        self.assertIn("notas", opcionales)
+        self.assertNotIn("contacto_emergencia", opcionales)  # JSON
+
+    def test_la_descarga_lleva_las_columnas_elegidas(self):
+        ruta = "/api/inscripciones/exportar/?formato=xlsx"
+        self.assertIn("Número de cama", self.encabezado(ruta))
+        self.assertNotIn("Comentario", self.encabezado(ruta))
+        self.cambiar({"inscripciones": {"ocultas": ["cama"], "agregadas": ["notas"]}})
+        encabezado = self.encabezado(ruta)
+        self.assertNotIn("Número de cama", encabezado)
+        self.assertIn("Comentario", encabezado)
+        # La pantalla manda las suyas: tienen prioridad.
+        self.assertEqual(self.encabezado(f"{ruta}&columnas=persona,cama"),
+                         ["Persona", "Número de cama"])

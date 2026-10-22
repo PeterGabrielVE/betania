@@ -11,6 +11,8 @@ import PageMeta from "@/components/common/PageMeta";
 import Telefono from "@/components/common/Telefono";
 import BotonesDescarga from "@/components/modulos/BotonesDescarga";
 import Paginacion from "@/components/modulos/Paginacion";
+import SelectorColumnas from "@/components/modulos/SelectorColumnas";
+import { claveDe, useColumnas } from "@/components/modulos/useColumnas";
 import { usePaginas } from "@/components/modulos/usePaginas";
 import {
   claseControl,
@@ -44,10 +46,7 @@ const esCifra = (c: ColumnaReporte) =>
 
 // "José Pérez" y "jose perez" coinciden.
 const plano = (t: string) =>
-  t
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase();
+  t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
 function mostrar(c: ColumnaReporte, v: Celda): React.ReactNode {
   if (v === null || v === "") return "—";
@@ -101,7 +100,20 @@ export default function Reportes() {
     filas,
     `${reporte?.clave}|${datos?.retiro?.id}|${buscado}`,
   );
-  const conTotales = !!reporte?.columnas.some((c) => c.total);
+  // Cada reporte recuerda sus columnas; la primera (el nombre) no se quita.
+  const { ve, selector } = useColumnas(
+    `reporte_${reporte?.clave ?? ""}`,
+    (reporte?.columnas ?? []).map((c, i) => ({
+      clave: claveDe(c.etiqueta),
+      etiqueta: c.etiqueta,
+      fija: i === 0,
+    })),
+  );
+  // Índices de las columnas a la vista.
+  const indices = (reporte?.columnas ?? []).flatMap((c, i) =>
+    ve(claveDe(c.etiqueta)) ? [i] : [],
+  );
+  const conTotales = indices.some((i) => reporte!.columnas[i].total);
   const total = (i: number) => filas.reduce((s, f) => s + Number(f[i] ?? 0), 0);
 
   const tablaDescarga = (): TablaDescarga => {
@@ -109,15 +121,17 @@ export default function Reportes() {
     return {
       titulo: `${reporte!.titulo} · ${datos?.retiro?.etiqueta ?? ""}`,
       subtitulo: texto.trim() ? `Búsqueda: «${texto.trim()}»` : "",
-      columnas: columnas.map((c) => c.etiqueta),
+      columnas: indices.map((i) => columnas[i].etiqueta),
       filas: [
-        ...filas.map((f) => f.map((v, i) => paraDescarga(columnas[i], v))),
+        ...filas.map((f) =>
+          indices.map((i) => paraDescarga(columnas[i], f[i])),
+        ),
         ...(conTotales
           ? [
-              columnas.map((c, i) =>
-                c.total
-                  ? paraDescarga(c, total(i))
-                  : i === 0
+              indices.map((i, n) =>
+                columnas[i].total
+                  ? paraDescarga(columnas[i], total(i))
+                  : n === 0
                     ? "Total"
                     : "",
               ),
@@ -209,8 +223,10 @@ export default function Reportes() {
                   Todos los reportes
                 </button>
                 <p className="text-theme-xs text-gray-500 dark:text-gray-400">
-                  {datos.catalogo.find((r) => r.clave === reporte.clave)
-                    ?.descripcion}
+                  {
+                    datos.catalogo.find((r) => r.clave === reporte.clave)
+                      ?.descripcion
+                  }
                 </p>
               </div>
               <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -225,12 +241,12 @@ export default function Reportes() {
                 <span className={claseVacio}>
                   {filas.length === 1 ? "1 fila" : `${filas.length} filas`}
                 </span>
-                {filas.length > 0 && (
-                  <BotonesDescarga
-                    tabla={tablaDescarga}
-                    className="sm:ms-auto"
-                  />
-                )}
+                <div className="flex flex-wrap items-center gap-3 sm:ms-auto">
+                  <SelectorColumnas {...selector} />
+                  {filas.length > 0 && (
+                    <BotonesDescarga tabla={tablaDescarga} />
+                  )}
+                </div>
               </div>
 
               {filas.length === 0 ? (
@@ -244,46 +260,48 @@ export default function Reportes() {
                   <Table>
                     <TableHeader className="border-b border-gray-100 dark:border-white/5">
                       <TableRow>
-                        {reporte.columnas.map((c) => (
-                          <TableCell
-                            key={c.etiqueta}
-                            isHeader
-                            className={`${claseEncabezado} ${esCifra(c) ? "text-end" : ""}`}
-                          >
-                            {c.etiqueta}
-                          </TableCell>
-                        ))}
+                        {indices
+                          .map((i) => reporte.columnas[i])
+                          .map((c) => (
+                            <TableCell
+                              key={c.etiqueta}
+                              isHeader
+                              className={`${claseEncabezado} ${esCifra(c) ? "text-end" : ""}`}
+                            >
+                              {c.etiqueta}
+                            </TableCell>
+                          ))}
                       </TableRow>
                     </TableHeader>
                     <TableBody className="divide-y divide-gray-100 dark:divide-white/5">
                       {pagina.map((f, n) => (
                         <TableRow key={n}>
-                          {reporte.columnas.map((c, i) => (
+                          {indices.map((i) => (
                             <TableCell
-                              key={c.etiqueta}
+                              key={i}
                               className={
-                                esCifra(c)
+                                esCifra(reporte.columnas[i])
                                   ? claseCifra
                                   : i === 0
                                     ? `${claseCelda} font-medium text-gray-800 dark:text-white/90`
                                     : claseCelda
                               }
                             >
-                              {mostrar(c, f[i])}
+                              {mostrar(reporte.columnas[i], f[i])}
                             </TableCell>
                           ))}
                         </TableRow>
                       ))}
                       {conTotales && (
                         <TableRow className="border-t border-gray-200 dark:border-gray-800">
-                          {reporte.columnas.map((c, i) => (
+                          {indices.map((i, n) => (
                             <TableCell
-                              key={c.etiqueta}
-                              className={`${esCifra(c) ? claseCifra : claseCelda} font-semibold text-gray-800 dark:text-white/90`}
+                              key={i}
+                              className={`${esCifra(reporte.columnas[i]) ? claseCifra : claseCelda} font-semibold text-gray-800 dark:text-white/90`}
                             >
-                              {c.total
-                                ? mostrar(c, total(i))
-                                : i === 0
+                              {reporte.columnas[i].total
+                                ? mostrar(reporte.columnas[i], total(i))
+                                : n === 0
                                   ? "Total"
                                   : ""}
                             </TableCell>

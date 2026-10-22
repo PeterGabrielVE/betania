@@ -97,15 +97,30 @@ def _filtro(modulo, nombre):
 
 
 def columnas_lista(modulo, user):
-    """Las columnas de la tabla de un módulo que este usuario puede ver."""
+    """Las columnas de la tabla de un módulo que este usuario puede ver: las de
+    siempre y, con "opcional", los demás campos del formulario que puede
+    agregar (salvo los JSON)."""
     vista = _preferencias_json(user)["moneda_vista"]
     columnas = [_describir(modulo, n) for n in modulo.lista
                 if n not in modulo.extras or modulo.extras[n].visible(user)]
+    columnas += [{**_describir(modulo, n), "opcional": True} for n in modulo.campos
+                 if n not in modulo.lista and n not in modulo.sensibles
+                 and _tipo(modulo.campo(n)) != "json"]
     if vista != settings.MONEDA:
         for columna in columnas:
             if columna["nombre"] == "monto_base":
                 columna["etiqueta"] = f"Equivalente en {vista}"
     return columnas
+
+
+def elegir_columnas(columnas, eleccion):
+    """Las que se ven según lo que eligió el usuario ({"ocultas", "agregadas"},
+    ver Preferencias.columnas). Siempre queda al menos una."""
+    eleccion = eleccion or {}
+    ocultas, agregadas = eleccion.get("ocultas", []), eleccion.get("agregadas", [])
+    elegidas = [c for c in columnas if (c["nombre"] in agregadas if c.get("opcional")
+                                        else c["nombre"] not in ocultas)]
+    return elegidas or [c for c in columnas if not c.get("opcional")][:1]
 
 
 def _celda(columna, datos, vista, factor):
@@ -239,6 +254,15 @@ class ModuloViewSet(viewsets.ModelViewSet):
         fijos = filtros_fijos(self.modulo, request.user)
         columnas = [c for c in columnas_lista(self.modulo, request.user)
                     if c["tipo"] != "enlace" and c["nombre"] not in fijos]
+        # Las que se ven en la tabla: ?columnas=a,b (las de la pantalla) o, si
+        # no, las que el usuario dejó guardadas.
+        pedidas = request.query_params.get("columnas")
+        if pedidas:
+            nombres = pedidas.split(",")
+            columnas = [c for c in columnas if c["nombre"] in nombres] or columnas[:1]
+        else:
+            columnas = elegir_columnas(columnas, _preferencias_json(request.user)
+                                       ["columnas"].get(self.modulo.slug))
         pref = _preferencias_json(request.user)
         datos = self.get_serializer(qs, many=True).data
         filas = [[_celda(c, d, pref["moneda_vista"], pref["factor"]) for c in columnas]

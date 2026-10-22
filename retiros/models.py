@@ -447,6 +447,10 @@ class Preferencias(models.Model):
     # Secciones del tablero de inicio que no quiere ver (sus claves, ver
     # frontend/src/pages/Retiros/seccionesTablero.ts).
     tablero_ocultos = models.JSONField(default=list, blank=True)
+    # Columnas de cada tabla (un módulo, "panel_caminantes", "reporte_salud"...):
+    # {tabla: {"ocultas": [...], "agregadas": [...]}}. Lo mismo sale en las
+    # descargas.
+    columnas = models.JSONField(default=dict, blank=True)
 
     class Meta:
         verbose_name = "preferencias"

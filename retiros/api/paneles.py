@@ -521,6 +521,7 @@ def _servidores(retiro, con_pagos=True):
             "motivo_cancelacion": p.motivo_cancelacion,
             "areas": ", ".join(s.area.nombre for s in p.servicios.all()),
             "duerme_en_casa": p.duerme_en_casa,
+            "cama": p.cama,
             "turnos": p.resumen_turnos(),
             "camisa": p.resumen_camisas(),
         }

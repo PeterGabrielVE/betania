@@ -3,6 +3,7 @@ import {
   ApiError,
   SESION_VENCIDA,
   ultimaActividad,
+  type EleccionColumnas,
   type Modulo,
   type Preferencias,
   type Sesion,
@@ -40,6 +41,12 @@ type AuthContextType = Estado & {
   // Las secciones del tablero que no quiere ver. Se ve al instante y se
   // guarda en el servidor (si falla, vuelve como estaba y lanza el error).
   guardarTablero: (ocultos: string[], antes: string[]) => Promise<void>;
+  // Las columnas de una tabla (null: las de siempre). Igual que el tablero.
+  guardarColumnas: (
+    tabla: string,
+    eleccion: EleccionColumnas | null,
+    antes: EleccionColumnas | null,
+  ) => Promise<void>;
   // Cambia la edición y/o la moneda preferidas (se guardan en el servidor).
   cambiarPreferencias: (datos: {
     retiro?: string | null;
@@ -185,6 +192,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     [],
   );
 
+  const guardarColumnas = useCallback(
+    async (
+      tabla: string,
+      eleccion: EleccionColumnas | null,
+      antes: EleccionColumnas | null,
+    ) => {
+      const poner = (valor: EleccionColumnas | null) =>
+        setEstado((e) => {
+          if (!e.sesion?.autenticado) return e;
+          const columnas = { ...e.sesion.preferencias.columnas };
+          if (valor) columnas[tabla] = valor;
+          else delete columnas[tabla];
+          return {
+            ...e,
+            sesion: {
+              ...e.sesion,
+              preferencias: { ...e.sesion.preferencias, columnas },
+            },
+          };
+        });
+      poner(eleccion);
+      try {
+        await api("/auth/preferencias/", {
+          method: "PATCH",
+          body: { columnas: { [tabla]: eleccion } },
+        });
+      } catch (e) {
+        poner(antes);
+        throw e;
+      }
+    },
+    [],
+  );
+
   const cambiarPreferencias = useCallback(
     async (datos: { retiro?: string | null; moneda?: string }) => {
       const sesion = await api<Sesion>("/auth/preferencias/", {
@@ -204,6 +245,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         logout,
         cerrarPorInactividad,
         guardarTablero,
+        guardarColumnas,
         cambiarPreferencias,
         reintentar,
         refrescar,

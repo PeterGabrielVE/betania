@@ -236,7 +236,10 @@ export type Preferencias = {
   aviso: string;
   // Secciones del tablero de inicio que eligió no ver.
   tablero_ocultos: string[];
+  // Columnas que ocultó o agregó en cada tabla (ver useColumnas).
+  columnas: Record<string, EleccionColumnas>;
 };
+export type EleccionColumnas = { ocultas: string[]; agregadas: string[] };
 
 export type Pagina<T> = {
   count: number;
@@ -279,6 +282,8 @@ export type Campo = {
   // Valor por defecto que sale de las preferencias (la edición elegida); a
   // diferencia de `fijo`, se puede cambiar.
   predeterminado?: { valor: string; etiqueta: string };
+  // En la tabla: una columna que no sale salvo que el usuario la agregue.
+  opcional?: boolean;
 };
 
 export type Modulo = {
@@ -492,6 +497,7 @@ export type PanelRetiro = {
       motivo_cancelacion: string;
       areas: string;
       duerme_en_casa: boolean | null; // null: no lo indicó
+      cama: string;
       turnos: string; // "Vie: noche · Sáb: todo el día"
       camisa: string; // "Azul de servicio · talla M"
       // Solo con acceso a finanzas:

@@ -10,6 +10,8 @@ import PageMeta from "@/components/common/PageMeta";
 import Telefono from "@/components/common/Telefono";
 import BotonesDescarga from "@/components/modulos/BotonesDescarga";
 import Paginacion from "@/components/modulos/Paginacion";
+import SelectorColumnas from "@/components/modulos/SelectorColumnas";
+import { useColumnas, type DefColumna } from "@/components/modulos/useColumnas";
 import { usePaginas } from "@/components/modulos/usePaginas";
 import { claseControl, claseTarjeta } from "@/components/modulos/estilos";
 import Actualizacion from "@/components/retiros/Actualizacion";
@@ -39,12 +41,18 @@ const QUIENES = [
 
 // "José Pérez" y "jose perez" coinciden.
 const plano = (t: string) =>
-  t
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .trim();
+  t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
 const digitos = (t: string) => t.replace(/\D/g, "");
+
+const COLUMNAS: DefColumna[] = [
+  { clave: "persona", etiqueta: "Nombres y apellidos", fija: true },
+  { clave: "tipo", etiqueta: "Participa como" },
+  { clave: "documento", etiqueta: "Cédula" },
+  { clave: "telefono", etiqueta: "Su celular", opcional: true },
+  { clave: "cama", etiqueta: "Cama" },
+  { clave: "estado", etiqueta: "Asistencia", opcional: true },
+  { clave: "contactos", etiqueta: "Familiares de contacto" },
+];
 
 type Filtros = { nombre: string; cedula: string; cama: string; quien: string };
 
@@ -82,6 +90,7 @@ export default function ContactosFamiliares() {
     setFiltros((f) => ({ ...f, [campo]: valor }));
 
   const visibles = (datos?.filas ?? []).filter((f) => cumple(f, filtros));
+  const { ve, selector } = useColumnas("contactos_familiares", COLUMNAS);
   const paginas = usePaginas();
   const { pagina, hayPaginas, paginacion } = paginas.de(
     visibles,
@@ -100,16 +109,26 @@ export default function ContactosFamiliares() {
       .filter(Boolean)
       .join(" · "),
     columnas: [
-      "Nombres y apellidos",
-      "Participa como",
-      "Cédula",
-      "Cama",
-      "Familiar",
-      "Relación",
-      "Teléfono del familiar",
+      ...COLUMNAS.filter((c) => c.clave !== "contactos" && ve(c.clave)).map(
+        (c) => c.etiqueta,
+      ),
+      ...(ve("contactos")
+        ? ["Familiar", "Relación", "Teléfono del familiar"]
+        : []),
     ],
     filas: visibles.flatMap((f) => {
-      const persona = [f.persona, f.tipo, f.documento, f.cama];
+      const datos: Record<string, string> = {
+        persona: f.persona,
+        tipo: f.tipo,
+        documento: f.documento,
+        telefono: f.telefono,
+        cama: f.cama,
+        estado: f.estado_display,
+      };
+      const persona = COLUMNAS.filter(
+        (c) => c.clave !== "contactos" && ve(c.clave),
+      ).map((c) => datos[c.clave]);
+      if (!ve("contactos")) return [persona];
       return f.contactos.length
         ? f.contactos.map((c) => [...persona, c.nombre, c.relacion, c.telefono])
         : [[...persona, "", "", ""]];
@@ -204,7 +223,12 @@ export default function ContactosFamiliares() {
                 {visibles.filter((f) => !f.contactos.length).length} sin
                 familiar de contacto
               </p>
-              {visibles.length > 0 && <BotonesDescarga tabla={tablaDescarga} />}
+              <div className="flex flex-wrap items-center gap-3">
+                <SelectorColumnas {...selector} />
+                {visibles.length > 0 && (
+                  <BotonesDescarga tabla={tablaDescarga} />
+                )}
+              </div>
             </div>
 
             {visibles.length === 0 ? (
@@ -214,15 +238,13 @@ export default function ContactosFamiliares() {
                 <Table>
                   <TableHeader className="border-b border-gray-100 dark:border-white/5">
                     <TableRow>
-                      {[
-                        "Nombres y apellidos",
-                        "Participa como",
-                        "Cédula",
-                        "Cama",
-                        "Familiares de contacto",
-                      ].map((t) => (
-                        <TableCell key={t} isHeader className={claseEncabezado}>
-                          {t}
+                      {COLUMNAS.filter((c) => ve(c.clave)).map((c) => (
+                        <TableCell
+                          key={c.clave}
+                          isHeader
+                          className={claseEncabezado}
+                        >
+                          {c.etiqueta}
                         </TableCell>
                       ))}
                     </TableRow>
@@ -240,39 +262,71 @@ export default function ContactosFamiliares() {
                             {f.persona}
                           </Link>
                         </TableCell>
-                        <TableCell className={`${claseCelda} whitespace-nowrap`}>
-                          {f.tipo}
-                        </TableCell>
-                        <TableCell className={`${claseCelda} whitespace-nowrap`}>
-                          {f.documento || "—"}
-                        </TableCell>
-                        <TableCell className={`${claseCelda} whitespace-nowrap`}>
-                          {f.cama || "—"}
-                        </TableCell>
-                        <TableCell className={claseCelda}>
-                          {f.contactos.length === 0 ? (
-                            <span className="text-warning-600 dark:text-orange-400">
-                              Sin familiar de contacto
-                            </span>
-                          ) : (
-                            <ul className="space-y-1">
-                              {f.contactos.map((c, i) => (
-                                <li key={i}>
-                                  {c.nombre || "Sin nombre"}
-                                  {c.relacion && ` (${c.relacion})`}
-                                  {c.telefono &&
-                                    // Puede traer dos: cada uno se copia aparte.
-                                    c.telefono.split(" / ").map((t) => (
-                                      <span key={t}>
-                                        {" · "}
-                                        <Telefono numero={t} />
-                                      </span>
-                                    ))}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </TableCell>
+                        {ve("tipo") && (
+                          <TableCell
+                            className={`${claseCelda} whitespace-nowrap`}
+                          >
+                            {f.tipo}
+                          </TableCell>
+                        )}
+                        {ve("documento") && (
+                          <TableCell
+                            className={`${claseCelda} whitespace-nowrap`}
+                          >
+                            {f.documento || "—"}
+                          </TableCell>
+                        )}
+                        {ve("telefono") && (
+                          <TableCell
+                            className={`${claseCelda} whitespace-nowrap`}
+                          >
+                            {f.telefono ? (
+                              <Telefono numero={f.telefono} />
+                            ) : (
+                              "—"
+                            )}
+                          </TableCell>
+                        )}
+                        {ve("cama") && (
+                          <TableCell
+                            className={`${claseCelda} whitespace-nowrap`}
+                          >
+                            {f.cama || "—"}
+                          </TableCell>
+                        )}
+                        {ve("estado") && (
+                          <TableCell
+                            className={`${claseCelda} whitespace-nowrap`}
+                          >
+                            {f.estado_display}
+                          </TableCell>
+                        )}
+                        {ve("contactos") && (
+                          <TableCell className={claseCelda}>
+                            {f.contactos.length === 0 ? (
+                              <span className="text-warning-600 dark:text-orange-400">
+                                Sin familiar de contacto
+                              </span>
+                            ) : (
+                              <ul className="space-y-1">
+                                {f.contactos.map((c, i) => (
+                                  <li key={i}>
+                                    {c.nombre || "Sin nombre"}
+                                    {c.relacion && ` (${c.relacion})`}
+                                    {c.telefono &&
+                                      // Puede traer dos: cada uno se copia aparte.
+                                      c.telefono.split(" / ").map((t) => (
+                                        <span key={t}>
+                                          {" · "}
+                                          <Telefono numero={t} />
+                                        </span>
+                                      ))}
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>

@@ -1,6 +1,10 @@
 import PantallaError from "@/components/estados/PantallaError";
 import { EsqueletoPanel } from "@/components/estados/Esqueleto";
-import { type FichaCaminante, type PanelRetiro } from "@/api/client";
+import {
+  type CeldaDescarga,
+  type FichaCaminante,
+  type PanelRetiro,
+} from "@/api/client";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
 import Telefono from "@/components/common/Telefono";
@@ -12,6 +16,8 @@ import {
 } from "@/components/modulos/estilos";
 import BotonesDescarga from "@/components/modulos/BotonesDescarga";
 import Paginacion from "@/components/modulos/Paginacion";
+import SelectorColumnas from "@/components/modulos/SelectorColumnas";
+import { useColumnas, type DefColumna } from "@/components/modulos/useColumnas";
 import { usePaginas } from "@/components/modulos/usePaginas";
 import AccionesAsistencia from "@/components/retiros/AccionesAsistencia";
 import Actualizacion from "@/components/retiros/Actualizacion";
@@ -248,6 +254,23 @@ function Ficha({
   );
 }
 
+type FilaCaminantePanel = NonNullable<
+  PanelRetiro["caminantes"]
+>["filas"][number];
+type FilaServidorPanel = NonNullable<
+  PanelRetiro["servidores"]
+>["filas"][number];
+
+// Una columna de las tablas del panel: lo que se ve (`celda`; si no, el
+// texto de `valor`) y lo que va en la descarga (`valor`).
+type ColumnaPanel<T> = DefColumna & {
+  valor: (f: T) => CeldaDescarga;
+  celda?: (f: T) => React.ReactNode;
+  clase?: string;
+};
+const textoCelda = (v: CeldaDescarga) =>
+  v === null || v === "" ? "—" : typeof v === "object" ? "" : v;
+
 function Caminantes({
   caminantes,
   opcionesPago,
@@ -272,6 +295,163 @@ function Caminantes({
   const conFicha = filas.some((f) => f.ficha !== undefined);
   const estados = new Map(por_estado.map((e) => [e.estado, e.etiqueta]));
   const pagos = new Map(opcionesPago.map((o) => [o.valor, o.etiqueta]));
+
+  // Cada columna: lo que se ve en la tabla y lo que va en la descarga. Las de
+  // la ficha (salud, familiares) se agregan con "Columnas".
+  const definidas: ColumnaPanel<FilaCaminantePanel>[] = [
+    {
+      clave: "persona",
+      etiqueta: "Caminante",
+      fija: true,
+      celda: (f) => (
+        <>
+          <Link
+            to={`/personas/${f.persona_id}`}
+            className="hover:text-brand-500"
+          >
+            {f.persona}
+          </Link>
+          <Avisos ficha={f.ficha} />
+        </>
+      ),
+      valor: (f) => f.persona,
+      clase: "font-medium text-gray-800 dark:text-white/90",
+    },
+    ...(conFicha
+      ? ([
+          {
+            clave: "documento",
+            etiqueta: "Documento",
+            opcional: true,
+            valor: (f) => f.ficha?.documento ?? "",
+          },
+          {
+            clave: "edad",
+            etiqueta: "Edad",
+            valor: (f) => f.ficha?.edad ?? null,
+          },
+          {
+            clave: "procedencia",
+            etiqueta: "De dónde es",
+            valor: (f) => f.ficha?.procedencia ?? "",
+          },
+        ] satisfies ColumnaPanel<FilaCaminantePanel>[])
+      : []),
+    {
+      clave: "telefono",
+      etiqueta: "Teléfono",
+      celda: (f) =>
+        f.telefono || f.ficha?.telefono_casa ? (
+          <Telefono numero={f.telefono || f.ficha!.telefono_casa} />
+        ) : (
+          "—"
+        ),
+      valor: (f) => f.telefono || f.ficha?.telefono_casa || "",
+    },
+    {
+      clave: "padrino",
+      etiqueta: "Quién lo invitó",
+      // Con la ficha la tabla ya es ancha: se agrega si se quiere.
+      opcional: conFicha,
+      valor: (f) => f.padrino,
+    },
+    {
+      clave: "estado",
+      etiqueta: "Estado",
+      celda: (f) => (
+        <>
+          <span className="flex items-center gap-1">
+            <Badge size="sm" color={colorEstado(f.estado)}>
+              {estados.get(f.estado)}
+            </Badge>
+            <AccionesAsistencia
+              quien="caminante"
+              id={f.id}
+              nombre={f.persona}
+              estado={f.estado}
+              onCambio={onCambio}
+            />
+          </span>
+          {f.motivo_cancelacion && !ve("motivo") && (
+            <span className="mt-0.5 block text-theme-xs text-gray-400">
+              {f.motivo_cancelacion}
+            </span>
+          )}
+        </>
+      ),
+      valor: (f) => estados.get(f.estado) ?? f.estado,
+    },
+    {
+      clave: "motivo",
+      etiqueta: "Motivo de la cancelación",
+      opcional: true,
+      valor: (f) => f.motivo_cancelacion,
+    },
+    ...(conPagos
+      ? ([
+          {
+            clave: "pago",
+            etiqueta: "Pago",
+            celda: (f) => (
+              <Badge size="sm" color={colorEstado(f.estado_pago!)}>
+                {pagos.get(f.estado_pago!)}
+              </Badge>
+            ),
+            valor: (f) => pagos.get(f.estado_pago!) ?? "",
+          },
+          {
+            clave: "pagado",
+            etiqueta: "Pagado",
+            celda: (f) => dinero(f.pagado!),
+            valor: (f) => montoVista(f.pagado),
+          },
+          {
+            clave: "debe",
+            etiqueta: "Debe",
+            celda: (f) => dinero(f.saldo!),
+            valor: (f) => montoVista(f.saldo),
+          },
+        ] satisfies ColumnaPanel<FilaCaminantePanel>[])
+      : []),
+    ...(conFicha
+      ? (
+          [
+            ["condicion", "Condición médica", (f) => f.ficha?.condicion_medica],
+            ["tratamiento", "Tratamiento", (f) => f.ficha?.tratamiento],
+            [
+              "alimentacion",
+              "Alimentación especial",
+              (f) => f.ficha?.alimentacion,
+            ],
+            [
+              "requerimientos",
+              "Requerimientos",
+              (f) => f.ficha?.requerimientos,
+            ],
+            ["talla", "Talla", (f) => f.ficha?.talla_camiseta],
+            [
+              "contactos",
+              "Familiares de contacto",
+              (f) =>
+                (f.ficha?.contactos ?? [])
+                  .map((c) =>
+                    [c.nombre, c.relacion && `(${c.relacion})`, c.telefono]
+                      .filter(Boolean)
+                      .join(" "),
+                  )
+                  .join("; "),
+            ],
+          ] as [string, string, (f: FilaCaminantePanel) => string | undefined][]
+        ).map(([clave, etiqueta, dato]) => ({
+          clave,
+          etiqueta,
+          opcional: true,
+          valor: (f: FilaCaminantePanel) => dato(f) ?? "",
+        }))
+      : []),
+  ];
+  const { ve, selector } = useColumnas("panel_caminantes", definidas);
+  const columnas = definidas.filter((c) => ve(c.clave));
 
   if (filas.length === 0) {
     return <p className={claseVacio}>Todavía no hay inscripciones.</p>;
@@ -300,14 +480,6 @@ function Caminantes({
       return nuevo;
     });
 
-  const titulos = conFicha
-    ? ["Caminante", "Edad", "De dónde es", "Teléfono", "Estado"]
-    : ["Caminante", "Teléfono", "Quién lo invitó", "Estado"];
-  if (conPagos) titulos.push("Pago", "Pagado", "Debe");
-  if (conFicha) titulos.push("");
-
-  // La descarga lleva lo que se ve y, con acceso a la ficha, también salud,
-  // comida, requerimientos y familiares (para logística).
   const tablaDescarga = () => ({
     titulo: `Caminantes · ${retiro}`,
     subtitulo: [
@@ -316,62 +488,8 @@ function Caminantes({
     ]
       .filter(Boolean)
       .join(" · "),
-    columnas: [
-      "Caminante",
-      ...(conFicha ? ["Documento", "Edad", "De dónde es"] : []),
-      "Teléfono",
-      "Quién lo invitó",
-      "Estado",
-      "Motivo de la cancelación",
-      ...(conPagos ? ["Pago", "Pagado", "Debe"] : []),
-      ...(conFicha
-        ? [
-            "Condición médica",
-            "Tratamiento",
-            "Alimentación especial",
-            "Requerimientos",
-            "Talla",
-            "Familiares de contacto",
-          ]
-        : []),
-    ],
-    filas: visibles.map((f) => [
-      f.persona,
-      ...(conFicha
-        ? [
-            f.ficha?.documento ?? "",
-            f.ficha?.edad ?? null,
-            f.ficha?.procedencia ?? "",
-          ]
-        : []),
-      f.telefono || f.ficha?.telefono_casa || "",
-      f.padrino,
-      estados.get(f.estado) ?? f.estado,
-      f.motivo_cancelacion,
-      ...(conPagos
-        ? [
-            pagos.get(f.estado_pago!) ?? "",
-            montoVista(f.pagado),
-            montoVista(f.saldo),
-          ]
-        : []),
-      ...(conFicha
-        ? [
-            f.ficha?.condicion_medica ?? "",
-            f.ficha?.tratamiento ?? "",
-            f.ficha?.alimentacion ?? "",
-            f.ficha?.requerimientos ?? "",
-            f.ficha?.talla_camiseta ?? "",
-            (f.ficha?.contactos ?? [])
-              .map((c) =>
-                [c.nombre, c.relacion && `(${c.relacion})`, c.telefono]
-                  .filter(Boolean)
-                  .join(" "),
-              )
-              .join("; "),
-          ]
-        : []),
-    ]),
+    columnas: columnas.map((c) => c.etiqueta),
+    filas: visibles.map((f) => columnas.map((c) => c.valor(f))),
   });
 
   return (
@@ -420,9 +538,10 @@ function Caminantes({
             {abiertos.size ? "Cerrar fichas" : "Abrir todas las fichas"}
           </button>
         )}
-        {visibles.length > 0 && (
-          <BotonesDescarga tabla={tablaDescarga} className="sm:ms-auto" />
-        )}
+        <div className="flex flex-wrap items-center gap-3 sm:ms-auto">
+          <SelectorColumnas {...selector} />
+          {visibles.length > 0 && <BotonesDescarga tabla={tablaDescarga} />}
+        </div>
       </div>
       {visibles.length === 0 ? (
         <p className={claseVacio}>Ningún caminante coincide.</p>
@@ -431,86 +550,26 @@ function Caminantes({
           <Table>
             <TableHeader className="border-b border-gray-100 dark:border-white/5">
               <TableRow>
-                {titulos.map((titulo, i) => (
-                  <TableCell key={i} isHeader className={claseEncabezado}>
-                    {titulo}
+                {columnas.map((c) => (
+                  <TableCell key={c.clave} isHeader className={claseEncabezado}>
+                    {c.etiqueta}
                   </TableCell>
                 ))}
+                {conFicha && <TableCell isHeader className={claseEncabezado} />}
               </TableRow>
             </TableHeader>
             <TableBody className="divide-y divide-gray-100 dark:divide-white/5">
               {pagina.map((f) => (
                 <Fragment key={f.id}>
                   <TableRow>
-                    <TableCell
-                      className={`${claseCelda} font-medium text-gray-800 dark:text-white/90`}
-                    >
-                      <Link
-                        to={`/personas/${f.persona_id}`}
-                        className="hover:text-brand-500"
+                    {columnas.map((c) => (
+                      <TableCell
+                        key={c.clave}
+                        className={`${claseCelda} ${c.clase ?? ""}`}
                       >
-                        {f.persona}
-                      </Link>
-                      <Avisos ficha={f.ficha} />
-                    </TableCell>
-                    {conFicha && (
-                      <>
-                        <TableCell className={claseCelda}>
-                          {f.ficha?.edad ?? "—"}
-                        </TableCell>
-                        <TableCell className={claseCelda}>
-                          {f.ficha?.procedencia || "—"}
-                        </TableCell>
-                      </>
-                    )}
-                    <TableCell className={claseCelda}>
-                      {f.telefono || f.ficha?.telefono_casa ? (
-                        <Telefono
-                          numero={f.telefono || f.ficha!.telefono_casa}
-                        />
-                      ) : (
-                        "—"
-                      )}
-                    </TableCell>
-                    {!conFicha && (
-                      <TableCell className={claseCelda}>
-                        {f.padrino || "—"}
+                        {c.celda ? c.celda(f) : textoCelda(c.valor(f))}
                       </TableCell>
-                    )}
-                    <TableCell className={claseCelda}>
-                      <span className="flex items-center gap-1">
-                        <Badge size="sm" color={colorEstado(f.estado)}>
-                          {estados.get(f.estado)}
-                        </Badge>
-                        <AccionesAsistencia
-                          quien="caminante"
-                          id={f.id}
-                          nombre={f.persona}
-                          estado={f.estado}
-                          onCambio={onCambio}
-                        />
-                      </span>
-                      {f.motivo_cancelacion && (
-                        <span className="mt-0.5 block text-theme-xs text-gray-400">
-                          {f.motivo_cancelacion}
-                        </span>
-                      )}
-                    </TableCell>
-                    {conPagos && (
-                      <>
-                        <TableCell className={claseCelda}>
-                          <Badge size="sm" color={colorEstado(f.estado_pago!)}>
-                            {pagos.get(f.estado_pago!)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className={claseCelda}>
-                          {dinero(f.pagado!)}
-                        </TableCell>
-                        <TableCell className={claseCelda}>
-                          {dinero(f.saldo!)}
-                        </TableCell>
-                      </>
-                    )}
+                    ))}
                     {conFicha && (
                       <TableCell className={claseCelda}>
                         <button
@@ -526,7 +585,10 @@ function Caminantes({
                   </TableRow>
                   {abiertos.has(f.id) && f.ficha && (
                     <TableRow>
-                      <TableCell colSpan={titulos.length} className="px-4 pb-4">
+                      <TableCell
+                        colSpan={columnas.length + 1}
+                        className="px-4 pb-4"
+                      >
                         <Ficha
                           fila={f}
                           retiroId={retiroId}
@@ -569,13 +631,120 @@ function Servidores({
   const [soloDeben, setSoloDeben] = useState(false);
   const paginas = usePaginas();
   const pagos = new Map(opcionesPago.map((o) => [o.valor, o.etiqueta]));
-  if (servidores.filas.length === 0) {
-    return <p className={claseVacio}>Todavía no hay servidores registrados.</p>;
-  }
   const conPagos = servidores.filas.some((f) => f.estado_pago !== undefined);
   // Cuota del retiro o, sin ella, el monto propio de algún servidor.
   const conCuota =
     conPagos && (cuota > 0 || servidores.filas.some((f) => (f.saldo ?? 0) > 0));
+  const siNo = (v: boolean | null) => (v === null ? "" : v ? "Sí" : "No");
+
+  // Cada columna: lo que se ve en la tabla y lo que va en la descarga.
+  const definidas: ColumnaPanel<FilaServidorPanel>[] = [
+    {
+      clave: "persona",
+      etiqueta: "Servidor",
+      fija: true,
+      celda: (f) => (
+        <Link to={`/personas/${f.persona_id}`} className="hover:text-brand-500">
+          {f.persona}
+        </Link>
+      ),
+      valor: (f) => f.persona,
+      clase: "font-medium text-gray-800 dark:text-white/90",
+    },
+    {
+      clave: "estado",
+      etiqueta: "Asistencia",
+      celda: (f) => (
+        <>
+          <span className="flex items-center gap-1">
+            <Badge size="sm" color={colorEstado(f.estado)}>
+              {f.estado_display}
+            </Badge>
+            <AccionesAsistencia
+              quien="servidor"
+              id={f.id}
+              nombre={f.persona}
+              estado={f.estado}
+              onCambio={onCambio}
+            />
+          </span>
+          {f.motivo_cancelacion && !ve("motivo") && (
+            <span className="mt-0.5 block text-theme-xs text-gray-400">
+              {f.motivo_cancelacion}
+            </span>
+          )}
+        </>
+      ),
+      valor: (f) => f.estado_display,
+    },
+    {
+      clave: "motivo",
+      etiqueta: "Motivo de la cancelación",
+      opcional: true,
+      valor: (f) => f.motivo_cancelacion,
+    },
+    {
+      clave: "tipo",
+      etiqueta: "Participa como",
+      opcional: true,
+      valor: (f) => f.tipo,
+    },
+    { clave: "areas", etiqueta: "Área", valor: (f) => f.areas || f.tipo },
+    {
+      clave: "telefono",
+      etiqueta: "Teléfono",
+      celda: (f) => (f.telefono ? <Telefono numero={f.telefono} /> : "—"),
+      valor: (f) => f.telefono,
+    },
+    {
+      clave: "duerme",
+      etiqueta: "Duerme",
+      valor: (f) => siNo(f.duerme_en_casa),
+    },
+    { clave: "cama", etiqueta: "Cama", opcional: true, valor: (f) => f.cama },
+    { clave: "turnos", etiqueta: "Turnos", valor: (f) => f.turnos },
+    { clave: "camisa", etiqueta: "Camisa", valor: (f) => f.camisa },
+    ...(conCuota
+      ? ([
+          {
+            clave: "pago",
+            etiqueta: "Pago",
+            celda: (f) => (
+              <Badge size="sm" color={colorEstado(f.estado_pago!)}>
+                {pagos.get(f.estado_pago!)}
+              </Badge>
+            ),
+            valor: (f) => pagos.get(f.estado_pago!) ?? "",
+          },
+        ] satisfies ColumnaPanel<FilaServidorPanel>[])
+      : []),
+    ...(conPagos
+      ? ([
+          {
+            clave: "pagado",
+            etiqueta: "Pagado",
+            celda: (f) => dinero(f.pagado ?? 0),
+            valor: (f) => montoVista(f.pagado),
+          },
+        ] satisfies ColumnaPanel<FilaServidorPanel>[])
+      : []),
+    ...(conCuota
+      ? ([
+          {
+            clave: "debe",
+            etiqueta: "Debe",
+            celda: (f) => dinero(f.saldo ?? 0),
+            valor: (f) => montoVista(f.saldo),
+          },
+        ] satisfies ColumnaPanel<FilaServidorPanel>[])
+      : []),
+  ];
+  const { ve, selector } = useColumnas("panel_servidores", definidas);
+  const columnas = definidas.filter((c) => ve(c.clave));
+
+  if (servidores.filas.length === 0) {
+    return <p className={claseVacio}>Todavía no hay servidores registrados.</p>;
+  }
   const visibles = servidores.filas.filter(
     (f) =>
       (!estado || f.estado === estado) && (!soloDeben || (f.saldo ?? 0) > 0),
@@ -584,18 +753,6 @@ function Servidores({
     visibles,
     `${estado}|${soloDeben}`,
   );
-  const titulos = [
-    "Servidor",
-    "Asistencia",
-    "Área",
-    "Teléfono",
-    "Duerme",
-    "Turnos",
-    "Camisa",
-    ...(conCuota ? ["Pago"] : []),
-    ...(conPagos ? ["Pagado"] : []),
-    ...(conCuota ? ["Debe"] : []),
-  ];
   const tablaDescarga = () => ({
     titulo: `Servidores · ${retiro}`,
     subtitulo: [
@@ -605,24 +762,8 @@ function Servidores({
     ]
       .filter(Boolean)
       .join(" · "),
-    columnas: [
-      ...titulos.slice(0, 2),
-      "Motivo de la cancelación",
-      ...titulos.slice(2),
-    ],
-    filas: visibles.map((f) => [
-      f.persona,
-      f.estado_display,
-      f.motivo_cancelacion,
-      f.areas || f.tipo,
-      f.telefono,
-      f.duerme_en_casa === null ? "" : f.duerme_en_casa ? "Sí" : "No",
-      f.turnos,
-      f.camisa,
-      ...(conCuota ? [pagos.get(f.estado_pago!) ?? ""] : []),
-      ...(conPagos ? [montoVista(f.pagado)] : []),
-      ...(conCuota ? [montoVista(f.saldo)] : []),
-    ]),
+    columnas: columnas.map((c) => c.etiqueta),
+    filas: visibles.map((f) => columnas.map((c) => c.valor(f))),
   });
   return (
     <>
@@ -659,6 +800,7 @@ function Servidores({
             Solo los que deben
           </label>
         )}
+        <SelectorColumnas {...selector} />
         {visibles.length > 0 && <BotonesDescarga tabla={tablaDescarga} />}
       </div>
       {visibles.length === 0 ? (
@@ -668,9 +810,9 @@ function Servidores({
           <Table>
             <TableHeader className="border-b border-gray-100 dark:border-white/5">
               <TableRow>
-                {titulos.map((titulo) => (
-                  <TableCell key={titulo} isHeader className={claseEncabezado}>
-                    {titulo}
+                {columnas.map((c) => (
+                  <TableCell key={c.clave} isHeader className={claseEncabezado}>
+                    {c.etiqueta}
                   </TableCell>
                 ))}
               </TableRow>
@@ -681,71 +823,14 @@ function Servidores({
                   key={f.id}
                   className={f.estado === "cancelado" ? "opacity-60" : ""}
                 >
-                  <TableCell
-                    className={`${claseCelda} font-medium text-gray-800 dark:text-white/90`}
-                  >
-                    <Link
-                      to={`/personas/${f.persona_id}`}
-                      className="hover:text-brand-500"
+                  {columnas.map((c) => (
+                    <TableCell
+                      key={c.clave}
+                      className={`${claseCelda} ${c.clase ?? ""}`}
                     >
-                      {f.persona}
-                    </Link>
-                  </TableCell>
-                  <TableCell className={claseCelda}>
-                    <span className="flex items-center gap-1">
-                      <Badge size="sm" color={colorEstado(f.estado)}>
-                        {f.estado_display}
-                      </Badge>
-                      <AccionesAsistencia
-                        quien="servidor"
-                        id={f.id}
-                        nombre={f.persona}
-                        estado={f.estado}
-                        onCambio={onCambio}
-                      />
-                    </span>
-                    {f.motivo_cancelacion && (
-                      <span className="mt-0.5 block text-theme-xs text-gray-400">
-                        {f.motivo_cancelacion}
-                      </span>
-                    )}
-                  </TableCell>
-                  <TableCell className={claseCelda}>
-                    {f.areas || f.tipo}
-                  </TableCell>
-                  <TableCell className={claseCelda}>
-                    {f.telefono ? <Telefono numero={f.telefono} /> : "—"}
-                  </TableCell>
-                  <TableCell className={claseCelda}>
-                    {f.duerme_en_casa === null
-                      ? "—"
-                      : f.duerme_en_casa
-                        ? "Sí"
-                        : "No"}
-                  </TableCell>
-                  <TableCell className={claseCelda}>
-                    {f.turnos || "—"}
-                  </TableCell>
-                  <TableCell className={claseCelda}>
-                    {f.camisa || "—"}
-                  </TableCell>
-                  {conCuota && (
-                    <TableCell className={claseCelda}>
-                      <Badge size="sm" color={colorEstado(f.estado_pago!)}>
-                        {pagos.get(f.estado_pago!)}
-                      </Badge>
+                      {c.celda ? c.celda(f) : textoCelda(c.valor(f))}
                     </TableCell>
-                  )}
-                  {conPagos && (
-                    <TableCell className={claseCelda}>
-                      {dinero(f.pagado ?? 0)}
-                    </TableCell>
-                  )}
-                  {conCuota && (
-                    <TableCell className={claseCelda}>
-                      {dinero(f.saldo ?? 0)}
-                    </TableCell>
-                  )}
+                  ))}
                 </TableRow>
               ))}
             </TableBody>

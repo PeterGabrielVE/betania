@@ -13,6 +13,8 @@ import PageMeta from "@/components/common/PageMeta";
 import Telefono from "@/components/common/Telefono";
 import BotonesDescarga from "@/components/modulos/BotonesDescarga";
 import Paginacion from "@/components/modulos/Paginacion";
+import SelectorColumnas from "@/components/modulos/SelectorColumnas";
+import { useColumnas, type DefColumna } from "@/components/modulos/useColumnas";
 import { usePaginas } from "@/components/modulos/usePaginas";
 import {
   claseBoton,
@@ -427,89 +429,156 @@ function Tabla({
   const conFicha = esCaminante && grupo.filas.some((f) => f.ficha);
   const segundo = esCaminante ? "Asistencia" : "Equipo";
 
-  // La hoja de siempre: Nº, nombre, (sus datos), monto, abonos, pagado y resta.
-  const tablaDescarga = () => {
-    const contacto = (f: FilaControlPago) => f.ficha?.contactos[0];
-    const columnas = [
-      "N.º",
-      esCaminante ? "Nombre y apellido" : "Nombre del servidor",
-      ...(esCaminante
-        ? [
-            "Celular",
-            ...(conFicha
-              ? [
-                  "Edad",
-                  "Dirección",
-                  "Talla",
-                  "Dieta o tratamiento",
-                  "Contacto",
-                  "Celular del contacto",
-                ]
-              : []),
-            "Asistencia",
-          ]
-        : ["Equipo", "Celular"]),
-      "Monto",
-      ...Array.from({ length: columnasAbono }, (_, i) => `Abono ${i + 1}`),
-      "Pagado",
-      "Resta",
-      "Estado del pago",
-    ];
-    const filas: CeldaDescarga[][] = visibles.map((f, n) => [
-      n + 1,
-      f.persona,
-      ...(esCaminante
-        ? [
-            f.telefono,
-            ...(conFicha
-              ? [
-                  f.ficha?.edad ?? null,
-                  [f.ficha?.direccion, f.ficha?.procedencia]
-                    .filter(Boolean)
-                    .join(", "),
-                  f.ficha?.talla_camiseta ?? "",
-                  [
-                    f.ficha?.alimentacion,
-                    f.ficha?.condicion_medica,
-                    f.ficha?.tratamiento,
-                  ]
-                    .filter(Boolean)
-                    .join(" · "),
-                  contacto(f)
-                    ? `${contacto(f)!.nombre}${contacto(f)!.relacion ? ` (${contacto(f)!.relacion})` : ""}`
-                    : "",
-                  contacto(f)?.telefono ?? "",
-                ]
-              : []),
-            f.estado_display,
-          ]
-        : [f.equipo ?? "", f.telefono]),
-      montoVista(f.cuota),
-      ...Array.from({ length: columnasAbono }, (_, i) =>
-        f.abonos[i] ? montoVista(f.abonos[i].monto_base) : null,
+  // Las columnas que se pueden elegir; cada una con lo que lleva la descarga
+  // (los abonos son varias, una por abono). Las de la ficha se agregan.
+  const contacto = (f: FilaControlPago) => f.ficha?.contactos[0];
+  const estadoPago = (f: FilaControlPago) =>
+    f.cancelado
+      ? "Canceló"
+      : (ESTADOS_PAGO.find((e) => e.valor === f.estado_pago)?.etiqueta ?? "");
+  const definidas: (DefColumna & {
+    titulos: string[];
+    valores: (f: FilaControlPago, n: number) => CeldaDescarga[];
+  })[] = [
+    {
+      clave: "numero",
+      etiqueta: "N.º",
+      titulos: ["N.º"],
+      valores: (_, n) => [n + 1],
+    },
+    {
+      clave: "persona",
+      etiqueta: esCaminante ? "Caminante" : "Servidor",
+      fija: true,
+      titulos: [esCaminante ? "Nombre y apellido" : "Nombre del servidor"],
+      valores: (f) => [f.persona],
+    },
+    {
+      clave: "telefono",
+      etiqueta: "Celular",
+      titulos: ["Celular"],
+      valores: (f) => [f.telefono],
+    },
+    ...(conFicha
+      ? [
+          {
+            clave: "edad",
+            etiqueta: "Edad",
+            opcional: true,
+            titulos: ["Edad"],
+            valores: (f: FilaControlPago) => [f.ficha?.edad ?? null],
+          },
+          {
+            clave: "direccion",
+            etiqueta: "Dirección",
+            opcional: true,
+            titulos: ["Dirección"],
+            valores: (f: FilaControlPago) => [
+              [f.ficha?.direccion, f.ficha?.procedencia]
+                .filter(Boolean)
+                .join(", "),
+            ],
+          },
+          {
+            clave: "talla",
+            etiqueta: "Talla",
+            opcional: true,
+            titulos: ["Talla"],
+            valores: (f: FilaControlPago) => [f.ficha?.talla_camiseta ?? ""],
+          },
+          {
+            clave: "dieta",
+            etiqueta: "Dieta o tratamiento",
+            opcional: true,
+            titulos: ["Dieta o tratamiento"],
+            valores: (f: FilaControlPago) => [
+              [
+                f.ficha?.alimentacion,
+                f.ficha?.condicion_medica,
+                f.ficha?.tratamiento,
+              ]
+                .filter(Boolean)
+                .join(" · "),
+            ],
+          },
+          {
+            clave: "contacto",
+            etiqueta: "Familiar de contacto",
+            opcional: true,
+            titulos: ["Contacto", "Celular del contacto"],
+            valores: (f: FilaControlPago) => {
+              const c = contacto(f);
+              return [
+                c ? `${c.nombre}${c.relacion ? ` (${c.relacion})` : ""}` : "",
+                c?.telefono ?? "",
+              ];
+            },
+          },
+        ]
+      : []),
+    {
+      clave: "segundo",
+      etiqueta: segundo,
+      titulos: [segundo],
+      valores: (f) => [esCaminante ? f.estado_display : (f.equipo ?? "")],
+    },
+    {
+      clave: "monto",
+      etiqueta: "Monto",
+      titulos: ["Monto"],
+      valores: (f) => [montoVista(f.cuota)],
+    },
+    {
+      clave: "abonos",
+      etiqueta: "Abonos",
+      titulos: Array.from(
+        { length: columnasAbono },
+        (_, i) => `Abono ${i + 1}`,
       ),
-      montoVista(f.pagado),
-      montoVista(f.saldo),
-      f.cancelado
-        ? "Canceló"
-        : (ESTADOS_PAGO.find((e) => e.valor === f.estado_pago)?.etiqueta ?? ""),
-    ]);
-    return {
-      titulo: `Control de pago ${esCaminante ? "de caminantes" : "de servidores"} · ${retiro.etiqueta}`,
-      subtitulo: [
-        `Esperado ${dinero(grupo.totales.esperado)}`,
-        `pagado ${dinero(grupo.totales.pagado)}`,
-        `por cobrar ${dinero(grupo.totales.saldo)}`,
-        estado &&
-          `Filtro: ${ESTADOS_PAGO.find((e) => e.valor === estado)?.etiqueta}`,
-        buscado && `Búsqueda: «${texto.trim()}»`,
-      ]
-        .filter(Boolean)
-        .join(" · "),
-      columnas,
-      filas,
-    };
-  };
+      valores: (f) =>
+        Array.from({ length: columnasAbono }, (_, i) =>
+          f.abonos[i] ? montoVista(f.abonos[i].monto_base) : null,
+        ),
+    },
+    {
+      clave: "pagado",
+      etiqueta: "Pagado",
+      titulos: ["Pagado"],
+      valores: (f) => [montoVista(f.pagado)],
+    },
+    {
+      clave: "resta",
+      etiqueta: "Resta",
+      titulos: ["Resta"],
+      valores: (f) => [montoVista(f.saldo)],
+    },
+    {
+      clave: "estado_pago",
+      etiqueta: "Estado del pago",
+      titulos: ["Estado del pago"],
+      valores: (f) => [estadoPago(f)],
+    },
+  ];
+  const { ve, selector } = useColumnas(`control_pagos_${quien}`, definidas);
+  const elegidas = definidas.filter((c) => ve(c.clave));
+  // Las de la ficha que agregó: en la tabla, como texto.
+  const deFicha = elegidas.filter((c) => c.opcional);
+
+  const tablaDescarga = () => ({
+    titulo: `Control de pago ${esCaminante ? "de caminantes" : "de servidores"} · ${retiro.etiqueta}`,
+    subtitulo: [
+      `Esperado ${dinero(grupo.totales.esperado)}`,
+      `pagado ${dinero(grupo.totales.pagado)}`,
+      `por cobrar ${dinero(grupo.totales.saldo)}`,
+      estado &&
+        `Filtro: ${ESTADOS_PAGO.find((e) => e.valor === estado)?.etiqueta}`,
+      buscado && `Búsqueda: «${texto.trim()}»`,
+    ]
+      .filter(Boolean)
+      .join(" · "),
+    columnas: elegidas.flatMap((c) => c.titulos),
+    filas: visibles.map((f, n) => elegidas.flatMap((c) => c.valores(f, n))),
+  });
 
   if (grupo.filas.length === 0) {
     return (
@@ -522,17 +591,23 @@ function Tabla({
   }
 
   const titulos = [
-    "N.º",
+    ...(ve("numero") ? ["N.º"] : []),
     esCaminante ? "Caminante" : "Servidor",
-    segundo,
-    "Monto",
-    ...Array.from({ length: columnasAbono }, (_, i) => `Abono ${i + 1}`),
-    "Pagado",
-    "Resta",
+    ...deFicha.map((c) => c.etiqueta),
+    ...(ve("segundo") ? [segundo] : []),
+    ...(ve("monto") ? ["Monto"] : []),
+    ...(ve("abonos")
+      ? Array.from({ length: columnasAbono }, (_, i) => `Abono ${i + 1}`)
+      : []),
+    ...(ve("pagado") ? ["Pagado"] : []),
+    ...(ve("resta") || ve("estado_pago")
+      ? [ve("resta") ? "Resta" : "Estado del pago"]
+      : []),
     ...(puedeRegistrar ? [""] : []),
   ];
   const cifra = (t: string) =>
-    t === "Monto" || t === "Pagado" || t === "Resta" || t.startsWith("Abono");
+    ["Monto", "Pagado", "Resta", "Estado del pago"].includes(t) ||
+    t.startsWith("Abono");
 
   return (
     <>
@@ -566,9 +641,10 @@ function Tabla({
           />
           Mostrar los que cancelaron
         </label>
-        {visibles.length > 0 && (
-          <BotonesDescarga tabla={tablaDescarga} className="sm:ms-auto" />
-        )}
+        <div className="flex flex-wrap items-center gap-3 sm:ms-auto">
+          <SelectorColumnas {...selector} />
+          {visibles.length > 0 && <BotonesDescarga tabla={tablaDescarga} />}
+        </div>
       </div>
 
       {visibles.length === 0 ? (
@@ -595,9 +671,11 @@ function Tabla({
                   key={f.id}
                   className={f.cancelado ? "opacity-60" : ""}
                 >
-                  <TableCell className={`${claseCelda} text-gray-400`}>
-                    {desde + n + 1}
-                  </TableCell>
+                  {ve("numero") && (
+                    <TableCell className={`${claseCelda} text-gray-400`}>
+                      {desde + n + 1}
+                    </TableCell>
+                  )}
                   <TableCell
                     className={`${claseCelda} font-medium text-gray-800 dark:text-white/90`}
                   >
@@ -607,68 +685,86 @@ function Tabla({
                     >
                       {f.persona}
                     </Link>
-                    {f.telefono && (
+                    {f.telefono && ve("telefono") && (
                       <Telefono
                         numero={f.telefono}
                         className="flex text-theme-xs font-normal text-gray-400"
                       />
                     )}
                   </TableCell>
-                  <TableCell className={claseCelda}>
-                    {esCaminante ? (
-                      <Badge size="sm" color={colorEstado(f.estado)}>
-                        {f.estado_display}
-                      </Badge>
-                    ) : (
-                      <>
-                        {f.equipo}
-                        {f.cancelado && (
-                          <span className="block text-theme-xs text-gray-400">
-                            Canceló
-                          </span>
-                        )}
-                      </>
-                    )}
-                  </TableCell>
-                  <TableCell className={claseCifra}>
-                    <span className="inline-flex items-center gap-1">
-                      {dinero(f.cuota)}
-                      {puedeCambiarMonto && (
-                        <button
-                          type="button"
-                          className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/5"
-                          onClick={() => setCambiandoMonto(f)}
-                          aria-label={`Cambiar el monto de ${f.persona}`}
-                          title="Cambiar el monto de esta persona"
-                        >
-                          <PencilIcon className="size-3.5" />
-                        </button>
+                  {deFicha.map((c) => (
+                    <TableCell key={c.clave} className={claseCelda}>
+                      {c
+                        .valores(f, n)
+                        .filter((v) => v !== null && v !== "")
+                        .join(" · ") || "—"}
+                    </TableCell>
+                  ))}
+                  {ve("segundo") && (
+                    <TableCell className={claseCelda}>
+                      {esCaminante ? (
+                        <Badge size="sm" color={colorEstado(f.estado)}>
+                          {f.estado_display}
+                        </Badge>
+                      ) : (
+                        <>
+                          {f.equipo}
+                          {f.cancelado && (
+                            <span className="block text-theme-xs text-gray-400">
+                              Canceló
+                            </span>
+                          )}
+                        </>
                       )}
-                    </span>
-                    {f.cuota_propia && (
-                      <span className="block text-theme-xs text-gray-400">
-                        Monto propio
+                    </TableCell>
+                  )}
+                  {ve("monto") && (
+                    <TableCell className={claseCifra}>
+                      <span className="inline-flex items-center gap-1">
+                        {dinero(f.cuota)}
+                        {puedeCambiarMonto && (
+                          <button
+                            type="button"
+                            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/5"
+                            onClick={() => setCambiandoMonto(f)}
+                            aria-label={`Cambiar el monto de ${f.persona}`}
+                            title="Cambiar el monto de esta persona"
+                          >
+                            <PencilIcon className="size-3.5" />
+                          </button>
+                        )}
                       </span>
-                    )}
-                  </TableCell>
-                  <Abonos fila={f} columnas={columnasAbono} />
-                  <TableCell
-                    className={`${claseCifra} font-medium text-gray-800 dark:text-white/90`}
-                  >
-                    {dinero(f.pagado)}
-                  </TableCell>
-                  <TableCell
-                    className={`${claseCifra} font-medium ${f.saldo > 0 ? "text-error-600 dark:text-error-500" : ""}`}
-                  >
-                    {dinero(f.saldo)}
-                    {/* El estado del pago, debajo: ahorra una columna. */}
-                    <span className="mt-1 block">
-                      <Badge size="sm" color={colorEstado(f.estado_pago)}>
-                        {ESTADOS_PAGO.find((e) => e.valor === f.estado_pago)
-                          ?.etiqueta ?? f.estado_pago}
-                      </Badge>
-                    </span>
-                  </TableCell>
+                      {f.cuota_propia && (
+                        <span className="block text-theme-xs text-gray-400">
+                          Monto propio
+                        </span>
+                      )}
+                    </TableCell>
+                  )}
+                  {ve("abonos") && <Abonos fila={f} columnas={columnasAbono} />}
+                  {ve("pagado") && (
+                    <TableCell
+                      className={`${claseCifra} font-medium text-gray-800 dark:text-white/90`}
+                    >
+                      {dinero(f.pagado)}
+                    </TableCell>
+                  )}
+                  {(ve("resta") || ve("estado_pago")) && (
+                    <TableCell
+                      className={`${claseCifra} font-medium ${f.saldo > 0 ? "text-error-600 dark:text-error-500" : ""}`}
+                    >
+                      {ve("resta") && dinero(f.saldo)}
+                      {/* El estado del pago, debajo: ahorra una columna. */}
+                      {ve("estado_pago") && (
+                        <span className="mt-1 block">
+                          <Badge size="sm" color={colorEstado(f.estado_pago)}>
+                            {ESTADOS_PAGO.find((e) => e.valor === f.estado_pago)
+                              ?.etiqueta ?? f.estado_pago}
+                          </Badge>
+                        </span>
+                      )}
+                    </TableCell>
+                  )}
                   {puedeRegistrar && (
                     <TableCell className={claseCelda}>
                       {!f.cancelado && f.saldo > 0 && (

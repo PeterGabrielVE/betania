@@ -9,6 +9,8 @@ import {
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
 import BotonesDescarga from "@/components/modulos/BotonesDescarga";
+import SelectorColumnas from "@/components/modulos/SelectorColumnas";
+import { useColumnas } from "@/components/modulos/useColumnas";
 import BotonLimpiarFiltros from "@/components/modulos/BotonLimpiarFiltros";
 import {
   parametrosFiltros,
@@ -522,9 +524,19 @@ function Listado({ modulo }: { modulo: Modulo }) {
   const libres = modulo.filtros.filter((f) => !f.fijo);
   const fijos = modulo.filtros.filter((f) => f.fijo);
   // Una columna con el mismo valor en todas las filas no dice nada.
-  const columnas = modulo.lista.filter(
+  const posibles = modulo.lista.filter(
     (c) => !fijos.some((f) => f.nombre === c.nombre),
   );
+  // Las que el usuario eligió ver (y las opcionales que agregó).
+  const elegidas = useColumnas(
+    modulo.slug,
+    posibles.map((c) => ({
+      clave: c.nombre,
+      etiqueta: c.etiqueta,
+      opcional: c.opcional,
+    })),
+  );
+  const columnas = posibles.filter((c) => elegidas.ve(c.nombre));
 
   const params = new URLSearchParams({
     page: String(consulta.pagina),
@@ -547,6 +559,8 @@ function Listado({ modulo }: { modulo: Modulo }) {
     p.delete("page");
     p.delete("page_size");
     p.set("formato", formato);
+    // Las mismas columnas que la tabla.
+    p.set("columnas", columnas.map((c) => c.nombre).join(","));
     const detalle = libres
       .filter((f) => filtros[f.nombre]?.valor)
       .map((f) => {
@@ -720,6 +734,7 @@ function Listado({ modulo }: { modulo: Modulo }) {
               Leer listado
             </button>
           )}
+          <SelectorColumnas {...elegidas.selector} />
           {!!datos?.count && <BotonesDescarga ruta={rutaDescarga} />}
           {modulo.puede_agregar && (
             <button
