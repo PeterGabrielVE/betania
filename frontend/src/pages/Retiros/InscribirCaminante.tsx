@@ -94,7 +94,10 @@ export default function InscribirCaminante() {
   });
   const { getValues, setError, reset, handleSubmit, formState } = formulario;
 
-  const asistente = useAsistente(pasos, formulario);
+  const asistente = useAsistente(pasos, formulario, {
+    libre: !!editando,
+    inicial: parametros.get("paso") ?? "",
+  });
   const registro = useRegistroPersona(formulario, {
     retiroInicial: retiroInicial?.id,
     personaInicial: estado?.persona,
@@ -389,6 +392,9 @@ export default function InscribirCaminante() {
               editando ? "Guardar cambios" : "Registrar inscripción"
             }
             textoReiniciar={editando ? "Cancelar" : undefined}
+            onGuardarYa={
+              editando ? () => handleSubmit(guardar, alFallar)() : undefined
+            }
             onEmpezarDeNuevo={() => {
               if (editando) return salir(original?.persona as string);
               setHecho(null);

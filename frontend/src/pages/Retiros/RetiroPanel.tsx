@@ -235,7 +235,7 @@ function Ficha({
       <div className="mt-4 flex flex-wrap gap-4 text-sm">
         {puedeEditar("inscripciones") && (
           <Link
-            to={`/inscribir?inscripcion=${fila.id}&volver=${volver}`}
+            to={`/inscribir?inscripcion=${fila.id}&paso=salud&volver=${volver}`}
             className={claseEnlace}
           >
             Editar salud y contactos

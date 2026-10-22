@@ -16,15 +16,23 @@ export default function BarraPasos({
   conErrores: Set<number>;
   onIr: (indice: number) => void;
 }) {
-  const paso = pasos[actual];
   return (
     <>
       {/* Celular: "Paso 2 de 6" y una barra de avance. */}
       <div className="md:hidden">
-        <div className="flex items-baseline justify-between gap-3">
-          <p className="text-theme-sm font-semibold text-gray-800 dark:text-white/90">
-            {paso.titulo}
-          </p>
+        <div className="flex items-center justify-between gap-3">
+          <select
+            value={actual}
+            onChange={(e) => onIr(Number(e.target.value))}
+            className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-theme-sm font-semibold text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+            aria-label="Ir al paso"
+          >
+            {pasos.map((p, i) => (
+              <option key={p.id} value={i} disabled={i > alcanzado}>
+                {i + 1}. {p.titulo}
+              </option>
+            ))}
+          </select>
           <p className="text-theme-xs text-gray-500 dark:text-gray-400">
             Paso {actual + 1} de {pasos.length}
           </p>

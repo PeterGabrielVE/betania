@@ -1,6 +1,10 @@
 // El marco de un formulario por pasos: pestañas, la tarjeta del paso actual,
 // el error general y los botones Anterior / Siguiente / Guardar.
-import { claseBoton, claseTarjeta } from "@/components/modulos/estilos";
+import {
+  claseBoton,
+  claseBotonPrincipal,
+  claseTarjeta,
+} from "@/components/modulos/estilos";
 import Button from "@/components/ui/button/Button";
 import BarraPasos from "./BarraPasos";
 import type { Paso } from "./esquema";
@@ -14,6 +18,7 @@ export default function Asistente({
   textoGuardar,
   onEmpezarDeNuevo,
   textoReiniciar = "Empezar de nuevo",
+  onGuardarYa,
   children,
 }: {
   pasos: Paso[];
@@ -23,6 +28,8 @@ export default function Asistente({
   textoGuardar: string;
   onEmpezarDeNuevo: () => void;
   textoReiniciar?: string; // al editar: "Cancelar"
+  // Al editar: guardar desde cualquier paso, sin llegar al último.
+  onGuardarYa?: () => void;
   children: React.ReactNode; // el contenido del paso actual
 }) {
   const { actual, alcanzado, conErrores, tarjeta, ultimo, ir, irA } = asistente;
@@ -63,7 +70,7 @@ export default function Asistente({
         <button type="button" className={claseBoton} onClick={onEmpezarDeNuevo}>
           {textoReiniciar}
         </button>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <button
             type="button"
             className={claseBoton}
@@ -78,7 +85,22 @@ export default function Asistente({
               {guardando ? "Guardando…" : textoGuardar}
             </Button>
           ) : (
-            <Button size="sm">Siguiente</Button>
+            <>
+              <Button size="sm" variant={onGuardarYa ? "outline" : "primary"}>
+                Siguiente
+              </Button>
+              {onGuardarYa && (
+                // type="button": no envía el formulario (eso es "Siguiente").
+                <button
+                  type="button"
+                  className={claseBotonPrincipal}
+                  disabled={guardando}
+                  onClick={onGuardarYa}
+                >
+                  {guardando ? "Guardando…" : textoGuardar}
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>

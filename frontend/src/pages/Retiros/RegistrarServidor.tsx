@@ -100,7 +100,10 @@ export default function RegistrarServidor() {
   });
   const { getValues, setError, reset, handleSubmit, formState } = formulario;
 
-  const asistente = useAsistente(pasos, formulario);
+  const asistente = useAsistente(pasos, formulario, {
+    libre: !!editando,
+    inicial: parametros.get("paso") ?? "",
+  });
   const registro = useRegistroPersona(formulario, {
     retiroInicial: retiroInicial?.id,
     personaInicial: estado?.persona,
@@ -489,6 +492,9 @@ export default function RegistrarServidor() {
             guardando={formState.isSubmitting}
             textoGuardar={editando ? "Guardar cambios" : "Registrar servidor"}
             textoReiniciar={editando ? "Cancelar" : undefined}
+            onGuardarYa={
+              editando ? () => handleSubmit(guardar, alFallar)() : undefined
+            }
             onEmpezarDeNuevo={() => {
               if (editando) {
                 return salir(original?.participacion.persona as string);
