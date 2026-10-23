@@ -243,7 +243,7 @@ function Ficha({
         )}
         {puedeEditar("personas") && (
           <Link
-            to={`/personas/${fila.persona_id}/editar?volver=${volver}`}
+            to={`/inscribir?inscripcion=${fila.id}&paso=personales&volver=${volver}`}
             className={claseEnlace}
           >
             Editar datos personales

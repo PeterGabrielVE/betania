@@ -1,6 +1,11 @@
 import PantallaError from "@/components/estados/PantallaError";
 import { EsqueletoFormulario } from "@/components/estados/Esqueleto";
-import { api, ApiError, type Registro } from "@/api/client";
+import {
+  api,
+  ApiError,
+  type FichaPersona,
+  type Registro,
+} from "@/api/client";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
 import Asistente from "@/components/inscripcion/Asistente";
@@ -33,7 +38,7 @@ import { useRegistroPersona } from "@/components/inscripcion/useRegistroPersona"
 import { useAuth } from "@/context/AuthContext";
 import NotFound from "@/pages/OtherPage/NotFound";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FormProvider, useForm, type FieldErrors } from "react-hook-form";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { z } from "zod";
@@ -89,15 +94,72 @@ function crearEsquemaEdicion(
   ) as unknown as z.ZodType<Valores, Valores>;
 }
 
+// Si la persona es caminante o servidor, a qué formulario completo ir: el de
+// su inscripción (o su lugar en el equipo) en la edición preferida o, si no,
+// en el retiro más reciente. Así se edita con los mismos pasos con que se
+// inscribió, salud y contactos incluidos. null: no lo es (o no hay permiso).
+function formularioCompleto(
+  ficha: FichaPersona,
+  preferido: string | undefined,
+  puede: (slug: string) => boolean,
+): string | null {
+  const opciones = [
+    ...(puede("inscripciones") ? (ficha.caminante ?? []) : []).map((c) => ({
+      ruta: `/inscribir?inscripcion=${c.id}`,
+      retiro: c.retiro,
+      orden: 0,
+    })),
+    ...(puede("participaciones") ? (ficha.servidor ?? []) : []).map((s) => ({
+      ruta: `/registrar-servidor?participacion=${s.id}`,
+      retiro: s.retiro,
+      orden: 1,
+    })),
+  ];
+  opciones.sort(
+    (a, b) =>
+      Number(b.retiro.id === preferido) - Number(a.retiro.id === preferido) ||
+      b.retiro.fecha_inicio.localeCompare(a.retiro.fecha_inicio) ||
+      a.orden - b.orden,
+  );
+  return opciones[0]?.ruta ?? null;
+}
+
 // Editar los datos de una persona con el mismo formulario por pasos con que se
 // registra (no el formulario genérico). Al guardar vuelve a ?volver= o a su
-// ficha.
+// ficha. Un caminante o servidor se edita en su formulario completo (ver
+// formularioCompleto).
 export default function EditarPersona() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [parametros] = useSearchParams();
   const volver = parametros.get("volver");
-  const { modulos } = useAuth();
+  const { modulos, sesion } = useAuth();
+  // undefined mientras se averigua; null: se edita aquí.
+  const [completo, setCompleto] = useState<string | null | undefined>();
+  const preferido = sesion?.autenticado
+    ? sesion.preferencias.retiro?.id
+    : undefined;
+  useEffect(() => {
+    let vigente = true;
+    const puede = (slug: string) =>
+      !!modulos.find((m) => m.slug === slug)?.puede_cambiar;
+    api<FichaPersona>(`/personas/${id}/ficha/`)
+      .then((ficha) => {
+        if (!vigente) return;
+        const ruta = formularioCompleto(ficha, preferido, puede);
+        if (ruta) {
+          const regreso = encodeURIComponent(volver ?? `/personas/${id}`);
+          navigate(`${ruta}&volver=${regreso}`, { replace: true });
+        }
+        setCompleto(ruta);
+      })
+      .catch(() => vigente && setCompleto(null));
+    return () => {
+      vigente = false;
+    };
+    // Solo al abrir la pantalla.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
   const personas = modulos.find((m) => m.slug === "personas");
   const sensibles = !!personas?.campos.some(
     (c) => c.nombre === "datos_sensibles",
@@ -123,6 +185,7 @@ export default function EditarPersona() {
 
   if (!personas?.puede_cambiar) return <NotFound />;
   const { persona } = registro;
+  if (completo !== null && !registro.errorCarga) return <EsqueletoFormulario />;
   if (!persona) {
     return registro.errorCarga ? (
       <PantallaError error={registro.errorCarga} />
