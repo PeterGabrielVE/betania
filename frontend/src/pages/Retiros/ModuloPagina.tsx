@@ -27,6 +27,14 @@ import { opcionesNuevaPersona } from "@/components/modulos/nuevaPersona";
 import { celda } from "@/components/modulos/celda";
 import { DialogoCancelar } from "@/components/retiros/AccionesAsistencia";
 import {
+  claseFilaLider,
+  EtiquetaLider,
+  LeyendaLiderOculto,
+  textoLiderOculto,
+} from "@/components/retiros/LideresOcultos";
+import Badge from "@/components/ui/badge/Badge";
+import { colorEstado } from "@/utils/formato";
+import {
   ASISTENCIA,
   cambiarAsistencia,
   type Quien,
@@ -84,6 +92,8 @@ type Acciones = {
   onCuenta?: (fila: Registro) => void;
   // Roles: su tabla de permisos.
   onPermisos?: (fila: Registro) => void;
+  // Caminantes: abre el formulario del servidor que va como líder oculto.
+  onEditarLider?: (fila: Registro) => void;
   // Caminantes y servidores: casillas para confirmar o cancelar varios.
   seleccion?: {
     ids: Set<string>;
@@ -239,13 +249,57 @@ function Titulo({
   );
 }
 
+// Un líder oculto en la tabla de caminantes: su asistencia como servidor y,
+// en lo que es solo del caminante (pago, quién lo invitó…), nada.
+function celdaLider(columna: Campo, fila: Registro): React.ReactNode {
+  if (columna.nombre === "estado") {
+    return (
+      <Badge size="sm" color={colorEstado(String(fila.estado))}>
+        {String(fila.estado_display)}
+      </Badge>
+    );
+  }
+  if (columna.tipo !== "fk" && fila[columna.nombre] == null) return "—";
+  return celda(columna, fila);
+}
+
+function EditarLider({
+  fila,
+  onEditarLider,
+}: {
+  fila: Registro;
+  onEditarLider?: (fila: Registro) => void;
+}) {
+  if (!onEditarLider) return null;
+  return (
+    <button
+      type="button"
+      className={`${claseIcono} hover:text-brand-500`}
+      onClick={() => onEditarLider(fila)}
+      title="Editar servidor"
+    >
+      <PencilIcon className="size-4" />
+      <span className="sr-only">Editar a {fila.etiqueta}</span>
+    </button>
+  );
+}
+
+type PropsRegistros = Acciones & {
+  columnas: Campo[];
+  filas: Registro[];
+  cargando: boolean;
+  // Caminantes: los líderes ocultos, al final y resaltados.
+  lideres?: Registro[];
+};
+
 // Pantallas medianas y grandes: tabla.
 function TablaRegistros({
   columnas,
   filas,
   cargando,
+  lideres = [],
   ...acciones
-}: Acciones & { columnas: Campo[]; filas: Registro[]; cargando: boolean }) {
+}: PropsRegistros) {
   const { modulo, seleccion } = acciones;
   const conAcciones = modulo.puede_cambiar || modulo.puede_eliminar;
   const todas =
@@ -327,6 +381,37 @@ function TablaRegistros({
               )}
             </TableRow>
           ))}
+          {lideres.map((fila) => (
+            <TableRow
+              key={`lider-${fila.id}`}
+              className={claseFilaLider}
+              title={textoLiderOculto}
+            >
+              {seleccion && <TableCell className="w-10 ps-4" />}
+              {columnas.map((columna, i) => (
+                <TableCell
+                  key={columna.nombre}
+                  className={`${claseCelda} ${i === 0 ? "font-medium text-gray-800 dark:text-white/90" : ""}`}
+                >
+                  {i === 0 ? (
+                    <>
+                      <Titulo modulo={modulo} columna={columna} fila={fila} />
+                      <EtiquetaLider />
+                    </>
+                  ) : (
+                    celdaLider(columna, fila)
+                  )}
+                </TableCell>
+              ))}
+              {conAcciones && (
+                <TableCell
+                  className={`${claseFija} px-3 py-2 text-end ${claseFilaLider}`}
+                >
+                  <EditarLider fila={fila} {...acciones} />
+                </TableCell>
+              )}
+            </TableRow>
+          ))}
         </TableBody>
       </Table>
     </div>
@@ -338,8 +423,9 @@ function TarjetasRegistros({
   columnas,
   filas,
   cargando,
+  lideres = [],
   ...acciones
-}: Acciones & { columnas: Campo[]; filas: Registro[]; cargando: boolean }) {
+}: PropsRegistros) {
   const { modulo, seleccion } = acciones;
   const [primera, ...resto] = columnas;
   return (
@@ -375,6 +461,33 @@ function TarjetasRegistros({
           </dl>
         </li>
       ))}
+      {lideres.map((fila) => (
+        <li
+          key={`lider-${fila.id}`}
+          className={`px-4 py-4 ${claseFilaLider}`}
+          title={textoLiderOculto}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <span className="min-w-0 text-theme-sm font-semibold break-words text-gray-800 dark:text-white/90">
+              <Titulo modulo={modulo} columna={primera} fila={fila} />
+              <EtiquetaLider />
+            </span>
+            <EditarLider fila={fila} {...acciones} />
+          </div>
+          <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3">
+            {resto.map((columna) => (
+              <div key={columna.nombre} className="min-w-0">
+                <dt className="text-theme-xs text-gray-400 dark:text-gray-500">
+                  {columna.etiqueta}
+                </dt>
+                <dd className="mt-0.5 truncate text-theme-sm text-gray-700 dark:text-gray-300">
+                  {celdaLider(columna, fila)}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </li>
+      ))}
     </ul>
   );
 }
@@ -393,7 +506,110 @@ function Esqueleto() {
   );
 }
 
+// Filtro escrito (p. ej. la mesa): busca el valor exacto al dejar de escribir.
+function FiltroTexto({
+  etiqueta,
+  valor,
+  onCambio,
+}: {
+  etiqueta: string;
+  valor: string;
+  onCambio: (valor: string) => void;
+}) {
+  const [texto, setTexto] = useState(valor);
+  // Al limpiar los filtros desde afuera, se vacía también.
+  const [previo, setPrevio] = useState(valor);
+  if (valor !== previo) {
+    setPrevio(valor);
+    setTexto(valor);
+  }
+  useEffect(() => {
+    if (texto.trim() === valor) return;
+    const espera = setTimeout(() => onCambio(texto.trim()), 300);
+    return () => clearTimeout(espera);
+    // onCambio cambia en cada render del listado.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [texto, valor]);
+  return (
+    <input
+      type="search"
+      value={texto}
+      onChange={(e) => setTexto(e.target.value)}
+      placeholder={`${etiqueta}: todas`}
+      aria-label={etiqueta}
+      className={`${claseControl} w-full sm:w-36`}
+    />
+  );
+}
+
 // Listado + alta/edición/borrado de un módulo, dibujado a partir de su esquema.
+// Caminantes: los servidores que van como líder oculto, con el retiro, la mesa
+// y la búsqueda del listado (la descarga los agrega igual), como filas de la
+// tabla. Necesita ver Servidores; `activo` en falso: ninguno.
+function useLideresOcultos({
+  activo,
+  retiro,
+  mesa,
+  busqueda,
+  version,
+}: {
+  activo: boolean;
+  retiro: string;
+  mesa: string;
+  busqueda: string;
+  version: number;
+}) {
+  const { modulos } = useAuth();
+  const servidores = modulos.find((m) => m.slug === "participaciones");
+  const [filas, setFilas] = useState<Registro[]>([]);
+  const buscar = activo && !!servidores;
+  useEffect(() => {
+    if (!buscar || !servidores) return;
+    const estados = new Map(
+      servidores.campos
+        .find((c) => c.nombre === "estado")
+        ?.opciones?.map((o) => [o.valor, o.etiqueta]),
+    );
+    const p = new URLSearchParams({ lider_oculto: "true", page_size: "100" });
+    if (retiro) p.set("retiro", retiro);
+    if (mesa) p.set("mesa", mesa);
+    if (busqueda) p.set("search", busqueda);
+    let vigente = true;
+    api<Pagina<Registro>>(`/participaciones/?${p}`)
+      .then((d) => {
+        if (!vigente) return;
+        setFilas(
+          d.results
+            .filter((r) => r.estado !== "cancelado")
+            // Con las columnas de Caminantes (persona, celular, retiro, cama…).
+            .map((r) => ({
+              id: r.id,
+              etiqueta: String(r.persona_etiqueta ?? ""),
+              persona: r.persona,
+              persona_etiqueta: r.persona_etiqueta,
+              persona_foto: r.persona_foto,
+              persona_sexo: r.persona_sexo,
+              telefono: r.telefono,
+              retiro: r.retiro,
+              retiro_etiqueta: r.retiro_etiqueta,
+              estado: r.estado,
+              estado_display: estados.get(String(r.estado)) ?? String(r.estado),
+              cama: r.cama,
+              mesa: r.mesa,
+            })),
+        );
+      })
+      .catch(() => vigente && setFilas([]));
+    return () => {
+      vigente = false;
+    };
+  }, [buscar, servidores, retiro, mesa, busqueda, version]);
+  return {
+    filas: buscar ? filas : [],
+    editar: servidores?.puede_cambiar,
+  };
+}
+
 function Listado({ modulo }: { modulo: Modulo }) {
   const navigate = useNavigate();
   // ?editar, ?nuevo (ver abajo) y filtros en la dirección: ?estado=confirmada,
@@ -589,6 +805,19 @@ function Listado({ modulo }: { modulo: Modulo }) {
   const cargando = resultado.clave !== clave;
   const { datos, error } = resultado;
   const filas = datos?.results ?? [];
+  // Caminantes: los líderes ocultos, en la primera página. Si se filtra por
+  // algo propio del caminante (estado, pago, edad…), no van.
+  const lideres = useLideresOcultos({
+    activo:
+      modulo.slug === "inscripciones" &&
+      consulta.pagina === 1 &&
+      !filtros.estado?.valor &&
+      aplicados.length === 0,
+    retiro: filtros.retiro?.valor ?? "",
+    mesa: filtros.mesa?.valor ?? "",
+    busqueda: consulta.busqueda,
+    version,
+  });
   const hayFiltros =
     !!consulta.busqueda ||
     Object.values(filtros).some((f) => f.valor) ||
@@ -657,6 +886,10 @@ function Listado({ modulo }: { modulo: Modulo }) {
         ? navigate(rutaDeEdicion(modulo.slug, fila.id, `/${modulo.slug}`))
         : setEditando(fila),
     onEliminar: eliminar,
+    onEditarLider: lideres.editar
+      ? (fila: Registro) =>
+          navigate(rutaDeEdicion("participaciones", fila.id, `/${modulo.slug}`))
+      : undefined,
     onPermisos:
       modulo.slug === "roles"
         ? (fila: Registro) => navigate(`/roles/${fila.id}/permisos`)
@@ -798,6 +1031,13 @@ function Listado({ modulo }: { modulo: Modulo }) {
               placeholder={`${filtro.etiqueta}: todos`}
               className="w-full sm:w-56"
             />
+          ) : !filtro.opciones ? (
+            <FiltroTexto
+              key={filtro.nombre}
+              etiqueta={filtro.etiqueta}
+              valor={filtros[filtro.nombre]?.valor ?? ""}
+              onCambio={(valor) => filtrar(filtro.nombre, valor)}
+            />
           ) : (
             <select
               key={filtro.nombre}
@@ -933,7 +1173,7 @@ function Listado({ modulo }: { modulo: Modulo }) {
         </div>
       ) : !datos ? (
         <Esqueleto />
-      ) : filas.length === 0 ? (
+      ) : filas.length === 0 && lideres.filas.length === 0 ? (
         <div className="border-t border-gray-100 px-5 py-12 text-center dark:border-white/5">
           <p className="text-sm text-gray-500 dark:text-gray-400">
             {error?.message ??
@@ -956,15 +1196,22 @@ function Listado({ modulo }: { modulo: Modulo }) {
           <TablaRegistros
             columnas={columnas}
             filas={filas}
+            lideres={lideres.filas}
             cargando={cargando}
             {...acciones}
           />
           <TarjetasRegistros
             columnas={columnas}
             filas={filas}
+            lideres={lideres.filas}
             cargando={cargando}
             {...acciones}
           />
+          {lideres.filas.length > 0 && (
+            <div className="border-t border-gray-100 px-5 py-3 dark:border-white/5">
+              <LeyendaLiderOculto total={lideres.filas.length} />
+            </div>
+          )}
         </>
       )}
 

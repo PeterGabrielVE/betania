@@ -390,6 +390,19 @@ export type ControlPagos = {
   servidores?: GrupoControlPago | null;
 };
 
+// Un servidor que va como líder oculto entre los caminantes de un retiro.
+export type FilaLiderOculto = {
+  id: string;
+  persona_id: string;
+  persona: string;
+  telefono: string;
+  estado: string; // por_confirmar | confirmado
+  estado_display: string;
+  areas: string;
+  cama: string;
+  mesa: string;
+};
+
 // Contactos familiares de un retiro (/api/contactos/?retiro=<id>, ver
 // retiros/api/contactos.py): por cada caminante y servidor.
 export type FilaContactos = {
@@ -454,6 +467,8 @@ export type PanelRetiro = {
       padrino: string;
       estado: string;
       motivo_cancelacion: string;
+      cama: string;
+      mesa: string;
       // Solo para roles con acceso a datos confidenciales:
       ficha?: FichaCaminante;
       // Solo con acceso a finanzas:
@@ -461,6 +476,8 @@ export type PanelRetiro = {
       saldo?: number;
       estado_pago?: string;
     }[];
+    // Servidores que van entre los caminantes (no cuentan en el cupo).
+    lideres_ocultos: FilaLiderOculto[];
     inscritos: number;
     disponibles: number;
     por_estado: { estado: string; etiqueta: string; total: number }[];
@@ -492,6 +509,7 @@ export type PanelRetiro = {
       persona_id: string;
       telefono: string;
       tipo: string;
+      lider_oculto: boolean;
       estado: string; // por_confirmar | confirmado | cancelado
       estado_display: string;
       motivo_cancelacion: string;

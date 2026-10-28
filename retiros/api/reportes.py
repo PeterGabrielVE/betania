@@ -22,7 +22,7 @@ from ..models import (
 )
 from .paneles import (
     POR_CONFIRMAR, _caminantes, _contactos, _edad, _equipo_activo, _servidores, _texto,
-    elegir_retiro,
+    elegir_retiro, lideres_ocultos,
 )
 from .permisos import permiso, ve_sensibles
 
@@ -51,12 +51,20 @@ def _confirmados(retiro):
     filas = [
         [i.persona.nombre, i.persona.documento_completo,
          _edad(i.persona.fecha_nacimiento, retiro.fecha_inicio), i.persona.telefono,
-         i.cama, i.mesa, i.padrino.nombre if i.padrino_id else ""]
+         i.cama, i.mesa, i.padrino.nombre if i.padrino_id else "", "Caminante"]
         for i in _vigentes(retiro).filter(estado=Inscripcion.Estado.CONFIRMADA)
     ]
+    # Los líderes ocultos van entre los caminantes.
+    filas += [
+        [p.persona.nombre, p.persona.documento_completo,
+         _edad(p.persona.fecha_nacimiento, retiro.fecha_inicio), p.persona.telefono,
+         p.cama, p.mesa, "", "Líder oculto"]
+        for p in lideres_ocultos(retiro).filter(estado=Participacion.Estado.CONFIRMADO)
+    ]
+    filas.sort(key=lambda f: f[0].lower())
     return ([col("Caminante"), col("Cédula"), col("Edad", "numero"),
-             col("Celular", "telefono"), col("Cama"), col("Mesa"), col("Quién lo invitó")],
-            filas)
+             col("Celular", "telefono"), col("Cama"), col("Mesa"), col("Quién lo invitó"),
+             col("Participa como")], filas)
 
 
 def _por_confirmar(retiro):
@@ -126,7 +134,8 @@ def _orden_cama(cama):
 
 def _camas(retiro):
     filas = [[i.cama, i.persona.nombre, "Caminante", i.mesa] for i in _vigentes(retiro)]
-    filas += [[p.cama, p.persona.nombre, p.get_tipo_display(), ""]
+    filas += [[p.cama, p.persona.nombre,
+               "Líder oculto" if p.lider_oculto else p.get_tipo_display(), p.mesa]
               for p in _equipo(retiro) if p.duerme_en_casa]
     filas.sort(key=lambda f: (_orden_cama(f[0]), f[1].lower()))
     return [col("Cama"), col("Nombre"), col("Participa como"), col("Mesa")], filas
@@ -240,8 +249,8 @@ def _sin_sensibles(funcion):
 
 REPORTES = [
     Reporte("confirmados", "Caminantes confirmados",
-            "La lista para el retiro: cédula, edad, celular, cama, mesa y quién lo invitó.",
-            _sin_sensibles(_confirmados)),
+            "La lista para el retiro: cédula, edad, celular, cama, mesa y quién lo invitó "
+            "(con los líderes ocultos).", _sin_sensibles(_confirmados)),
     Reporte("por_confirmar", "Caminantes por confirmar",
             "Solicitadas, aceptadas y en lista de espera: a quién hay que llamar.",
             _sin_sensibles(_por_confirmar)),

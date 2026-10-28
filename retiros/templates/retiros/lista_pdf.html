@@ -23,9 +23,9 @@
       {% for i in inscritos %}
       <tr>
         <td>{{ forloop.counter }}</td>
-        <td>{{ i.persona.nombre }}</td>
-        <td>{{ i.padrino.nombre|default:"—" }}</td>
-        <td>{{ i.get_estado_display }}</td>
+        <td>{{ i.nombre }}</td>
+        <td>{{ i.padrino|default:"—" }}</td>
+        <td>{{ i.estado }}</td>
       </tr>
       {% empty %}
       <tr><td colspan="4">Sin inscritos confirmados.</td></tr>

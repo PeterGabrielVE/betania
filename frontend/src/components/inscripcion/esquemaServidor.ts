@@ -78,6 +78,9 @@ const basicos = {
   ...camposPersona,
   retiro: obligatorio("Elige el retiro."),
   tipo: obligatorio("Elige cómo participa."),
+  // Va entre los caminantes como uno más (sale en sus listados).
+  lider_oculto: z.boolean(),
+  mesa: texto.max(10, "Máximo 10 caracteres."), // la del líder oculto
   areas: z.array(z.string()), // ids de AreaServicio
   coordina: z.array(z.string()), // las de `areas` que coordina
   // "si" o "no" (vacío: todavía no responde).
@@ -131,6 +134,8 @@ export const ETIQUETAS_SERVIDOR: Record<keyof ValoresServidor, string> = {
   ...ETIQUETAS_CONTACTOS,
   retiro: "Retiro",
   tipo: "Participa como",
+  lider_oculto: "Líder oculto",
+  mesa: "Número de mesa",
   areas: "Áreas de servicio",
   coordina: "Coordina",
   duerme: "Dormirá en la casa de retiro",
@@ -145,7 +150,15 @@ const PASOS: Paso[] = [
     id: "identificacion",
     titulo: "Identificación",
     descripcion: "Retiro y documento de identidad.",
-    campos: ["retiro", "parroquia", "tipo", "tipo_documento", "documento"],
+    campos: [
+      "retiro",
+      "parroquia",
+      "tipo",
+      "lider_oculto",
+      "mesa",
+      "tipo_documento",
+      "documento",
+    ],
   },
   {
     id: "personales",
@@ -193,6 +206,8 @@ export function valoresServidor(retiro?: string, pais = ""): ValoresServidor {
     ...vaciosContactos(),
     retiro: retiro ?? "",
     tipo: "servidor",
+    lider_oculto: false,
+    mesa: "",
     areas: [],
     coordina: [],
     duerme: "",
@@ -209,6 +224,9 @@ export function cuerpoDisponibilidad(v: ValoresServidor, conSensibles: boolean) 
   const marcadas = (claves: string[]) =>
     Object.fromEntries(claves.map((c) => [c, true]));
   return {
+    lider_oculto: v.lider_oculto,
+    // Solo el líder oculto come en una mesa de caminantes.
+    mesa: v.lider_oculto ? v.mesa : "",
     duerme_en_casa: v.duerme === "si",
     // Quien no duerme en la casa no tiene cama.
     cama: v.duerme === "si" ? v.cama : "",
@@ -245,6 +263,8 @@ export function datosDeParticipacion(
   return {
     retiro: String(p.retiro),
     tipo: String(p.tipo),
+    lider_oculto: Boolean(p.lider_oculto),
+    mesa: String(p.mesa ?? ""),
     duerme:
       p.duerme_en_casa === true ? "si" : p.duerme_en_casa === false ? "no" : "",
     cama: String(p.cama ?? ""),

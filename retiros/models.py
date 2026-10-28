@@ -790,6 +790,12 @@ class Participacion(models.Model):
                                          blank=True)
     # Si duerme en la casa, dónde (como la del caminante).
     cama = models.CharField("número de cama", max_length=10, blank=True)
+    # Líder oculto: va entre los caminantes como uno más. Sigue siendo del
+    # equipo (paga la cuota de servidor), pero sale en los listados de
+    # caminantes del retiro.
+    lider_oculto = models.BooleanField("líder oculto", default=False)
+    # La mesa en que come entre los caminantes (solo el líder oculto).
+    mesa = models.CharField("número de mesa", max_length=10, blank=True)
     disponibilidad = models.JSONField(default=dict, blank=True)  # TURNOS_SERVICIO
     camisas = models.JSONField(default=dict, blank=True)         # CAMISAS_SERVICIO
     tallas_camisa = models.JSONField(default=dict, blank=True)   # TALLAS_CAMISA
@@ -877,6 +883,8 @@ class Participacion(models.Model):
     def save(self, *args, **kwargs):
         if self.estado != self.Estado.CANCELADO:
             self.motivo_cancelacion = ""
+        if not self.lider_oculto:
+            self.mesa = ""
         super().save(*args, **kwargs)
 
     def __str__(self):

@@ -2275,6 +2275,86 @@ class ContactosFamiliaresTests(Base):
         self.assertEqual(self.client.get(self.ruta).status_code, 403)
 
 
+class LideresOcultosTests(Base):
+    """Los servidores que van como líder oculto salen entre los caminantes."""
+
+    def setUp(self):
+        super().setUp()
+        Inscripcion.objects.create(retiro=self.retiro, persona=self.persona("Ana Pérez"),
+                                   estado=Inscripcion.Estado.CONFIRMADA, cama="3", mesa="1")
+        self.lider = Participacion.objects.create(
+            retiro=self.retiro, persona=self.persona("Luis Gil"),
+            tipo=Participacion.Tipo.SERVIDOR, lider_oculto=True,
+            estado=Participacion.Estado.CONFIRMADO, duerme_en_casa=True, cama="4", mesa="2")
+        Participacion.objects.create(
+            retiro=self.retiro, persona=self.persona("Marta Ruiz"),
+            tipo=Participacion.Tipo.SERVIDOR, estado=Participacion.Estado.CONFIRMADO)
+        Participacion.objects.create(
+            retiro=self.retiro, persona=self.persona("Pedro Sol"),
+            tipo=Participacion.Tipo.SERVIDOR, lider_oculto=True,
+            estado=Participacion.Estado.CANCELADO)
+
+    def test_en_el_panel_sin_contar_en_el_cupo(self):
+        datos = self.client.get(f"/api/retiros/{self.retiro.pk}/panel/").json()
+        caminantes = datos["caminantes"]
+        self.assertEqual([f["persona"] for f in caminantes["filas"]], ["Ana Pérez"])
+        self.assertEqual(caminantes["filas"][0]["mesa"], "1")
+        self.assertEqual(
+            [(f["persona"], f["cama"], f["mesa"]) for f in caminantes["lideres_ocultos"]],
+            [("Luis Gil", "4", "2")])
+        self.assertEqual(caminantes["inscritos"], 1)
+        lideres = {f["persona"]: f["lider_oculto"] for f in datos["servidores"]["filas"]}
+        self.assertTrue(lideres["Luis Gil"])
+        self.assertFalse(lideres["Marta Ruiz"])
+
+    def test_en_los_reportes(self):
+        r = self.client.get(f"/api/reportes/?retiro={self.retiro.pk}&reporte=confirmados")
+        filas = r.json()["reporte"]["filas"]
+        self.assertEqual([(f[0], f[-1]) for f in filas],
+                         [("Ana Pérez", "Caminante"), ("Luis Gil", "Líder oculto")])
+        r = self.client.get(f"/api/reportes/?retiro={self.retiro.pk}&reporte=camas")
+        self.assertIn(["4", "Luis Gil", "Líder oculto", "2"], r.json()["reporte"]["filas"])
+
+    def test_en_la_descarga_de_caminantes(self):
+        from io import BytesIO
+
+        from openpyxl import load_workbook
+
+        def nombres(ruta):
+            r = self.client.get(ruta)
+            self.assertEqual(r.status_code, 200, r.content[:300])
+            hoja = load_workbook(BytesIO(r.content)).active
+            return [str(f[0].value) for f in hoja.iter_rows(min_row=5)]
+
+        ruta = f"/api/inscripciones/exportar/?formato=xlsx&retiro={self.retiro.pk}"
+        self.assertEqual(nombres(ruta), [str(Persona.objects.get(nombre="Ana Pérez")),
+                                         str(Persona.objects.get(nombre="Luis Gil"))])
+        # Filtrando por algo propio del caminante, no van.
+        self.assertEqual(len(nombres(ruta + "&estado=confirmada")), 1)
+        # Por mesa, cada uno con la suya.
+        self.assertEqual(nombres(ruta + "&mesa=2"),
+                         [str(Persona.objects.get(nombre="Luis Gil"))])
+
+    def test_filtro_de_mesa_en_caminantes(self):
+        Inscripcion.objects.create(retiro=self.retiro, persona=self.persona("Rosa Mar"),
+                                   mesa="2")
+        r = self.client.get("/api/inscripciones/?mesa=1")
+        self.assertEqual([f["persona_etiqueta"] for f in r.json()["results"]], ["Ana Pérez"])
+        r = self.client.get("/api/participaciones/?lider_oculto=true&mesa=2")
+        self.assertEqual([f["persona_etiqueta"] for f in r.json()["results"]], ["Luis Gil"])
+
+    def test_sin_ser_lider_oculto_no_tiene_mesa(self):
+        self.lider.lider_oculto = False
+        self.lider.save()
+        self.lider.refresh_from_db()
+        self.assertEqual(self.lider.mesa, "")
+
+    def test_se_filtran_en_servidores(self):
+        r = self.client.get("/api/participaciones/?lider_oculto=true")
+        self.assertEqual(sorted(f["persona_etiqueta"] for f in r.json()["results"]),
+                         ["Luis Gil", "Pedro Sol"])
+
+
 class ReportesRetiroTests(Base):
     """Los reportes de un retiro (catálogo, tablas y permisos)."""
 

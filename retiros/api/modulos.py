@@ -5,6 +5,7 @@ su API (/api/<slug>/) y el menú, la tabla y el formulario del frontend
 """
 
 from django.conf import settings
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Count, Q, Sum
 
 from ..models import (
@@ -44,6 +45,36 @@ _COMENTARIOS = "Comentarios"
 # Una inscripción cuenta como "inscrito" mientras no esté cancelada.
 INSCRITAS = ~Q(inscripciones__estado=Inscripcion.Estado.CANCELADA)
 CONFIRMADAS = Q(inscripciones__estado=Inscripcion.Estado.CONFIRMADA)
+
+
+
+def _lideres_ocultos(request):
+    """Para la descarga de Caminantes: los servidores que van como líder oculto,
+    con el retiro y la búsqueda de la pantalla. Si se filtra por algo propio
+    del caminante (estado, pago, edad...), no van."""
+    params = request.query_params
+    if (not request.user.has_perm(POR_MODELO[Participacion].permiso("view"))
+            or params.get("estado") or any(k.startswith("f_") for k in params)):
+        return []
+    qs = (Participacion.objects.filter(lider_oculto=True)
+          .exclude(tipo=Participacion.Tipo.CAMINANTE)
+          .exclude(estado=Participacion.Estado.CANCELADO)
+          .select_related("persona", "retiro__tipo").order_by("persona__nombre"))
+    if params.get("retiro"):
+        try:
+            qs = qs.filter(retiro_id=params["retiro"])
+        except (ValueError, DjangoValidationError):
+            return []
+    if params.get("mesa"):
+        qs = qs.filter(mesa=params["mesa"])
+    if params.get("search"):
+        qs = qs.filter(persona__nombre__icontains=params["search"])
+    return [{
+        "persona_etiqueta": str(p.persona), "telefono": p.persona.telefono,
+        "retiro_etiqueta": str(p.retiro), "estado": "Líder oculto", "cama": p.cama,
+        "mesa": p.mesa, "creado": p.creado and p.creado.isoformat(),
+    } for p in qs]
+
 
 MODULOS = [
     # ---- Retiros ----
@@ -152,8 +183,9 @@ MODULOS = [
         lista=["persona", "telefono", "retiro", "padrino", "estado", "cama", "mesa", "estado_pago",
                "total_pagado", "consentimiento_datos", "creado"],
         buscar=["persona__nombre", "padrino__nombre", "retiro__tipo__nombre"],
-        filtros=["estado", "retiro"],
+        filtros=["estado", "mesa", "retiro"],
         avanzados=F.CAMINANTES,
+        anexo=_lideres_ocultos,
         orden=["-creado"],
         relacionados=["persona", "padrino", "retiro__tipo"],
         sensibles=["salud_alimentacion", "contacto_emergencia"],
@@ -193,8 +225,8 @@ MODULOS = [
         # participaciones de caminante no van aquí: los caminantes son las
         # inscripciones.
         "participaciones", Participacion, "Servidores", "servidor", PERSONAS,
-        campos=["retiro", "persona", "tipo", "estado", "motivo_cancelacion", "duerme_en_casa",
-                "cama", "disponibilidad", "camisas", "tallas_camisa", "contacto_emergencia"],
+        campos=["retiro", "persona", "tipo", "lider_oculto", "mesa", "estado",
+                "motivo_cancelacion", "duerme_en_casa", "cama", "disponibilidad", "camisas", "tallas_camisa", "contacto_emergencia"],
         lista=["persona", "documento", "telefono", "areas", "tipo", "estado", "duerme", "cama",
                "turnos", "camisa", "retiro"],
         buscar=["persona__nombre", "persona__documento", "servicios__area__nombre",
@@ -215,10 +247,11 @@ MODULOS = [
                 for s in sorted(o.servicios.all(), key=lambda s: s.area.nombre)
             )),
         },
-        filtros=["estado", "tipo", "retiro"],
+        filtros=["estado", "tipo", "lider_oculto", "mesa", "retiro"],
         avanzados=F.SERVIDORES,
         etiquetas={"persona": "Servidor", "tipo": "Participa como",
-                   "duerme_en_casa": "Dormirá en la casa de retiro"},
+                   "duerme_en_casa": "Dormirá en la casa de retiro",
+                   "lider_oculto": "Líder oculto"},
         subcampos={
             "disponibilidad": [sub(c, e, _TURNOS, "bool") for c, e in TURNOS_SERVICIO],
             "camisas": [sub(c, e, _CAMISA, "bool") for c, e in CAMISAS_SERVICIO],

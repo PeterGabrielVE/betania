@@ -16,7 +16,7 @@ from django.utils.text import slugify
 from import_export import fields, resources
 from import_export.widgets import ForeignKeyWidget
 
-from .models import Inscripcion, Parroquia, Persona, Retiro
+from .models import Inscripcion, Parroquia, Participacion, Persona, Retiro
 
 
 # --------------------------------------------------------------------------- #
@@ -84,14 +84,22 @@ def lista_retiro_pdf(request, retiro_id):
     """PDF con los caminantes confirmados de un retiro."""
     from weasyprint import HTML  # pesado de importar: solo al generar un PDF
 
+    from .api.paneles import lideres_ocultos
+
     # El RLS ya limita a la parroquia activa: un retiro ajeno da 404.
     retiro = get_object_or_404(Retiro.objects.select_related("tipo", "parroquia"), pk=retiro_id)
-    inscritos = (
-        retiro.inscripciones
-        .select_related("persona", "padrino")
+    inscritos = [
+        {"nombre": i.persona.nombre, "padrino": i.padrino.nombre if i.padrino_id else "",
+         "estado": i.get_estado_display()}
+        for i in retiro.inscripciones.select_related("persona", "padrino")
         .filter(estado=Inscripcion.Estado.CONFIRMADA)
-        .order_by("persona__nombre")
-    )
+    ]
+    # Los líderes ocultos confirmados van en la lista como un caminante más.
+    inscritos += [
+        {"nombre": p.persona.nombre, "padrino": "", "estado": "Líder oculto"}
+        for p in lideres_ocultos(retiro).filter(estado=Participacion.Estado.CONFIRMADO)
+    ]
+    inscritos.sort(key=lambda f: f["nombre"].lower())
     html = render_to_string(
         "retiros/lista_pdf.html", {"retiro": retiro, "inscritos": inscritos}
     )

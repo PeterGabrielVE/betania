@@ -163,6 +163,28 @@ def _equipo_activo(retiro):
             .exclude(estado=Participacion.Estado.CANCELADO))
 
 
+def lideres_ocultos(retiro):
+    """Los servidores que van entre los caminantes como uno más: salen en los
+    listados de caminantes, aunque no cuentan en el cupo ni en sus cuotas."""
+    return (_equipo_activo(retiro).filter(lider_oculto=True)
+            .select_related("persona").prefetch_related("servicios__area")
+            .order_by("persona__nombre"))
+
+
+def _fila_lider(p):
+    return {
+        "id": p.pk,
+        "persona_id": p.persona_id,
+        "persona": p.persona.nombre,
+        "telefono": p.persona.telefono,
+        "estado": p.estado,
+        "estado_display": p.get_estado_display(),
+        "areas": ", ".join(s.area.nombre for s in p.servicios.all()),
+        "cama": p.cama,
+        "mesa": p.mesa,
+    }
+
+
 def _cumpleanos(retiro, hoy):
     """Cumpleaños de caminantes y servidores del retiro: los de los próximos días
     y los que caen durante el retiro (para celebrarlos allá)."""
@@ -438,6 +460,8 @@ def _caminantes(retiro, con_pagos, con_ficha):
             "padrino": i.padrino.nombre if i.padrino_id else "",
             "estado": i.estado,
             "motivo_cancelacion": i.motivo_cancelacion,
+            "cama": i.cama,
+            "mesa": i.mesa,
         }
         if con_ficha:
             fila["ficha"] = _ficha(i, retiro)
@@ -454,6 +478,7 @@ def _caminantes(retiro, con_pagos, con_ficha):
     inscritos = len(filas) - por_estado[Inscripcion.Estado.CANCELADA]
     return {
         "filas": filas,
+        "lideres_ocultos": [_fila_lider(p) for p in lideres_ocultos(retiro)],
         "inscritos": inscritos,
         "disponibles": max(retiro.cupo - inscritos, 0),
         "por_estado": [
@@ -516,6 +541,7 @@ def _servidores(retiro, con_pagos=True):
             "persona_id": p.persona_id,
             "telefono": p.persona.telefono,
             "tipo": p.get_tipo_display(),
+            "lider_oculto": p.lider_oculto,
             "estado": p.estado,
             "estado_display": p.get_estado_display(),
             "motivo_cancelacion": p.motivo_cancelacion,

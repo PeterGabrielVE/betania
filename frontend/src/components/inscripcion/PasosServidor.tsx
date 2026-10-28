@@ -3,7 +3,7 @@ import { api, type Pagina, type Registro } from "@/api/client";
 import SelectorRemoto from "@/components/modulos/SelectorRemoto";
 import { useEffect, useState } from "react";
 import { Controller, get, useFormContext, useWatch } from "react-hook-form";
-import { Grupo, Opciones, Relacion, Texto } from "./Campos";
+import { Casilla, Grupo, Opciones, Relacion, Texto } from "./Campos";
 import { TIPOS_DOCUMENTO } from "./esquemaPersona";
 import {
   CAMISAS,
@@ -33,7 +33,8 @@ export function PasoIdentificacionServidor({
   // Editando: la persona ya está elegida (no se busca otra).
   edicion?: boolean;
 }) {
-  const { register } = useFormContext();
+  const { register, control } = useFormContext();
+  const liderOculto = useWatch({ control, name: "lider_oculto" }) as boolean;
   return (
     <div className="space-y-6">
       <Grupo>
@@ -55,6 +56,21 @@ export function PasoIdentificacionServidor({
           ayuda="Coordinador general: quien coordina todo el retiro."
         />
       </Grupo>
+      <Casilla
+        nombre="lider_oculto"
+        etiqueta="Va como líder oculto"
+        descripcion="Va entre los caminantes como uno más: sale en sus listados, pero sigue en el equipo y paga la cuota de servidor."
+      />
+      {liderOculto && (
+        <div className="max-w-xs">
+          <Texto
+            nombre="mesa"
+            etiqueta={E.mesa}
+            placeholder="Ej.: 3"
+            ayuda="La mesa de caminantes en que va. Opcional."
+          />
+        </div>
+      )}
       <Grupo titulo="Documento de identidad">
         <Opciones
           nombre="tipo_documento"

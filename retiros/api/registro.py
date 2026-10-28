@@ -58,6 +58,10 @@ class Modulo:
     solo_lectura: bool = False
     # Filtros del panel lateral (ver api/filtros.py).
     avanzados: list = field(default_factory=list)
+    # Filas de otro modelo que la descarga agrega al final: función(request) ->
+    # [{columna: valor como lo da el serializer}] (p. ej. los líderes ocultos
+    # en Caminantes).
+    anexo: Callable | None = None
 
     def campo(self, nombre):
         return self.modelo._meta.get_field(nombre)

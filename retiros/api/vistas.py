@@ -265,6 +265,8 @@ class ModuloViewSet(viewsets.ModelViewSet):
                                        ["columnas"].get(self.modulo.slug))
         pref = _preferencias_json(request.user)
         datos = self.get_serializer(qs, many=True).data
+        if self.modulo.anexo:
+            datos = [*datos, *self.modulo.anexo(request)]
         filas = [[_celda(c, d, pref["moneda_vista"], pref["factor"]) for c in columnas]
                  for d in datos]
         subtitulo = " · ".join(filter(None, [

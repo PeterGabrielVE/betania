@@ -3,6 +3,7 @@ import { EsqueletoPanel } from "@/components/estados/Esqueleto";
 import {
   type CeldaDescarga,
   type FichaCaminante,
+  type FilaLiderOculto,
   type PanelRetiro,
 } from "@/api/client";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
@@ -21,6 +22,12 @@ import { useColumnas, type DefColumna } from "@/components/modulos/useColumnas";
 import { usePaginas } from "@/components/modulos/usePaginas";
 import AccionesAsistencia from "@/components/retiros/AccionesAsistencia";
 import Actualizacion from "@/components/retiros/Actualizacion";
+import {
+  claseFilaLider,
+  EtiquetaLider,
+  LeyendaLiderOculto,
+  textoLiderOculto,
+} from "@/components/retiros/LideresOcultos";
 import LogisticaEquipo from "@/components/retiros/LogisticaEquipo";
 import Metrica from "@/components/retiros/Metrica";
 import Badge from "@/components/ui/badge/Badge";
@@ -271,8 +278,60 @@ type ColumnaPanel<T> = DefColumna & {
 const textoCelda = (v: CeldaDescarga) =>
   v === null || v === "" ? "—" : typeof v === "object" ? "" : v;
 
+// Un renglón de la tabla de caminantes: un caminante o un líder oculto (un
+// servidor que va entre ellos, con su fila resaltada).
+type Renglon =
+  { lider: false; f: FilaCaminantePanel } | { lider: true; l: FilaLiderOculto };
+const nombreRenglon = (r: Renglon) => (r.lider ? r.l.persona : r.f.persona);
+
+// Lo que va en cada columna para un líder oculto (en la descarga, tal cual).
+function valorLider(clave: string, l: FilaLiderOculto): CeldaDescarga {
+  switch (clave) {
+    case "persona":
+      return l.persona;
+    case "telefono":
+      return l.telefono;
+    case "estado":
+      return `Líder oculto · ${l.estado_display}`;
+    case "cama":
+      return l.cama;
+    case "mesa":
+      return l.mesa;
+    default:
+      return "";
+  }
+}
+
+function celdaLider(clave: string, l: FilaLiderOculto): React.ReactNode {
+  switch (clave) {
+    case "persona":
+      return (
+        <>
+          <Link
+            to={`/personas/${l.persona_id}`}
+            className="hover:text-brand-500"
+          >
+            {l.persona}
+          </Link>
+          <EtiquetaLider />
+        </>
+      );
+    case "telefono":
+      return l.telefono ? <Telefono numero={l.telefono} /> : "—";
+    case "estado":
+      return (
+        <Badge size="sm" color={colorEstado(l.estado)}>
+          {l.estado_display}
+        </Badge>
+      );
+    default:
+      return textoCelda(valorLider(clave, l));
+  }
+}
+
 function Caminantes({
   caminantes,
+  lideres,
   opcionesPago,
   retiroId,
   retiro,
@@ -280,6 +339,7 @@ function Caminantes({
   onCambio,
 }: {
   caminantes: NonNullable<PanelRetiro["caminantes"]>;
+  lideres: FilaLiderOculto[];
   opcionesPago: PanelRetiro["opciones_pago"];
   retiroId: string;
   retiro: string; // "Emaús hombres #12", para el título de la descarga
@@ -288,6 +348,7 @@ function Caminantes({
 }) {
   const { filas, por_estado } = caminantes;
   const [filtro, setFiltro] = useState("");
+  const [mesa, setMesa] = useState(""); // "-": sin mesa
   const [texto, setTexto] = useState("");
   const [abiertos, setAbiertos] = useState<Set<string>>(new Set());
   const paginas = usePaginas();
@@ -355,6 +416,8 @@ function Caminantes({
       opcional: conFicha,
       valor: (f) => f.padrino,
     },
+    { clave: "mesa", etiqueta: "Mesa", valor: (f) => f.mesa },
+    { clave: "cama", etiqueta: "Cama", opcional: true, valor: (f) => f.cama },
     {
       clave: "estado",
       etiqueta: "Estado",
@@ -453,7 +516,7 @@ function Caminantes({
   const { ve, selector } = useColumnas("panel_caminantes", definidas);
   const columnas = definidas.filter((c) => ve(c.clave));
 
-  if (filas.length === 0) {
+  if (filas.length === 0 && lideres.length === 0) {
     return <p className={claseVacio}>Todavía no hay inscripciones.</p>;
   }
 
@@ -462,14 +525,28 @@ function Caminantes({
   );
   const elegido = disponibles.find((f) => f.valor === filtro) ?? disponibles[0];
   const buscado = texto.trim().toLowerCase();
-  const visibles = filas.filter(
-    (f) =>
-      elegido.cumple(f) &&
-      (!buscado || f.persona.toLowerCase().includes(buscado)),
-  );
+  const mesas = [
+    ...new Set([...filas, ...lideres].map((x) => x.mesa).filter(Boolean)),
+  ].sort((a, b) => a.localeCompare(b, "es", { numeric: true }));
+  const coincide = (nombre: string, suMesa: string) =>
+    (!buscado || nombre.toLowerCase().includes(buscado)) &&
+    (!mesa || (mesa === "-" ? !suMesa : suMesa === mesa));
+  // Los líderes ocultos van entre los caminantes, por nombre; con un filtro
+  // propio del caminante (deben, salud…) no salen.
+  const visibles: Renglon[] = [
+    ...filas
+      .filter((f) => elegido.cumple(f) && coincide(f.persona, f.mesa))
+      .map((f) => ({ lider: false as const, f })),
+    ...(elegido.valor
+      ? []
+      : lideres
+          .filter((l) => coincide(l.persona, l.mesa))
+          .map((l) => ({ lider: true as const, l }))),
+  ].sort((a, b) => nombreRenglon(a).localeCompare(nombreRenglon(b), "es"));
+  const totalLideres = visibles.filter((r) => r.lider).length;
   const { pagina, hayPaginas, paginacion } = paginas.de(
     visibles,
-    `${elegido.valor}|${buscado}`,
+    `${elegido.valor}|${buscado}|${mesa}`,
   );
 
   const alternar = (id: string) =>
@@ -484,12 +561,15 @@ function Caminantes({
     titulo: `Caminantes · ${retiro}`,
     subtitulo: [
       elegido.valor && `Filtro: ${elegido.etiqueta}`,
+      mesa && (mesa === "-" ? "Sin mesa" : `Mesa ${mesa}`),
       buscado && `Búsqueda: «${texto.trim()}»`,
     ]
       .filter(Boolean)
       .join(" · "),
     columnas: columnas.map((c) => c.etiqueta),
-    filas: visibles.map((f) => columnas.map((c) => c.valor(f))),
+    filas: visibles.map((r) =>
+      columnas.map((c) => (r.lider ? valorLider(c.clave, r.l) : c.valor(r.f))),
+    ),
   });
 
   return (
@@ -525,13 +605,31 @@ function Caminantes({
             ))}
           </select>
         )}
+        {mesas.length > 0 && (
+          <select
+            value={mesa}
+            onChange={(e) => setMesa(e.target.value)}
+            className={claseControl}
+            aria-label="Filtrar por mesa"
+          >
+            <option value="">Mesa: todas</option>
+            {mesas.map((m) => (
+              <option key={m} value={m}>
+                Mesa {m}
+              </option>
+            ))}
+            <option value="-">Sin mesa</option>
+          </select>
+        )}
         {conFicha && (
           <button
             type="button"
             className={claseBoton}
             onClick={() =>
               setAbiertos(
-                abiertos.size ? new Set() : new Set(visibles.map((f) => f.id)),
+                abiertos.size
+                  ? new Set()
+                  : new Set(visibles.flatMap((r) => (r.lider ? [] : [r.f.id]))),
               )
             }
           >
@@ -559,48 +657,75 @@ function Caminantes({
               </TableRow>
             </TableHeader>
             <TableBody className="divide-y divide-gray-100 dark:divide-white/5">
-              {pagina.map((f) => (
-                <Fragment key={f.id}>
-                  <TableRow>
-                    {columnas.map((c) => (
-                      <TableCell
-                        key={c.clave}
-                        className={`${claseCelda} ${c.clase ?? ""}`}
-                      >
-                        {c.celda ? c.celda(f) : textoCelda(c.valor(f))}
-                      </TableCell>
-                    ))}
-                    {conFicha && (
-                      <TableCell className={claseCelda}>
-                        <button
-                          type="button"
-                          className={claseEnlace}
-                          aria-expanded={abiertos.has(f.id)}
-                          onClick={() => alternar(f.id)}
+              {pagina.map((r) => {
+                if (r.lider) {
+                  return (
+                    <TableRow
+                      key={`lider-${r.l.id}`}
+                      className={claseFilaLider}
+                      title={textoLiderOculto}
+                    >
+                      {columnas.map((c) => (
+                        <TableCell
+                          key={c.clave}
+                          className={`${claseCelda} ${c.clase ?? ""}`}
                         >
-                          {abiertos.has(f.id) ? "Ocultar ficha" : "Ver ficha"}
-                        </button>
-                      </TableCell>
-                    )}
-                  </TableRow>
-                  {abiertos.has(f.id) && f.ficha && (
-                    <TableRow>
-                      <TableCell
-                        colSpan={columnas.length + 1}
-                        className="px-4 pb-4"
-                      >
-                        <Ficha
-                          fila={f}
-                          retiroId={retiroId}
-                          puedeEditar={puedeEditar}
-                        />
-                      </TableCell>
+                          {celdaLider(c.clave, r.l)}
+                        </TableCell>
+                      ))}
+                      {conFicha && <TableCell className={claseCelda} />}
                     </TableRow>
-                  )}
-                </Fragment>
-              ))}
+                  );
+                }
+                const f = r.f;
+                return (
+                  <Fragment key={f.id}>
+                    <TableRow>
+                      {columnas.map((c) => (
+                        <TableCell
+                          key={c.clave}
+                          className={`${claseCelda} ${c.clase ?? ""}`}
+                        >
+                          {c.celda ? c.celda(f) : textoCelda(c.valor(f))}
+                        </TableCell>
+                      ))}
+                      {conFicha && (
+                        <TableCell className={claseCelda}>
+                          <button
+                            type="button"
+                            className={claseEnlace}
+                            aria-expanded={abiertos.has(f.id)}
+                            onClick={() => alternar(f.id)}
+                          >
+                            {abiertos.has(f.id) ? "Ocultar ficha" : "Ver ficha"}
+                          </button>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                    {abiertos.has(f.id) && f.ficha && (
+                      <TableRow>
+                        <TableCell
+                          colSpan={columnas.length + 1}
+                          className="px-4 pb-4"
+                        >
+                          <Ficha
+                            fila={f}
+                            retiroId={retiroId}
+                            puedeEditar={puedeEditar}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </Fragment>
+                );
+              })}
             </TableBody>
           </Table>
+        </div>
+      )}
+      {totalLideres > 0 && (
+        <div className="mt-4">
+          <LeyendaLiderOculto total={totalLideres} />
         </div>
       )}
       {hayPaginas && (
@@ -644,9 +769,15 @@ function Servidores({
       etiqueta: "Servidor",
       fija: true,
       celda: (f) => (
-        <Link to={`/personas/${f.persona_id}`} className="hover:text-brand-500">
-          {f.persona}
-        </Link>
+        <>
+          <Link
+            to={`/personas/${f.persona_id}`}
+            className="hover:text-brand-500"
+          >
+            {f.persona}
+          </Link>
+          {f.lider_oculto && <EtiquetaLider />}
+        </>
       ),
       valor: (f) => f.persona,
       clase: "font-medium text-gray-800 dark:text-white/90",
@@ -821,7 +952,10 @@ function Servidores({
               {pagina.map((f) => (
                 <TableRow
                   key={f.id}
-                  className={f.estado === "cancelado" ? "opacity-60" : ""}
+                  className={`${f.estado === "cancelado" ? "opacity-60" : ""} ${
+                    f.lider_oculto ? claseFilaLider : ""
+                  }`}
+                  title={f.lider_oculto ? textoLiderOculto : undefined}
                 >
                   {columnas.map((c) => (
                     <TableCell
@@ -1035,6 +1169,7 @@ export default function RetiroPanel() {
           >
             <Caminantes
               caminantes={caminantes}
+              lideres={caminantes.lideres_ocultos}
               opcionesPago={panel.opciones_pago}
               retiroId={retiro.id}
               retiro={retiro.etiqueta}

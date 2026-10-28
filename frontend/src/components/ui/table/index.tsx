@@ -24,6 +24,7 @@ interface TableBodyProps {
 interface TableRowProps {
   children: ReactNode; // Cells (th or td)
   className?: string; // Optional className for styling
+  title?: string; // Texto al pasar el cursor
 }
 
 // Props for TableCell
@@ -50,8 +51,12 @@ const TableBody: React.FC<TableBodyProps> = ({ children, className }) => {
 };
 
 // TableRow Component
-const TableRow: React.FC<TableRowProps> = ({ children, className }) => {
-  return <tr className={className}>{children}</tr>;
+const TableRow: React.FC<TableRowProps> = ({ children, className, title }) => {
+  return (
+    <tr className={className} title={title}>
+      {children}
+    </tr>
+  );
 };
 
 // TableCell Component
