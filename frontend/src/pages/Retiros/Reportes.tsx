@@ -20,6 +20,7 @@ import {
   claseTarjeta,
 } from "@/components/modulos/estilos";
 import Actualizacion from "@/components/retiros/Actualizacion";
+import ResumenSacramentos from "@/components/retiros/Sacramentos";
 import {
   Table,
   TableBody,
@@ -74,6 +75,10 @@ export default function Reportes() {
   const { datos, alDia, error, hora, consultando, actualizar } =
     useDatosVivos<Datos>(`/reportes/${parametros ? `?${parametros}` : ""}`);
   const [texto, setTexto] = useState("");
+  // Reporte de sacramentos: cómo participa, qué sacramento y si lo tiene.
+  const [quien, setQuien] = useState("");
+  const [sacramento, setSacramento] = useState<number | null>(null);
+  const [loTiene, setLoTiene] = useState("Sí");
 
   const cambiar = (cambios: Record<string, string>) => {
     setBusqueda(
@@ -87,19 +92,52 @@ export default function Reportes() {
       },
       { replace: true },
     );
-    if ("reporte" in cambios) setTexto("");
+    if ("reporte" in cambios) {
+      setTexto("");
+      setQuien("");
+      setSacramento(null);
+      setLoTiene("Sí");
+    }
   };
 
   const reporte = datos?.reporte;
   const buscado = plano(texto.trim());
+  const columnasSacramento = (reporte?.columnas ?? []).flatMap((c, i) =>
+    c.grupo === "sacramento" ? [i] : [],
+  );
+  const conSacramentos = columnasSacramento.length > 0;
+  const columnaQuien = conSacramentos
+    ? (reporte?.columnas ?? []).findIndex(
+        (c) => c.etiqueta === "Participa como",
+      )
+    : -1;
+  const quienes = [
+    ...new Set(
+      (reporte?.filas ?? []).map((f) => String(f[columnaQuien] ?? "")),
+    ),
+  ]
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, "es"));
   const filas = (reporte?.filas ?? []).filter(
-    (f) => !buscado || f.some((v) => plano(String(v ?? "")).includes(buscado)),
+    (f) =>
+      (!buscado || f.some((v) => plano(String(v ?? "")).includes(buscado))) &&
+      (!quien || f[columnaQuien] === quien) &&
+      (sacramento === null || f[sacramento] === loTiene),
   );
   const paginas = usePaginas();
   const { pagina, hayPaginas, paginacion } = paginas.de(
     filas,
-    `${reporte?.clave}|${datos?.retiro?.id}|${buscado}`,
+    `${reporte?.clave}|${datos?.retiro?.id}|${buscado}|${quien}|${sacramento}|${loTiene}`,
   );
+  // Los filtros a la vista, para el subtítulo de las descargas.
+  const filtrosTexto = [
+    quien && `Participa como: ${quien}`,
+    sacramento !== null &&
+      `${reporte?.columnas[sacramento]?.etiqueta}: ${loTiene === "Sí" ? "lo tiene" : "no lo tiene"}`,
+    texto.trim() && `Búsqueda: «${texto.trim()}»`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
   // Cada reporte recuerda sus columnas; la primera (el nombre) no se quita.
   const { ve, selector } = useColumnas(
     `reporte_${reporte?.clave ?? ""}`,
@@ -120,7 +158,7 @@ export default function Reportes() {
     const columnas = reporte!.columnas;
     return {
       titulo: `${reporte!.titulo} · ${datos?.retiro?.etiqueta ?? ""}`,
-      subtitulo: texto.trim() ? `Búsqueda: «${texto.trim()}»` : "",
+      subtitulo: filtrosTexto,
       columnas: indices.map((i) => columnas[i].etiqueta),
       filas: [
         ...filas.map((f) =>
@@ -238,6 +276,51 @@ export default function Reportes() {
                   onChange={(e) => setTexto(e.target.value)}
                   className={`${claseControl} w-full sm:w-72`}
                 />
+                {conSacramentos && quienes.length > 1 && (
+                  <select
+                    value={quien}
+                    onChange={(e) => setQuien(e.target.value)}
+                    className={`${claseControl} w-full sm:w-auto`}
+                    aria-label="Participa como"
+                  >
+                    <option value="">Participa como: todos</option>
+                    {quienes.map((q) => (
+                      <option key={q} value={q}>
+                        {q}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {conSacramentos && (
+                  <select
+                    value={sacramento ?? ""}
+                    onChange={(e) =>
+                      setSacramento(
+                        e.target.value === "" ? null : Number(e.target.value),
+                      )
+                    }
+                    className={`${claseControl} w-full sm:w-auto`}
+                    aria-label="Sacramento"
+                  >
+                    <option value="">Sacramento: cualquiera</option>
+                    {columnasSacramento.map((i) => (
+                      <option key={i} value={i}>
+                        {reporte.columnas[i].etiqueta}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {conSacramentos && sacramento !== null && (
+                  <select
+                    value={loTiene}
+                    onChange={(e) => setLoTiene(e.target.value)}
+                    className={`${claseControl} w-full sm:w-auto`}
+                    aria-label="Si lo tiene"
+                  >
+                    <option value="Sí">Lo tiene</option>
+                    <option value="No">No lo tiene</option>
+                  </select>
+                )}
                 <span className={claseVacio}>
                   {filas.length === 1 ? "1 fila" : `${filas.length} filas`}
                 </span>
@@ -248,6 +331,19 @@ export default function Reportes() {
                   )}
                 </div>
               </div>
+
+              {conSacramentos && (
+                <ResumenSacramentos
+                  columnas={reporte.columnas}
+                  filas={filas}
+                  elegido={loTiene === "Sí" ? sacramento : null}
+                  onElegir={(i) => {
+                    setSacramento(i);
+                    setLoTiene("Sí");
+                  }}
+                  titulo={datos.retiro.etiqueta}
+                />
+              )}
 
               {filas.length === 0 ? (
                 <p className={claseVacio}>

@@ -2411,7 +2411,9 @@ class ReportesRetiroTests(Base):
         self.assertEqual(self.reporte("areas")[0][:3], ["Cocina", "Sí", "Luis Gil"])
         self.assertEqual(self.reporte("invitaron"), [["Luis Gil", 1, "Ana Pérez"]])
         self.assertEqual([f[0] for f in self.reporte("cumpleanos")], ["Ana Pérez"])
-        self.assertEqual(self.reporte("sacramentos")[0][:2], ["Ana Pérez", "Sí"])
+        # Caminantes y servidores, cada uno con cómo participa.
+        self.assertEqual([f[:3] for f in self.reporte("sacramentos")],
+                         [["Ana Pérez", "Caminante", "Sí"], ["Luis Gil", "Servidor", "No"]])
         self.assertEqual([f[0] for f in self.reporte("incompletos")], ["Marta"])
         self.assertEqual([(f[0], f[5]) for f in self.reporte("pendientes")],
                          [("Ana Pérez", 100.0), ("Marta", 100.0)])

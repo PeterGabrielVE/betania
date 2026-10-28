@@ -434,6 +434,8 @@ export type ColumnaReporte = {
   etiqueta: string;
   tipo: "texto" | "numero" | "dinero" | "fecha" | "telefono";
   total: boolean; // se suma al pie
+  // Columnas que la pantalla cuenta y grafica ("sacramento": "Sí" o "No").
+  grupo?: string;
 };
 export type Reportes = {
   catalogo: { clave: string; titulo: string; descripcion: string }[];

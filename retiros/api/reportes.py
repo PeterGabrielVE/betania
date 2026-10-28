@@ -29,8 +29,13 @@ from .permisos import permiso, ve_sensibles
 SI_NO = {True: "Sí", False: "No"}
 
 
-def col(etiqueta, tipo="texto", total=False):
-    return {"etiqueta": etiqueta, "tipo": tipo, "total": total}
+def col(etiqueta, tipo="texto", total=False, grupo=""):
+    """`grupo` junta columnas que la pantalla cuenta y grafica (p. ej. los
+    sacramentos, que valen "Sí" o "No")."""
+    datos = {"etiqueta": etiqueta, "tipo": tipo, "total": total}
+    if grupo:
+        datos["grupo"] = grupo
+    return datos
 
 
 def _vigentes(retiro):
@@ -202,13 +207,22 @@ SACRAMENTOS = [("bautismo", "Bautismo"), ("primera_comunion", "Primera comunión
                ("orden_sacerdotal", "Orden sacerdotal"), ("uncion", "Unción")]
 
 
-def _sacramentos(retiro):
+def _sacramentos(retiro, con_equipo):
+    """Qué sacramentos ha recibido cada caminante y, si se ve el equipo, cada
+    servidor (los líderes ocultos, como tales)."""
+    personas = [(i.persona, "Caminante") for i in _vigentes(retiro)]
+    if con_equipo:
+        personas += [(p.persona, "Líder oculto" if p.lider_oculto else p.get_tipo_display())
+                     for p in _equipo(retiro)]
     filas = []
-    for i in _vigentes(retiro):
-        datos = i.persona.datos_sensibles or {}
-        filas.append([i.persona.nombre, *(SI_NO[bool(datos.get(c))] for c, _ in SACRAMENTOS),
+    for persona, como in personas:
+        datos = persona.datos_sensibles or {}
+        filas.append([persona.nombre, como,
+                      *(SI_NO[bool(datos.get(c))] for c, _ in SACRAMENTOS),
                       _texto(datos, "parroquia_asiste")])
-    return ([col("Caminante"), *(col(e) for _, e in SACRAMENTOS),
+    filas.sort(key=lambda f: f[0].lower())
+    return ([col("Nombre"), col("Participa como"),
+             *(col(e, grupo="sacramento") for _, e in SACRAMENTOS),
              col("Parroquia a la que asiste")], filas)
 
 
@@ -241,6 +255,8 @@ class Reporte:
     generar: Callable  # (retiro, sensibles) -> (columnas, filas)
     requiere: tuple = (Inscripcion,)  # modelos cuyo permiso 'view' hace falta
     sensible: bool = False
+    # generar recibe además al usuario (para lo que depende de sus permisos).
+    con_usuario: bool = False
 
 
 def _sin_sensibles(funcion):
@@ -274,9 +290,12 @@ REPORTES = [
     Reporte("cumpleanos", "Cumpleaños del mes del retiro",
             "Caminantes y servidores que cumplen años ese mes, y si es durante el retiro.",
             _sin_sensibles(_cumpleanos), requiere=(Inscripcion, Participacion)),
-    Reporte("sacramentos", "Sacramentos de los caminantes",
-            "Qué sacramentos ha recibido cada caminante y a qué parroquia asiste.",
-            _sin_sensibles(_sacramentos), sensible=True),
+    Reporte("sacramentos", "Sacramentos",
+            "Qué sacramentos ha recibido cada caminante y servidor, cuántos tiene cada uno "
+            "y a qué parroquia asiste, con gráficas.",
+            lambda retiro, sensibles, user: _sacramentos(
+                retiro, con_equipo=user.has_perm(permiso(Participacion, "view"))),
+            sensible=True, con_usuario=True),
     Reporte("incompletos", "Datos incompletos",
             "Caminantes sin cédula, celular, fecha de nacimiento, familiar de contacto o "
             "autorización de datos.", _incompletos),
@@ -313,7 +332,8 @@ def reportes(request):
     if clave and elegido is None:
         return Response({"detail": "Ese reporte no existe o no tienes acceso."}, status=404)
     if elegido and retiro:
-        columnas, filas = elegido.generar(retiro, sensibles)
+        columnas, filas = (elegido.generar(retiro, sensibles, user) if elegido.con_usuario
+                           else elegido.generar(retiro, sensibles))
         datos["reporte"] = {"clave": elegido.clave, "titulo": elegido.titulo,
                             "columnas": columnas, "filas": filas}
     return Response(datos)
