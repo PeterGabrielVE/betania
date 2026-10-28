@@ -16,6 +16,8 @@ import {
   claseTarjeta,
 } from "@/components/modulos/estilos";
 import BotonesDescarga from "@/components/modulos/BotonesDescarga";
+import EncabezadoOrden from "@/components/modulos/EncabezadoOrden";
+import { ordenarFilas } from "@/components/modulos/ordenarFilas";
 import Paginacion from "@/components/modulos/Paginacion";
 import SelectorColumnas from "@/components/modulos/SelectorColumnas";
 import { useColumnas, type DefColumna } from "@/components/modulos/useColumnas";
@@ -513,7 +515,10 @@ function Caminantes({
         }))
       : []),
   ];
-  const { ve, selector } = useColumnas("panel_caminantes", definidas);
+  const { ve, selector, orden, ordenar } = useColumnas(
+    "panel_caminantes",
+    definidas,
+  );
   const columnas = definidas.filter((c) => ve(c.clave));
 
   if (filas.length === 0 && lideres.length === 0) {
@@ -544,9 +549,14 @@ function Caminantes({
           .map((l) => ({ lider: true as const, l }))),
   ].sort((a, b) => nombreRenglon(a).localeCompare(nombreRenglon(b), "es"));
   const totalLideres = visibles.filter((r) => r.lider).length;
+  // Con una columna elegida, por ella (si no, por nombre).
+  const ordenadas = ordenarFilas(visibles, orden, (r, clave) => {
+    if (r.lider) return valorLider(clave, r.l);
+    return definidas.find((c) => c.clave === clave)?.valor(r.f) ?? null;
+  });
   const { pagina, hayPaginas, paginacion } = paginas.de(
-    visibles,
-    `${elegido.valor}|${buscado}|${mesa}`,
+    ordenadas,
+    `${elegido.valor}|${buscado}|${mesa}|${orden}`,
   );
 
   const alternar = (id: string) =>
@@ -567,7 +577,7 @@ function Caminantes({
       .filter(Boolean)
       .join(" · "),
     columnas: columnas.map((c) => c.etiqueta),
-    filas: visibles.map((r) =>
+    filas: ordenadas.map((r) =>
       columnas.map((c) => (r.lider ? valorLider(c.clave, r.l) : c.valor(r.f))),
     ),
   });
@@ -650,7 +660,12 @@ function Caminantes({
               <TableRow>
                 {columnas.map((c) => (
                   <TableCell key={c.clave} isHeader className={claseEncabezado}>
-                    {c.etiqueta}
+                    <EncabezadoOrden
+                      etiqueta={c.etiqueta}
+                      clave={c.clave}
+                      orden={orden}
+                      onOrdenar={ordenar}
+                    />
                   </TableCell>
                 ))}
                 {conFicha && <TableCell isHeader className={claseEncabezado} />}
@@ -870,19 +885,26 @@ function Servidores({
         ] satisfies ColumnaPanel<FilaServidorPanel>[])
       : []),
   ];
-  const { ve, selector } = useColumnas("panel_servidores", definidas);
+  const { ve, selector, orden, ordenar } = useColumnas(
+    "panel_servidores",
+    definidas,
+  );
   const columnas = definidas.filter((c) => ve(c.clave));
 
   if (servidores.filas.length === 0) {
     return <p className={claseVacio}>Todavía no hay servidores registrados.</p>;
   }
-  const visibles = servidores.filas.filter(
-    (f) =>
-      (!estado || f.estado === estado) && (!soloDeben || (f.saldo ?? 0) > 0),
+  const visibles = ordenarFilas(
+    servidores.filas.filter(
+      (f) =>
+        (!estado || f.estado === estado) && (!soloDeben || (f.saldo ?? 0) > 0),
+    ),
+    orden,
+    (f, clave) => definidas.find((c) => c.clave === clave)?.valor(f) ?? null,
   );
   const { pagina, hayPaginas, paginacion } = paginas.de(
     visibles,
-    `${estado}|${soloDeben}`,
+    `${estado}|${soloDeben}|${orden}`,
   );
   const tablaDescarga = () => ({
     titulo: `Servidores · ${retiro}`,
@@ -943,7 +965,12 @@ function Servidores({
               <TableRow>
                 {columnas.map((c) => (
                   <TableCell key={c.clave} isHeader className={claseEncabezado}>
-                    {c.etiqueta}
+                    <EncabezadoOrden
+                      etiqueta={c.etiqueta}
+                      clave={c.clave}
+                      orden={orden}
+                      onOrdenar={ordenar}
+                    />
                   </TableCell>
                 ))}
               </TableRow>

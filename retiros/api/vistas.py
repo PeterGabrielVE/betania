@@ -7,9 +7,9 @@ import copy
 import json
 from datetime import date, datetime
 
-from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.exceptions import FieldDoesNotExist, ValidationError as DjangoValidationError
 from django.db import IntegrityError, models, transaction
-from django.db.models import ProtectedError
+from django.db.models import F, ProtectedError
 from django.utils.functional import cached_property
 from django.utils.text import capfirst
 from rest_framework import filters, routers, serializers, status, viewsets
@@ -20,7 +20,7 @@ from rest_framework.response import Response
 from django.conf import settings
 
 from ..acceso import ambito_fijo
-from ..models import Persona
+from ..models import Persona, Retiro
 from ..exportar import FORMATOS, MAX_FILAS, Dinero, descargar
 from .sesion import _preferencias_json
 from .modulos import AYUDAS, ETIQUETAS, MODULOS, POR_MODELO
@@ -96,6 +96,33 @@ def _filtro(modulo, nombre):
     return info
 
 
+def campos_orden(modulo, nombre):
+    """Por qué campos se ordena una columna de la tabla ([] si no se puede):
+    una relación, por el nombre de lo relacionado (un retiro, por su fecha)."""
+    if nombre in modulo.ordenar_por:
+        campos = modulo.ordenar_por[nombre]
+        return [campos] if isinstance(campos, str) else list(campos)
+    if nombre in modulo.extras:
+        return [nombre] if nombre in modulo.anotaciones else []
+    try:
+        f = modulo.campo(nombre)
+    except FieldDoesNotExist:
+        return []
+    if isinstance(f, models.JSONField):
+        return []
+    if not f.is_relation:
+        return [nombre]
+    relacionado = f.related_model
+    nombres = {c.name for c in relacionado._meta.get_fields()}
+    if relacionado is Retiro:
+        return [f"{nombre}__fecha_inicio"]
+    if "nombre" in nombres:
+        return [f"{nombre}__nombre"]
+    if "persona" in nombres:
+        return [f"{nombre}__persona__nombre"]
+    return []
+
+
 def columnas_lista(modulo, user):
     """Las columnas de la tabla de un módulo que este usuario puede ver: las de
     siempre y, con "opcional", los demás campos del formulario que puede
@@ -106,6 +133,8 @@ def columnas_lista(modulo, user):
     columnas += [{**_describir(modulo, n), "opcional": True} for n in modulo.campos
                  if n not in modulo.lista and n not in modulo.sensibles
                  and _tipo(modulo.campo(n)) != "json"]
+    for columna in columnas:
+        columna["ordenable"] = bool(campos_orden(modulo, columna["nombre"]))
     if vista != settings.MONEDA:
         for columna in columnas:
             if columna["nombre"] == "monto_base":
@@ -218,7 +247,12 @@ class ModuloViewSet(viewsets.ModelViewSet):
             if nombre in fijos:
                 continue
             valor = self.request.query_params.get(nombre)
-            if valor:
+            # Los sí/no llegan como "true"/"false" (ver _filtro), que Django
+            # no acepta tal cual.
+            if valor in ("true", "false") and isinstance(
+                    self.modulo.campo(nombre), models.BooleanField):
+                valor = valor == "true"
+            if valor not in ("", None):
                 try:
                     qs = qs.filter(**{nombre: valor})
                 except (ValueError, DjangoValidationError):
@@ -236,6 +270,17 @@ class ModuloViewSet(viewsets.ModelViewSet):
                     except ValueError:
                         return qs.none()
                     qs = qs.filter(**{f"{self.modulo.rango_fecha}__date__{operador}": dia})
+        # ?orden=columna (ascendente) o -columna (descendente); los vacíos, al final.
+        orden = self.request.query_params.get("orden", "")
+        nombre = orden.removeprefix("-")
+        if nombre in (*self.modulo.lista, *self.modulo.campos):
+            campos = campos_orden(self.modulo, nombre)
+            if campos:
+                desc = orden.startswith("-")
+                qs = qs.order_by(
+                    *(F(c).desc(nulls_last=True) if desc else F(c).asc(nulls_last=True)
+                      for c in campos),
+                    *self.modulo.orden, "pk")
         return qs
 
     @action(detail=False, methods=["get"])

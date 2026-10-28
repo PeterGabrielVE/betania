@@ -25,6 +25,7 @@ import DialogoListado from "@/components/ocr/DialogoListado";
 import DialogoNuevaPersona from "@/components/modulos/DialogoNuevaPersona";
 import { opcionesNuevaPersona } from "@/components/modulos/nuevaPersona";
 import { celda } from "@/components/modulos/celda";
+import EncabezadoOrden from "@/components/modulos/EncabezadoOrden";
 import { DialogoCancelar } from "@/components/retiros/AccionesAsistencia";
 import {
   claseFilaLider,
@@ -94,6 +95,9 @@ type Acciones = {
   onPermisos?: (fila: Registro) => void;
   // Caminantes: abre el formulario del servidor que va como líder oculto.
   onEditarLider?: (fila: Registro) => void;
+  // Columna por la que se ordena ("-": descendente) y cómo cambiarla.
+  orden: string;
+  onOrdenar: (clave: string) => void;
   // Caminantes y servidores: casillas para confirmar o cancelar varios.
   seleccion?: {
     ids: Set<string>;
@@ -330,7 +334,16 @@ function TablaRegistros({
                 isHeader
                 className={claseEncabezado}
               >
-                {columna.etiqueta}
+                {columna.ordenable ? (
+                  <EncabezadoOrden
+                    etiqueta={columna.etiqueta}
+                    clave={columna.nombre}
+                    orden={acciones.orden}
+                    onOrdenar={acciones.onOrdenar}
+                  />
+                ) : (
+                  columna.etiqueta
+                )}
               </TableCell>
             ))}
             {conAcciones && (
@@ -753,12 +766,18 @@ function Listado({ modulo }: { modulo: Modulo }) {
     })),
   );
   const columnas = posibles.filter((c) => elegidas.ve(c.nombre));
+  const orden = columnas.some(
+    (c) => c.ordenable && c.nombre === elegidas.orden.replace(/^-/, ""),
+  )
+    ? elegidas.orden
+    : "";
 
   const params = new URLSearchParams({
     page: String(consulta.pagina),
     page_size: String(porPagina),
   });
   if (consulta.busqueda) params.set("search", consulta.busqueda);
+  if (orden) params.set("orden", orden);
   for (const [nombre, filtro] of Object.entries(filtros)) {
     if (filtro.valor) params.set(nombre, filtro.valor);
   }
@@ -881,6 +900,11 @@ function Listado({ modulo }: { modulo: Modulo }) {
 
   const acciones = {
     modulo,
+    orden,
+    onOrdenar: (clave: string) => {
+      elegidas.ordenar(clave);
+      setConsulta((c) => ({ ...c, pagina: 1 }));
+    },
     onEditar: (fila: Registro) =>
       EDICION_POR_PASOS[modulo.slug]
         ? navigate(rutaDeEdicion(modulo.slug, fila.id, `/${modulo.slug}`))

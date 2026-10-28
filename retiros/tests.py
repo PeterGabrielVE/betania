@@ -2343,6 +2343,15 @@ class LideresOcultosTests(Base):
         r = self.client.get("/api/participaciones/?lider_oculto=true&mesa=2")
         self.assertEqual([f["persona_etiqueta"] for f in r.json()["results"]], ["Luis Gil"])
 
+    def test_el_lider_oculto_duerme_en_la_casa(self):
+        lider = Participacion.objects.create(
+            retiro=self.retiro, persona=self.persona("Rita Paz"),
+            tipo=Participacion.Tipo.SERVIDOR, lider_oculto=True, duerme_en_casa=False,
+            cama="9")
+        lider.refresh_from_db()
+        self.assertTrue(lider.duerme_en_casa)
+        self.assertEqual(lider.cama, "9")
+
     def test_sin_ser_lider_oculto_no_tiene_mesa(self):
         self.lider.lider_oculto = False
         self.lider.save()
@@ -2475,3 +2484,49 @@ class ColumnasPorUsuarioTests(Base):
         # La pantalla manda las suyas: tienen prioridad.
         self.assertEqual(self.encabezado(f"{ruta}&columnas=persona,cama"),
                          ["Persona", "Número de cama"])
+
+
+class OrdenTablasTests(Base):
+    """Cada tabla se ordena por una columna, ascendente o descendente, y el orden
+    queda en las preferencias del usuario."""
+
+    def setUp(self):
+        super().setUp()
+        for nombre, mesa in (("Beto Paz", "10"), ("Ana Pérez", "2"), ("Carla Ruiz", "")):
+            Inscripcion.objects.create(retiro=self.retiro, persona=self.persona(nombre),
+                                       mesa=mesa)
+
+    def nombres(self, orden):
+        r = self.client.get(f"/api/inscripciones/?orden={orden}")
+        self.assertEqual(r.status_code, 200, r.content)
+        return [f["persona_etiqueta"] for f in r.json()["results"]]
+
+    def test_ordena_por_columna_en_ambos_sentidos(self):
+        self.assertEqual(self.nombres("persona"), ["Ana Pérez", "Beto Paz", "Carla Ruiz"])
+        self.assertEqual(self.nombres("-persona"), ["Carla Ruiz", "Beto Paz", "Ana Pérez"])
+        # Los vacíos van al final en los dos sentidos.
+        self.assertEqual(self.nombres("-mesa")[-1], "Carla Ruiz")
+        self.assertEqual(self.nombres("mesa")[-1], "Carla Ruiz")
+        # Una columna que no existe se ignora.
+        self.assertEqual(len(self.nombres("no_existe")), 3)
+
+    def test_el_esquema_dice_que_columnas_se_ordenan(self):
+        modulo = next(m for m in self.client.get("/api/esquema/").json()
+                      if m["slug"] == "inscripciones")
+        ordenables = {c["nombre"]: c["ordenable"] for c in modulo["lista"]}
+        self.assertTrue(ordenables["persona"])
+        self.assertTrue(ordenables["telefono"])
+        self.assertFalse(ordenables["estado_pago"])
+
+    def test_se_guarda_en_las_preferencias(self):
+        r = self.client.patch(
+            "/api/auth/preferencias/",
+            {"columnas": {"inscripciones": {"ocultas": [], "agregadas": [], "orden": "-mesa"}}},
+            content_type="application/json")
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.json()["preferencias"]["columnas"]["inscripciones"]["orden"], "-mesa")
+        r = self.client.patch(
+            "/api/auth/preferencias/",
+            {"columnas": {"inscripciones": {"ocultas": [], "agregadas": [], "orden": "a b"}}},
+            content_type="application/json")
+        self.assertEqual(r.status_code, 400)

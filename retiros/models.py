@@ -883,7 +883,10 @@ class Participacion(models.Model):
     def save(self, *args, **kwargs):
         if self.estado != self.Estado.CANCELADO:
             self.motivo_cancelacion = ""
-        if not self.lider_oculto:
+        if self.lider_oculto:
+            # Va entre los caminantes: duerme en la casa, como ellos.
+            self.duerme_en_casa = True
+        else:
             self.mesa = ""
         super().save(*args, **kwargs)
 

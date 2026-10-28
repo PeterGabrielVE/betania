@@ -62,6 +62,10 @@ class Modulo:
     # [{columna: valor como lo da el serializer}] (p. ej. los líderes ocultos
     # en Caminantes).
     anexo: Callable | None = None
+    # Columnas calculadas que se pueden ordenar: extra -> campo (o campos) del
+    # modelo por el que se ordena. Los campos del modelo y las anotaciones se
+    # ordenan solos.
+    ordenar_por: dict = field(default_factory=dict)
 
     def campo(self, nombre):
         return self.modelo._meta.get_field(nombre)

@@ -93,6 +93,7 @@ MODULOS = [
             "inscritos": Count("inscripciones", filter=INSCRITAS),
             "confirmados": Count("inscripciones", filter=CONFIRMADAS),
         },
+        ordenar_por={"nombre": ["tipo__nombre", "edicion"]},
         extras={
             # "Emaús hombres #12": tipo y edición juntos, con lo que se reconoce.
             "nombre": Extra("Retiro", "texto", str),
@@ -135,6 +136,7 @@ MODULOS = [
         filtros=["parroquia"],
         avanzados=F.PERSONAS,
         orden=["nombre"],
+        ordenar_por={"documento_completo": "documento"},
         relacionados=["parroquia", "pais", "estado", "ciudad"],
         sensibles=["datos_sensibles"],
         extras={
@@ -187,6 +189,7 @@ MODULOS = [
         avanzados=F.CAMINANTES,
         anexo=_lideres_ocultos,
         orden=["-creado"],
+        ordenar_por={"telefono": "persona__telefono"},
         relacionados=["persona", "padrino", "retiro__tipo"],
         sensibles=["salud_alimentacion", "contacto_emergencia"],
         anotaciones={"total_pagado": Sum("pagos__monto_base")},
@@ -260,6 +263,7 @@ MODULOS = [
             "contacto_emergencia": _CONTACTOS,
         },
         orden=["persona__nombre"],
+        ordenar_por={"documento": "persona__documento", "telefono": "persona__telefono"},
         relacionados=["persona", "retiro__tipo"],
     ),
     Modulo(
@@ -280,6 +284,7 @@ MODULOS = [
         lista=["persona", "cuenta_acceso", "activo"],
         buscar=["persona__nombre", "cuenta__username"],
         orden=["persona__nombre"],
+        ordenar_por={"cuenta_acceso": "cuenta__username"},
         relacionados=["persona", "cuenta"],
         extras={
             # El nombre con que entra; la cuenta se crea con el botón de la llave.

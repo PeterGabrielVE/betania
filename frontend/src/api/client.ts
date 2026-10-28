@@ -239,7 +239,11 @@ export type Preferencias = {
   // Columnas que ocultó o agregó en cada tabla (ver useColumnas).
   columnas: Record<string, EleccionColumnas>;
 };
-export type EleccionColumnas = { ocultas: string[]; agregadas: string[] };
+export type EleccionColumnas = {
+  ocultas: string[];
+  agregadas: string[];
+  orden?: string; // columna por la que se ordena; "-columna": descendente
+};
 
 export type Pagina<T> = {
   count: number;
@@ -272,6 +276,7 @@ export type Campo = {
   requerido?: boolean;
   opciones?: { valor: string; etiqueta: string }[]; // tipo "opcion"
   recurso?: string; // tipo "fk": slug del módulo relacionado
+  ordenable?: boolean; // columna de tabla: se puede ordenar por ella
   seccion?: string; // título bajo el que va en el formulario
   ayuda?: string; // texto bajo el control
   // tipo "json": datos que el formulario pide por separado y guarda en ese JSON

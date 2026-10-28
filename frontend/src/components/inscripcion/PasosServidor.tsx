@@ -33,8 +33,12 @@ export function PasoIdentificacionServidor({
   // Editando: la persona ya está elegida (no se busca otra).
   edicion?: boolean;
 }) {
-  const { register, control } = useFormContext();
+  const { register, control, setValue } = useFormContext();
   const liderOculto = useWatch({ control, name: "lider_oculto" }) as boolean;
+  // El líder oculto duerme en la casa, con los caminantes.
+  useEffect(() => {
+    if (liderOculto) setValue("duerme", "si");
+  }, [liderOculto, setValue]);
   return (
     <div className="space-y-6">
       <Grupo>
@@ -62,14 +66,20 @@ export function PasoIdentificacionServidor({
         descripcion="Va entre los caminantes como uno más: sale en sus listados, pero sigue en el equipo y paga la cuota de servidor."
       />
       {liderOculto && (
-        <div className="max-w-xs">
+        <Grupo>
           <Texto
             nombre="mesa"
             etiqueta={E.mesa}
             placeholder="Ej.: 3"
             ayuda="La mesa de caminantes en que va. Opcional."
           />
-        </div>
+          <Texto
+            nombre="cama"
+            etiqueta={E.cama}
+            placeholder="Ej.: 12"
+            ayuda="Duerme en la casa, con los caminantes. Opcional."
+          />
+        </Grupo>
       )}
       <Grupo titulo="Documento de identidad">
         <Opciones
@@ -359,6 +369,7 @@ export function PasoDisponibilidad() {
   const { register, control, setValue, trigger, formState } = useFormContext();
   const turnos = (useWatch({ control, name: "turnos" }) as string[]) ?? [];
   const duerme = useWatch({ control, name: "duerme" }) as string;
+  const liderOculto = useWatch({ control, name: "lider_oculto" }) as boolean;
   // Con un aviso a la vista, se recalcula al cambiar.
   const revalidar = (campo: string) => {
     if (get(formState.errors, campo)) trigger(campo);
@@ -371,37 +382,46 @@ export function PasoDisponibilidad() {
 
   return (
     <div className="space-y-8">
-      <Pregunta titulo={E.duerme} obligatorio nombre="duerme">
-        <div className="flex gap-6">
-          {[
-            ["si", "Sí"],
-            ["no", "No"],
-          ].map(([valor, etiqueta]) => (
-            <label
-              key={valor}
-              className="flex cursor-pointer items-center gap-2 text-sm text-gray-800 dark:text-white/90"
-            >
-              <input
-                type="radio"
-                value={valor}
-                className="size-4 border-gray-300 text-brand-500"
-                {...register("duerme", { onChange: () => revalidar("duerme") })}
-              />
-              {etiqueta}
-            </label>
-          ))}
-        </div>
-        {duerme === "si" && (
-          <div className="mt-4 max-w-xs">
-            <Texto
-              nombre="cama"
-              etiqueta={E.cama}
-              placeholder="Ej.: 12"
-              ayuda="Opcional. Se puede asignar después."
-            />
+      {liderOculto ? (
+        <p className="rounded-lg bg-brand-25 px-4 py-3 text-theme-sm text-brand-600 dark:bg-brand-500/10 dark:text-brand-400">
+          Como líder oculto duerme en la casa de retiro, con los caminantes. Su
+          mesa y su cama se indican en el paso Identificación.
+        </p>
+      ) : (
+        <Pregunta titulo={E.duerme} obligatorio nombre="duerme">
+          <div className="flex gap-6">
+            {[
+              ["si", "Sí"],
+              ["no", "No"],
+            ].map(([valor, etiqueta]) => (
+              <label
+                key={valor}
+                className="flex cursor-pointer items-center gap-2 text-sm text-gray-800 dark:text-white/90"
+              >
+                <input
+                  type="radio"
+                  value={valor}
+                  className="size-4 border-gray-300 text-brand-500"
+                  {...register("duerme", {
+                    onChange: () => revalidar("duerme"),
+                  })}
+                />
+                {etiqueta}
+              </label>
+            ))}
           </div>
-        )}
-      </Pregunta>
+          {duerme === "si" && (
+            <div className="mt-4 max-w-xs">
+              <Texto
+                nombre="cama"
+                etiqueta={E.cama}
+                placeholder="Ej.: 12"
+                ayuda="Opcional. Se puede asignar después."
+              />
+            </div>
+          )}
+        </Pregunta>
+      )}
 
       <Pregunta
         titulo="Marca los turnos del fin de semana en que puede servir"

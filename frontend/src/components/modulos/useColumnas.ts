@@ -1,6 +1,7 @@
 // Qué columnas ve cada usuario en una tabla: oculta las que no le sirven y
-// agrega las opcionales. Queda guardado en sus preferencias (en cualquier
-// equipo) y las descargas llevan las mismas columnas.
+// agrega las opcionales; y por cuál ordena (ascendente o descendente). Queda
+// guardado en sus preferencias (en cualquier equipo) y las descargas llevan
+// las mismas columnas y el mismo orden.
 import type { EleccionColumnas } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
 import { useState } from "react";
@@ -30,6 +31,8 @@ export function useColumnas(tabla: string, defs: DefColumna[]) {
     : null;
   const ocultas = eleccion?.ocultas ?? [];
   const agregadas = eleccion?.agregadas ?? [];
+  // Solo vale si la columna sigue en la tabla y a la vista.
+  const guardado = eleccion?.orden ?? "";
 
   const elegida = (d: DefColumna) =>
     d.fija ||
@@ -40,12 +43,24 @@ export function useColumnas(tabla: string, defs: DefColumna[]) {
     return !d || elegida(d);
   };
   const visibles = defs.filter(elegida);
+  const orden = visibles.some((d) => d.clave === guardado.replace(/^-/, ""))
+    ? guardado
+    : "";
 
   const guardar = (nueva: EleccionColumnas | null) => {
     setError("");
-    guardarColumnas(tabla, nueva, eleccion).catch((e: Error) =>
+    const vacia =
+      !nueva ||
+      (!nueva.ocultas.length && !nueva.agregadas.length && !nueva.orden);
+    guardarColumnas(tabla, vacia ? null : nueva, eleccion).catch((e: Error) =>
       setError(`No se guardó: ${e.message}`),
     );
+  };
+  // Un clic: ascendente; otro: descendente; otro: el orden de siempre.
+  const ordenar = (clave: string) => {
+    const nuevo =
+      orden === clave ? `-${clave}` : orden === `-${clave}` ? "" : clave;
+    guardar({ ocultas, agregadas, ...(nuevo && { orden: nuevo }) });
   };
   const cambiar = (clave: string, ver: boolean) => {
     const d = defs.find((x) => x.clave === clave);
@@ -56,12 +71,14 @@ export function useColumnas(tabla: string, defs: DefColumna[]) {
     const nueva = d.opcional
       ? { ocultas, agregadas: ver ? [...agregadas, clave] : quitar(agregadas) }
       : { ocultas: ver ? quitar(ocultas) : [...ocultas, clave], agregadas };
-    guardar(nueva.ocultas.length || nueva.agregadas.length ? nueva : null);
+    guardar({ ...nueva, ...(guardado && { orden: guardado }) });
   };
 
   return {
     ve,
     visibles,
+    orden,
+    ordenar,
     selector: {
       defs,
       elegida,

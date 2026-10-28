@@ -150,11 +150,13 @@ def iniciar_sesion(request):
 
 _CLAVE_TABLA = re.compile(r"[a-z0-9_]{1,60}")
 _CLAVE_COLUMNA = re.compile(r"[a-z0-9_]{1,60}")
+_ORDEN = re.compile(r"-?[a-z0-9_]{1,60}")
 
 
 def _columnas_validas(columnas):
-    """{tabla: {"ocultas": [...], "agregadas": [...]} | None}, sin repetidas;
-    None si no tiene esa forma."""
+    """{tabla: {"ocultas": [...], "agregadas": [...], "orden": "-columna"} |
+    None}, sin repetidas; None si no tiene esa forma. "orden" es opcional:
+    la columna por la que se ordena ("-": descendente)."""
     if not isinstance(columnas, dict) or len(columnas) > 100:
         return None
     limpias = {}
@@ -164,9 +166,14 @@ def _columnas_validas(columnas):
         if eleccion is None:
             limpias[tabla] = None
             continue
-        if not isinstance(eleccion, dict) or set(eleccion) - {"ocultas", "agregadas"}:
+        if not isinstance(eleccion, dict) or set(eleccion) - {"ocultas", "agregadas", "orden"}:
             return None
         limpia = {}
+        orden = eleccion.get("orden", "")
+        if not (isinstance(orden, str) and (orden == "" or _ORDEN.fullmatch(orden))):
+            return None
+        if orden:
+            limpia["orden"] = orden
         for lado in ("ocultas", "agregadas"):
             lista = eleccion.get(lado, [])
             if not (isinstance(lista, list) and len(lista) <= 60 and all(
