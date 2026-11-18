@@ -146,6 +146,64 @@ revisa la política.
 Cada `git push` a `main` vuelve a desplegar; las migraciones nuevas se aplican
 solas al arrancar.
 
+### Publicar gratis en Render + Neon
+
+Render corre la app con el `Dockerfile` (plan *Free*) y Neon da la base
+PostgreSQL (plan *Free*, sin vencimiento). La base gratis de Render no conviene:
+se borra a los 30 días. Límites a tener en cuenta:
+
+- Render *Free*: 512 MB de RAM y CPU mínima. Por eso `render.yaml` deja un solo
+  worker y un timeout de 120 s. La app se duerme tras 15 minutos sin visitas
+  (lo evita el workflow de la sección siguiente) y tiene 750 horas al mes, que
+  alcanzan para un servicio encendido todo el mes.
+- Neon *Free*: 0,5 GB de datos y cómputo que se suspende cuando no hay uso
+  (despierta en menos de un segundo).
+
+1. **Base en Neon.** En https://neon.tech, *New Project* con región
+   *AWS US East (N. Virginia)* y Postgres 16. En *Connect*, **desactiva
+   *Connection pooling*** y copia la URL (el host no debe llevar `-pooler`).
+   El middleware fija el contexto del RLS por sesión, y con el pooler ese
+   contexto podría pasar de un usuario a otro.
+2. **Rol de la app.** En Neon > *SQL Editor*, con otra clave:
+
+   ```sql
+   CREATE ROLE betania_app LOGIN PASSWORD 'cambia-esta-clave';
+   GRANT CONNECT ON DATABASE neondb TO betania_app;
+   GRANT USAGE ON SCHEMA public TO betania_app;
+   GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO betania_app;
+   GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO betania_app;
+   ALTER DEFAULT PRIVILEGES FOR ROLE neondb_owner IN SCHEMA public
+     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO betania_app;
+   ALTER DEFAULT PRIVILEGES FOR ROLE neondb_owner IN SCHEMA public
+     GRANT USAGE, SELECT ON SEQUENCES TO betania_app;
+   ```
+
+   Los `ALTER DEFAULT PRIVILEGES` cubren las tablas que crean las migraciones,
+   así que puede hacerse antes del primer despliegue.
+3. **App en Render.** En https://render.com, *New > Blueprint* y elige este
+   repositorio: lee `render.yaml`. Te pedirá:
+
+   | Variable | Valor |
+   |---|---|
+   | `DATABASE_URL_ADMIN` | la URL directa de Neon (`neondb_owner`) |
+   | `DATABASE_URL` | la misma con `betania_app` y su clave |
+   | `DJANGO_SUPERUSER_USERNAME` / `_EMAIL` / `_PASSWORD` | tu cuenta; una clave fuerte |
+
+   `SECRET_KEY` la genera Render. El dominio `*.onrender.com` se acepta solo
+   (`RENDER_EXTERNAL_HOSTNAME`). Para un dominio propio, agrégalo en
+   `ALLOWED_HOSTS` y, con `https://`, en `CSRF_TRUSTED_ORIGINS`.
+4. **Comprobar.** En *Logs* deben aparecer los pasos del entrypoint y luego
+   gunicorn. Abre el dominio y entra con tu superusuario. El primer build tarda
+   varios minutos.
+5. **Después del primer arranque**, borra `DJANGO_SUPERUSER_PASSWORD` y pon
+   `DJANGO_CREATE_SUPERUSER=0`.
+6. **Mantenerla despierta:** crea la variable `URL_SERVIDOR` en GitHub (sección
+   siguiente) con `https://<tu-app>.onrender.com`.
+
+Cada `git push` a `main` vuelve a desplegar. Neon permite restaurar la base a un momento
+reciente (unas horas en el plan gratis). Para respaldos más largos, usa
+`pg_dump` con `DATABASE_URL_ADMIN` de vez en cuando.
+
 ### Mantener vivo el servidor
 
 - **Hosting gratuito que se duerme** (Render, Koyeb...): el workflow

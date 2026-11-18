@@ -15,6 +15,12 @@ ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").split(","
 CSRF_TRUSTED_ORIGINS = [
     o for o in os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",") if o
 ]
+# Render da el dominio público (*.onrender.com) en esta variable: se acepta solo,
+# sin tener que copiarlo a ALLOWED_HOSTS y CSRF_TRUSTED_ORIGINS.
+_HOST_RENDER = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+if _HOST_RENDER:
+    ALLOWED_HOSTS.append(_HOST_RENDER)
+    CSRF_TRUSTED_ORIGINS.append(f"https://{_HOST_RENDER}")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
