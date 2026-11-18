@@ -1,0 +1,50 @@
+# Blueprint de Render (plan gratuito): la app con el Dockerfile. La base va en
+# Neon (gratis y sin vencimiento); ver README, "Publicar gratis en Render + Neon".
+services:
+  - type: web
+    name: betania
+    runtime: docker
+    plan: free
+    region: virginia # cerca de Neon en AWS us-east-1
+    branch: main
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/salud/
+    autoDeploy: true
+    envVars:
+      # Conexiones DIRECTAS de Neon (sin "-pooler" en el host): ver README.
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_URL_ADMIN
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "0"
+      # El dominio *.onrender.com se agrega solo (RENDER_EXTERNAL_HOSTNAME);
+      # aquí van solo dominios propios, separados por comas.
+      - key: ALLOWED_HOSTS
+        value: localhost
+      - key: HTTPS
+        value: "1"
+      - key: PROXY_CONFIABLE
+        value: "1"
+      # 512 MB de RAM: un solo worker para que el OCR no la agote.
+      - key: WEB_CONCURRENCY
+        value: "1"
+      # CPU mínima: leer una planilla puede pasar de los 30 s por defecto.
+      - key: GUNICORN_CMD_ARGS
+        value: "--timeout 120"
+      - key: DJANGO_CREATE_SUPERUSER
+        value: "1"
+      - key: DJANGO_SUPERUSER_USERNAME
+        sync: false
+      - key: DJANGO_SUPERUSER_EMAIL
+        sync: false
+      - key: DJANGO_SUPERUSER_PASSWORD
+        sync: false
+      - key: TIME_ZONE
+        value: America/Caracas
+      - key: REGION
+        value: es-VE
+      - key: MONEDA
+        value: USD
