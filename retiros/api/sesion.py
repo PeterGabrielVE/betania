@@ -145,6 +145,8 @@ def iniciar_sesion(request):
         return JsonResponse({"detail": f"Usuario o contraseña incorrectos.{aviso}"},
                             status=400)
     login(request, user)
+    from ..middleware import fijar_contexto_rls
+    fijar_contexto_rls(request)
     return JsonResponse(_usuario_json(user))
 
 

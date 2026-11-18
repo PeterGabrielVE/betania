@@ -69,3 +69,12 @@ class RLSContextMiddleware:
             "1" if ve_finanzas(user) else "",
             "1" if ve_datos_sensibles(user) else "",
         )
+
+
+def fijar_contexto_rls(request):
+    """Actualiza las variables de sesión RLS en la conexión para el usuario autenticado de la petición."""
+    mw = RLSContextMiddleware(None)
+    contexto = mw._resolver(request)
+    request.rls_rol = contexto[0]
+    request.rls_sensibles = contexto[4] == "1"
+    RLSContextMiddleware._set(*contexto)
