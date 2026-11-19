@@ -700,8 +700,11 @@ export type FichaPersona = {
         motivo_cancelacion: string;
         padrino: string;
         padrino_id: string | null;
+        cama?: string;
+        mesa?: string;
+        notas?: string;
         salud?: Record<string, unknown>;
-        contacto?: Record<string, unknown>;
+        contactos?: Contacto[];
       } & PagoResumido)[]
     | null;
   servidor:

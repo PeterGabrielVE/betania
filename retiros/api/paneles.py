@@ -676,10 +676,13 @@ def _como_caminante(persona, con_pagos, sensibles):
             "motivo_cancelacion": i.motivo_cancelacion,
             "padrino": i.padrino.nombre if i.padrino_id else "",
             "padrino_id": i.padrino_id,
+            "cama": i.cama,
+            "mesa": i.mesa,
+            "notas": i.notas,
         }
         if sensibles:
             fila["salud"] = i.salud_alimentacion or {}
-            fila["contacto"] = i.contacto_emergencia or {}
+            fila["contactos"] = _contactos(i.contacto_emergencia)
         if con_pagos:
             pagado = i.pagado or 0
             cancelada = i.estado == Inscripcion.Estado.CANCELADA

@@ -331,18 +331,70 @@ export default function PersonaFicha() {
                       )}
                     </p>
                     <Pago fila={c} />
-                    {Boolean(
-                      c.salud?.tratamiento || c.salud?.regimen_alimenticio,
-                    ) && (
-                      <p className="text-theme-xs text-gray-500 dark:text-gray-400">
+                    {(Boolean(c.cama) || Boolean(c.mesa)) && (
+                      <p className="text-theme-xs text-gray-600 dark:text-gray-300">
                         {[
-                          c.salud?.tratamiento &&
-                            `Tratamiento: ${c.salud.tratamiento}`,
-                          c.salud?.regimen_alimenticio &&
-                            `Comida: ${c.salud.regimen_alimenticio}`,
+                          c.cama && `Cama ${c.cama}`,
+                          c.mesa && `Mesa ${c.mesa}`,
                         ]
                           .filter(Boolean)
                           .join(" · ")}
+                      </p>
+                    )}
+                    {Boolean(
+                      c.salud?.talla_camiseta ||
+                        c.salud?.condicion_medica ||
+                        c.salud?.tratamiento ||
+                        c.salud?.regimen_alimenticio ||
+                        c.salud?.requerimientos,
+                    ) && (
+                      <div className="rounded-lg bg-gray-50 p-2 text-theme-xs dark:bg-gray-800/60">
+                        <span className="font-medium text-gray-700 dark:text-gray-300">
+                          Salud:
+                        </span>{" "}
+                        <span className="text-gray-600 dark:text-gray-400">
+                          {[
+                            c.salud?.talla_camiseta &&
+                              `Camisa: ${c.salud.talla_camiseta}`,
+                            c.salud?.condicion_medica &&
+                              `Condición: ${c.salud.condicion_medica}`,
+                            c.salud?.tratamiento &&
+                              `Tratamiento: ${c.salud.tratamiento}`,
+                            c.salud?.regimen_alimenticio &&
+                              `Comida: ${c.salud.regimen_alimenticio}`,
+                            c.salud?.requerimientos &&
+                              `Requerimientos: ${c.salud.requerimientos}`,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </span>
+                      </div>
+                    )}
+                    {Boolean(c.contactos?.length) && (
+                      <div className="space-y-0.5 text-theme-xs text-gray-500 dark:text-gray-400">
+                        <span className="font-medium text-gray-700 dark:text-gray-300">
+                          Contacto{c.contactos!.length > 1 ? "s" : ""}:
+                        </span>
+                        <ul className="space-y-0.5 ps-1">
+                          {c.contactos!.map((cont, idx) => (
+                            <li key={idx}>
+                              {cont.nombre || "Sin nombre"}
+                              {cont.relacion && ` (${cont.relacion})`}
+                              {cont.telefono &&
+                                cont.telefono.split(" / ").map((t) => (
+                                  <span key={t}>
+                                    {" · "}
+                                    <Telefono numero={t} className={claseEnlace} />
+                                  </span>
+                                ))}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {c.notas && (
+                      <p className="text-theme-xs italic text-gray-500 dark:text-gray-400">
+                        Nota: {c.notas}
                       </p>
                     )}
                     {puede("inscripciones", "puede_cambiar") && (
@@ -521,6 +573,22 @@ export default function PersonaFicha() {
                   .filter(Boolean)
                   .join(" · ")}
               />
+              {Boolean(
+                texto("pareja_nombre") &&
+                  (texto("pareja_celular") || texto("pareja_telefono")),
+              ) && (
+                <Dato
+                  titulo="Teléfono de la pareja"
+                  valor={
+                    <Telefono
+                      numero={
+                        texto("pareja_celular") || texto("pareja_telefono")
+                      }
+                      className={claseEnlace}
+                    />
+                  }
+                />
+              )}
               <Dato
                 titulo="Hijos"
                 valor={[texto("hijos"), texto("edades_hijos")]
