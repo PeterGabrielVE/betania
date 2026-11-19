@@ -7,8 +7,8 @@ la duermen) y para avisar si no responde.
 """
 
 from django.db import connection
-from django.http import JsonResponse
-from django.views.decorators.http import require_GET
+from django.http import HttpResponse, JsonResponse
+from django.views.decorators.http import require_http_methods
 
 
 def _consultar_base():
@@ -16,12 +16,18 @@ def _consultar_base():
         cursor.execute("SELECT 1")
 
 
-@require_GET
+@require_http_methods(["GET", "HEAD"])
 def salud(request):
     try:
         _consultar_base()
-        respuesta = JsonResponse({"estado": "ok"})
+        if request.method == "HEAD":
+            respuesta = HttpResponse(status=200)
+        else:
+            respuesta = JsonResponse({"estado": "ok"})
     except Exception:
-        respuesta = JsonResponse({"estado": "sin base de datos"}, status=503)
+        if request.method == "HEAD":
+            respuesta = HttpResponse(status=503)
+        else:
+            respuesta = JsonResponse({"estado": "sin base de datos"}, status=503)
     respuesta["Cache-Control"] = "no-store"
     return respuesta
